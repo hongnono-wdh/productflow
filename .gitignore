@@ -19,3 +19,4 @@ secrets/
 *.tar.gz
 .understand-anything/
 node_modules/
+.wrangler/

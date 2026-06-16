@@ -203,6 +203,107 @@ class LandingE2E(unittest.TestCase):
         finally:
             ctx.close()
 
+    # 9 — interactive pipeline: clicking a rail node updates the live region + preview
+    def test_stage_click_updates_live_region(self):
+        ctx, page, _ = self._new_page()
+        try:
+            status = page.locator("#stageStatus")
+            preview = page.locator("#stagePreview")
+            # the hero intro animation cascades 01->04 then idles on 04 进行中;
+            # wait for it to settle on the resting state (stage 04 / 页面设计).
+            page.wait_for_function(
+                "() => document.querySelector('#stageStatus')"
+                ".innerText.includes('页面设计')",
+                timeout=4000,
+            )
+            self.assertIn("页面设计", status.inner_text())
+            self.assertIn("页面设计", preview.inner_text())
+
+            # click stage 07 (部署上线) and assert both the live region and preview change
+            node7 = page.locator(".rail-node[data-stage='7']")
+            self.assertTrue(node7.is_visible())
+            node7.click()
+            page.wait_for_timeout(200)
+            self.assertIn("部署上线", status.inner_text())
+            self.assertIn("部署上线", preview.inner_text())
+            self.assertEqual(node7.get_attribute("aria-current"), "step")
+
+            # click stage 01 (市场调研) — confirms it really tracks the click
+            node1 = page.locator(".rail-node[data-stage='1']")
+            node1.click()
+            page.wait_for_timeout(200)
+            self.assertIn("市场调研", status.inner_text())
+            self.assertIn("市场调研", preview.inner_text())
+        finally:
+            ctx.close()
+
+    # 10 — a .glass element actually reports backdrop-filter (defensive: headless_shell may say 'none')
+    def test_glass_has_backdrop_filter(self):
+        ctx, page, _ = self._new_page()
+        try:
+            glass = page.locator(".glass").first
+            self.assertTrue(glass.count() >= 1, "page must have .glass surfaces")
+            bf = page.evaluate(
+                """() => {
+                    const el = document.querySelector('.glass');
+                    if (!el) return null;
+                    const s = getComputedStyle(el);
+                    return s.backdropFilter || s.webkitBackdropFilter || 'none';
+                }"""
+            )
+            if bf and bf != "none":
+                # the real, ideal path: blur is actually applied
+                self.assertIn("blur", bf)
+            else:
+                # headless_shell returned 'none' — soft-pass by asserting the CSS
+                # rule that declares backdrop-filter on .glass exists in styles.css.
+                css = page.evaluate(
+                    """async () => {
+                        const r = await fetch('styles.css');
+                        return await r.text();
+                    }"""
+                )
+                self.assertIn("backdrop-filter", css)
+                self.assertRegexpMatches(
+                    css, r"\.glass\s*\{[^}]*backdrop-filter:\s*blur"
+                )
+        finally:
+            ctx.close()
+
+    # 11 — under reduced-motion: parallax + auto-run disabled; run jumps to instant final state
+    def test_reduced_motion_disables_parallax_and_autorun(self):
+        ctx, page, _ = self._new_page(reduced_motion="reduce")
+        try:
+            ambient = page.locator(".ambient")
+            self.assertTrue(ambient.count() >= 1)
+
+            def blob_transform():
+                return page.evaluate(
+                    """() => {
+                        const a = document.querySelector('.ambient');
+                        return a ? getComputedStyle(a).getPropertyValue('--blob-y') : '';
+                    }"""
+                )
+
+            before = blob_transform()
+            page.evaluate("window.scrollTo(0, 1400)")
+            page.wait_for_timeout(250)
+            after = blob_transform()
+            # parallax JS early-returns under reduced motion → no --blob-y drift written
+            self.assertEqual(
+                (before or "").strip(), (after or "").strip(),
+                "parallax must not write blob offset under reduced motion",
+            )
+
+            # pressing 运行流水线 must yield the INSTANT final state (stage 07), no tween
+            page.locator("#runBtn").click()
+            page.wait_for_timeout(150)
+            status = page.locator("#stageStatus")
+            self.assertIn("部署上线", status.inner_text())
+            self.assertIn("07", page.locator("#termHost").inner_text())
+        finally:
+            ctx.close()
+
 
 if __name__ == "__main__":
     if not os.path.exists(CHROMIUM_EXE):
