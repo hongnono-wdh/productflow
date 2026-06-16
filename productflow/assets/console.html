@@ -1,0 +1,2264 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProductFlow · 操作台</title>
+<style>
+  /* ── 设计 token：极简风格参照壹零中枢工作站原型 · 纯白底黑字单色 ── */
+  :root {
+    --bg: #ffffff; --ink: #111111; --ink-2: #555555; --dim: #8a8a8a; --faint: #b5b5b5;
+    --line: #e7e7e7; --line-2: #ededec; --field: #e2e2e2; --dash: #d6d6d6;
+    --hover: #f7f7f7; --fill: #f4f4f4;
+    --canvas-bg: #f7f7f6;
+    --note: #fbf6d2; --note-line: #ece2a8; --note-ink: #5c5320;
+    font-size: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: "Noto Sans SC", -apple-system, "PingFang SC", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; font-size: 14px;
+    display: flex;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  ::selection { background: rgba(17,17,17,.1); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #e4e4e4; border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ── 左侧侧边栏（常驻，可折叠 232 ⇄ 64） ── */
+  #sidebar {
+    width: 232px; flex: none; border-right: 1px solid var(--line-2); background: #fff;
+    display: flex; flex-direction: column; padding: 18px 14px 14px; position: relative;
+    transition: width .18s ease;
+  }
+  body.collapsed #sidebar { width: 64px; }
+  .sb-logo { display: flex; align-items: center; gap: 11px; padding: 4px 6px 22px; color: var(--ink); text-decoration: none; }
+  .sb-logo .mark {
+    width: 34px; height: 34px; border-radius: 11px; background: var(--ink); color: #fff; flex: none;
+    display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 15px;
+  }
+  .sb-logo .name { font-weight: 800; font-size: 15px; line-height: 1.2; white-space: nowrap; }
+  .sb-logo .name small { display: block; font-weight: 500; font-size: 11px; color: var(--dim); }
+  body.collapsed .sb-logo .name { display: none; }
+  .sb-nav { display: flex; flex-direction: column; gap: 2px; }
+  .sb-nav a {
+    display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 10px;
+    color: var(--ink-2); text-decoration: none; font-size: 13.5px; font-weight: 500; cursor: pointer;
+    white-space: nowrap;
+  }
+  .sb-nav a:hover { background: var(--hover); color: var(--ink); }
+  .sb-nav a.on { background: var(--fill); color: var(--ink); font-weight: 700; }
+  .sb-nav a .ico { width: 18px; flex: none; text-align: center; font-size: 15px; }
+  body.collapsed .sb-nav a .lbl { display: none; }
+  .sb-nav a.add .ico { color: var(--ink); }
+  .sb-acct {
+    margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px;
+    border: 1px solid var(--line); border-radius: 12px; font-size: 12px;
+  }
+  .sb-acct .av { width: 26px; height: 26px; border-radius: 8px; background: var(--ink); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 11px; flex: none; }
+  .sb-acct .meta { line-height: 1.3; white-space: nowrap; overflow: hidden; }
+  .sb-acct .meta b { font-weight: 700; font-size: 12.5px; }
+  .sb-acct .meta small { color: var(--dim); }
+  body.collapsed .sb-acct .meta { display: none; }
+  .sb-collapse {
+    position: absolute; top: 22px; right: -13px; width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; border: 1px solid var(--line); color: var(--dim); cursor: pointer; z-index: 20;
+    display: flex; align-items: center; justify-content: center; font-size: 12px;
+  }
+  .sb-collapse:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* ── 主区 ── */
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .page { flex: 1; min-height: 0; display: none; flex-direction: column; }
+  .page.on { display: flex; }
+
+  .topbar {
+    height: 60px; flex: none; display: flex; align-items: center; gap: 18px;
+    padding: 0 28px; border-bottom: 1px solid var(--line-2); background: #fff;
+  }
+  .topbar .ttl { font-weight: 800; font-size: 15px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .topbar .ttl .prod { color: var(--ink); }
+  .topbar .back { color: var(--dim); text-decoration: none; font-size: 13px; white-space: nowrap; }
+  .topbar .back:hover { color: var(--ink); }
+  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .topbar .meta { color: var(--dim); font-size: 12px; white-space: nowrap; }
+  .topbar .av-user { width: 30px; height: 30px; border-radius: 50%; background: var(--fill); color: var(--ink);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; }
+
+  /* 顶部步骤胶囊条 */
+  .steps-bar { display: flex; align-items: center; gap: 4px; }
+  .step-pill { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+  .step-pill.cur { background: var(--fill); }
+  .step-pill .num {
+    width: 20px; height: 20px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 1px solid var(--line); background: #fff; color: var(--faint);
+  }
+  .step-pill.cur .num { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .step-pill.done .num { background: #fff; border-color: var(--line); color: var(--ink); }
+  .step-pill .lbl { font-size: 12.5px; font-weight: 500; color: var(--dim); }
+  .step-pill.cur .lbl { color: var(--ink); font-weight: 700; }
+  .step-pill.done .lbl { color: var(--ink-2); }
+  .step-sep { width: 18px; height: 1px; background: var(--line); flex: none; }
+
+  /* 按钮 */
+  .btn { background: var(--ink); color: #fff; border: 0; border-radius: 10px; padding: 9px 20px;
+    font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: #000; }
+  .btn:active { transform: translateY(.5px); }
+  .btn.ghost { background: #fff; color: var(--ink); border: 1px solid var(--field); font-weight: 500; }
+  .btn.ghost:hover { border-color: var(--ink); background: #fff; }
+  .btn.sm { padding: 7px 15px; font-size: 13px; }
+
+  /* ── 首页：项目卡片墙 ── */
+  #home-scroll { flex: 1; overflow-y: auto; padding: 28px 36px 60px; }
+  .home-h1 { font-size: 26px; font-weight: 900; letter-spacing: -.4px; }
+  .home-sub { color: var(--dim); font-size: 13px; margin-top: 6px; margin-bottom: 26px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+  .pcard { position: relative; background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; cursor: pointer; transition: box-shadow .15s, border-color .15s; }
+  .pcard-del { position: absolute; top: 8px; right: 8px; z-index: 3; width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.92); cursor: pointer; font-size: 13px; line-height: 1; opacity: 0; transition: opacity .15s; display: flex; align-items: center; justify-content: center; }
+  .pcard:hover .pcard-del { opacity: 1; }
+  .pcard-del:hover { border-color: #c0392b; background: #fff; }
+  .pcard:hover { border-color: var(--ink); box-shadow: 0 6px 22px rgba(0,0,0,.06); }
+  .pcard img.cover { width: 100%; height: 150px; object-fit: cover; display: block; border-bottom: 1px solid var(--line); }
+  .pcard .cover.ph {
+    height: 150px; display: flex; align-items: center; justify-content: center;
+    font-size: 2.4rem; font-weight: 900; color: #d4d4d4; background: #fafafa; border-bottom: 1px solid var(--line);
+  }
+  .pcard .pbody { padding: 15px 17px 17px; }
+  .pcard .pname { font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .pcard .pdir { color: var(--dim); font-size: 12px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pcard .segs { display: flex; gap: 4px; margin-top: 12px; }
+  .pcard .seg { flex: 1; height: 5px; border-radius: 3px; background: var(--line); }
+  .pcard .seg.done { background: var(--ink); }
+  .pcard .seg.active { background: var(--dim); }
+  .pcard .pmeta { color: var(--dim); font-size: 12px; margin-top: 10px; }
+  .badge-working { font-size: 11px; color: #fff; background: var(--ink); border-radius: 999px; padding: 2px 9px; font-weight: 600; white-space: nowrap; }
+  .hdot { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  .warntag { color: #b23; }
+  .pcard.broken { opacity: .6; }
+  .pcard.ghost { border: 1.5px dashed var(--dash); background: #fff; cursor: default; }
+  .pcard.ghost:hover { border-color: var(--dash); box-shadow: none; }
+  .pcard .gtag { display: inline-block; margin-top: 12px; font-size: 11.5px; color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; }
+  .arch-toggle { margin-top: 22px; color: var(--dim); cursor: pointer; font-size: 13px; user-select: none; }
+  .arch-toggle:hover { color: var(--ink); }
+  .home-empty { grid-column: 1 / -1; color: var(--dim); font-size: 14px; text-align: center; padding: 70px 0; border: 1.5px dashed var(--dash); border-radius: 16px; }
+
+  /* 看板视图 */
+  #view-board { flex: 1; overflow-y: auto; }
+  .health-line { padding: 14px 36px 0; font-size: 13px; color: var(--dim); }
+  .wrap { display: block; padding: 24px 36px 36px; max-width: 1100px; }
+  /* 跨阶段常驻留言抽屉 */
+  #chat-drawer { position: fixed; top: 0; right: 0; width: 372px; max-width: 92vw; height: 100vh; background: #fff;
+    border-left: 1px solid var(--line); box-shadow: -10px 0 44px rgba(0,0,0,.10); z-index: 46;
+    transform: translateX(100%); transition: transform .22s ease; display: flex; flex-direction: column; padding: 20px 20px 18px; }
+  #chat-drawer.open { transform: translateX(0); }
+  #chat-btn { position: relative; }
+  #chat-btn.has-unread::after { content: ''; position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px #fff; }
+  /* Agent 待确认问题浮条 */
+  #choices-bar { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 35; width: min(760px, calc(100% - 120px)); display: none; flex-direction: column; gap: 10px; }
+  #choices-bar.show { display: flex; }
+  .choice-card { background: #fffaf0; border: 1px solid #f0d9a8; border-radius: 14px; padding: 14px 18px; box-shadow: 0 14px 40px rgba(0,0,0,.12); }
+  .choice-card .cq { font-weight: 700; font-size: 13px; color: #9a6a1a; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .choice-card .cqt { font-size: 13.5px; color: var(--ink); }
+  .choice-card .copts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 11px; }
+  .choice-card .copt { border: 1px solid var(--field); background: #fff; border-radius: 999px; padding: 7px 16px; cursor: pointer; font-size: 13px; }
+  .choice-card .copt:hover { border-color: var(--ink); box-shadow: 0 0 0 1.5px var(--ink) inset; }
+  .choice-card .crow { display: flex; gap: 8px; margin-top: 10px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-bottom: 18px; }
+  .card h2 { font-size: 15px; font-weight: 800; margin-bottom: 14px; display: flex; align-items: center; }
+  .card h2 .hint { color: var(--dim); font-weight: 400; font-size: 12px; margin-left: 8px; }
+  .steps li { list-style: none; display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line-2); font-size: 13.5px; }
+  .steps li:last-child { border-bottom: 0; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: none; }
+  .dot.done { background: var(--ink); }
+  .dot.active { background: var(--dim); animation: pulse 1.3s infinite; }
+  .dot.skipped { background: var(--dash); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .steps .st-title.done { color: var(--dim); }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .art { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+  .art:hover { border-color: var(--ink); box-shadow: 0 4px 14px rgba(0,0,0,.05); }
+  .art img { width: 100%; height: 100px; object-fit: cover; display: block; border-bottom: 1px solid var(--line); }
+  .art .ic { height: 100px; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: var(--faint); background: #fafafa; }
+  .art .cap { padding: 8px 10px; font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log { max-height: 280px; overflow-y: auto; font-size: 12.5px; }
+  .log .row { display: flex; gap: 10px; padding: 5px 0; color: var(--dim); }
+  .log .row .ts { flex: none; opacity: .7; }
+  .log .row .m { color: var(--ink-2); }
+  .chat { display: flex; flex-direction: column; height: 440px; }
+  .chat .msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; padding-bottom: 12px; }
+  .msg { border-radius: 12px; padding: 9px 12px; font-size: 13px; max-width: 88%; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+  .msg.me { align-self: flex-end; background: var(--ink); color: #fff; }
+  .msg.agent { align-self: flex-start; background: var(--fill); color: var(--ink); }
+  .msg .ts { font-size: 11px; margin-top: 4px; opacity: .6; }
+  .msg .fb { font-weight: 700; margin-bottom: 3px; }
+  .chat form { display: flex; gap: 8px; }
+  .chat textarea { flex: 1; background: #fff; border: 1px solid var(--field); border-radius: 10px; color: var(--ink); padding: 10px 12px; font: inherit; font-size: 13px; resize: none; height: 64px; }
+  .chat textarea:focus { outline: none; border-color: var(--ink); }
+  .chat textarea::placeholder { color: #b9b9b9; }
+  .chat button { background: var(--ink); color: #fff; border: 0; border-radius: 10px; padding: 0 18px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .note-txt { color: var(--dim); font-size: 11.5px; margin-top: 10px; line-height: 1.5; }
+  .empty { color: var(--dim); font-size: 13px; padding: 10px 0; }
+
+  /* ── 无限画布（白底点状网格 · 黑环选中） ── */
+  #view-canvas { flex: 1; position: relative; overflow: hidden; display: none; cursor: grab;
+    background-color: var(--canvas-bg);
+    background-image: radial-gradient(#e3e3e1 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  #view-canvas.panning { cursor: grabbing; }
+  #cv-world { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+  .cv-item { position: absolute; width: 320px; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,.04); user-select: none; cursor: default; }
+  .cv-item:hover { border-color: #cfcfcf; }
+  .cv-item.dragging { box-shadow: 0 14px 38px rgba(0,0,0,.12); }
+  .cv-item.liked { border-color: var(--ink); box-shadow: 0 0 0 1.5px var(--ink), 0 4px 16px rgba(0,0,0,.08); }
+  .cv-item img { width: 100%; display: block; pointer-events: none; }
+  .cv-item .doc { height: 120px; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: var(--faint); background: #fafafa; pointer-events: none; border-bottom: 1px solid var(--line); }
+  .cv-item .bar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; font-size: 12px; border-top: 1px solid var(--line); pointer-events: none; }
+  .cv-item .bar .ti { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
+  .cv-heart {
+    position: absolute; top: 9px; right: 9px; z-index: 2; width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; border: 1px solid var(--dash); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 13px; color: var(--faint); user-select: none;
+  }
+  .cv-heart:hover { border-color: var(--ink); }
+  .cv-item.liked .cv-heart { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .cv-del { position: absolute; top: 9px; right: 41px; z-index: 2; width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; border: 1px solid var(--dash); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 12px; color: var(--faint); opacity: 0; transition: opacity .12s; }
+  .cv-item:hover .cv-del { opacity: 1; }
+  .cv-del:hover { border-color: #c0392b; color: #c0392b; }
+  .cv-cmt { margin-left: auto; flex: none; pointer-events: auto; cursor: pointer; font-size: 13px; line-height: 1;
+    opacity: .5; user-select: none; padding: 0 2px; }
+  .cv-cmt:hover { opacity: 1; }
+  .cv-cmt.has { opacity: 1; }
+  .wz-del { position: absolute; top: 6px; right: 6px; z-index: 2; width: 22px; height: 22px; border-radius: 6px;
+    background: rgba(255,255,255,.92); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 11px; color: var(--dim); opacity: 0; transition: opacity .12s; }
+  .wz-ref:hover .wz-del { opacity: 1; }
+  .wz-del:hover { border-color: #c0392b; color: #c0392b; }
+  .badge { flex: none; font-size: 11px; padding: 2px 8px; border-radius: 999px; color: #fff; background: var(--ink); font-weight: 700; }
+  .cv-note { position: absolute; width: 200px; min-height: 90px; background: var(--note); color: var(--note-ink);
+    border: 1px solid var(--note-line); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; line-height: 1.5;
+    box-shadow: 0 4px 16px rgba(0,0,0,.06); cursor: default; user-select: none; white-space: pre-wrap; word-break: break-word; }
+  .cv-note.dragging { box-shadow: 0 12px 30px rgba(0,0,0,.12); }
+  .cv-note .nx { position: absolute; top: 3px; right: 8px; cursor: pointer; color: #a99c4a; display: none; font-size: 15px; line-height: 1.3; }
+  .cv-note:hover .nx { display: block; }
+  .cv-note .ph-empty { color: #b3a85e; }
+  .cv-note textarea { width: 100%; min-height: 80px; background: transparent; border: 0; resize: none; font: inherit; color: inherit; outline: none; padding: 0; }
+  .cv-lane-label { position: absolute; font-size: 13px; font-weight: 800; color: var(--ink); pointer-events: none; white-space: nowrap; display: flex; align-items: center; gap: 7px; }
+  .cv-lane-label .ln { color: var(--dim); font-weight: 500; }
+  .cv-toolbar { position: absolute; left: 20px; top: 16px; display: flex; gap: 8px; z-index: 5; }
+  .cv-toolbar button { background: #fff; border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 8px 14px; font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+  .cv-toolbar button:hover { border-color: var(--ink); }
+  .cv-toolbar button.primary { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
+  .cv-controls { position: absolute; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 6px; z-index: 5;
+    background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 7px; box-shadow: 0 4px 16px rgba(0,0,0,.07); align-items: center; }
+  .cv-controls button { width: 34px; height: 34px; border-radius: 9px; border: 0; background: #fff; color: var(--ink); font-size: 1rem; cursor: pointer; }
+  .cv-controls button:hover { background: var(--hover); }
+  #cv-zoom { font-size: 11px; color: var(--dim); text-align: center; }
+  #cv-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 14px; pointer-events: none; }
+  .cv-hint { position: absolute; left: 20px; bottom: 20px; color: var(--dim); font-size: 12px; z-index: 5; pointer-events: none; }
+  /* 阶段控制带（画布顶部）：生成首图 / 添加页面 / 依赖引导 */
+  #cv-stagebar { position: absolute; left: 50%; top: 16px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 12px;
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; box-shadow: 0 4px 16px rgba(0,0,0,.07); max-width: 70%; }
+  #cv-stagebar:empty { display: none; }
+  #cv-stagebar .sb-guide { color: var(--dim); font-size: 12.5px; display: flex; align-items: center; gap: 10px; }
+  #cv-stagebar .sb-sum { color: var(--dim); font-size: 12px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cv-loading { position: absolute; left: 80px; top: 100px; color: var(--dim); font-size: 13px; }
+  .cv-base { position: absolute; left: 10px; top: 10px; background: rgba(255,255,255,.92); border: 1px solid var(--line); border-radius: 8px;
+    padding: 3px 9px; font-size: 11.5px; font-weight: 600; color: var(--ink); cursor: pointer; z-index: 2; }
+  .cv-base:hover { border-color: var(--ink); }
+  .cv-item.base { box-shadow: 0 0 0 2px var(--ink); }
+  .cv-item.base .cv-base { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .cv-item.page-card { width: 240px; cursor: grab; }
+  .cv-item .pthumb { height: 130px; display: flex; align-items: center; justify-content: center; background: #fafafa; overflow: hidden; }
+  .cv-item .pthumb.ph { color: var(--faint); font-size: 13px; }
+  .cv-item .pthumb img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+  .cv-item .bar.col { flex-direction: column; align-items: stretch; gap: 7px; }
+  .cv-item .pn { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink); }
+  .cv-item .pn .pg-g { color: var(--faint); font-weight: 400; font-size: 11px; margin-left: auto; }
+  .cv-platrow { display: flex; gap: 6px; }
+  .cv-plat { font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); background: #fff; }
+  .cv-plat.on { border-color: var(--ink); color: var(--ink); font-weight: 600; cursor: pointer; }
+  .cv-page-del { position: absolute; right: 8px; top: 8px; width: 20px; height: 20px; border-radius: 6px; background: rgba(255,255,255,.92);
+    border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--dim); cursor: pointer; z-index: 2; }
+  .cv-page-del:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* 页面地图（画布顶部占位带） */
+  .cv-grouplabel { position: absolute; font-size: 12px; font-weight: 800; color: var(--ink); pointer-events: none; white-space: nowrap; display: flex; align-items: center; gap: 7px; }
+  .cv-grouplabel .gc { color: var(--dim); font-weight: 500; font-size: 11px; }
+  .cv-mapcap { position: absolute; font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--faint); pointer-events: none; }
+  .cv-divider { position: absolute; height: 1px; background: var(--line); pointer-events: none; }
+  .cv-page { position: absolute; width: 150px; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; user-select: none; box-shadow: 0 1px 6px rgba(0,0,0,.03); }
+  .cv-page:hover { border-color: var(--ink); }
+  .cv-page.ph { border: 1.5px dashed var(--dash); background: #fafafa; box-shadow: none; }
+  .cv-page .pthumb { height: 84px; background: #f4f4f4; display: flex; align-items: center; justify-content: center; color: var(--faint); font-size: 1.4rem; border-bottom: 1px solid var(--line); overflow: hidden; }
+  .cv-page .pthumb img { width: 100%; height: 100%; object-fit: cover; }
+  .cv-page.ph .pthumb { border-bottom: 1px dashed var(--dash); background: transparent; font-size: .72rem; }
+  .cv-page .pinfo { padding: 8px 10px; }
+  .cv-page .pn { font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cv-page .pmeta { font-size: 11px; color: var(--dim); margin-top: 3px; display: flex; gap: 6px; align-items: center; }
+  .cv-page .pv { background: var(--ink); color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 700; }
+  .cv-page .pdot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+  .cv-page .pdot.placeholder { background: var(--dash); }
+  .cv-page .pdot.designing { background: var(--dim); }
+  .cv-page .pdot.done { background: var(--ink); }
+  .cv-page-del { position: absolute; top: 5px; right: 6px; width: 20px; height: 20px; border-radius: 50%; background: rgba(255,255,255,.92); border: 1px solid var(--line); display: none; align-items: center; justify-content: center; font-size: 12px; color: var(--dim); cursor: pointer; z-index: 2; }
+  .cv-page:hover .cv-page-del { display: flex; }
+  .cv-page-del:hover { border-color: #c2406a; color: #c2406a; }
+  .cv-page-add { position: absolute; width: 150px; height: 128px; border: 1.5px dashed var(--dash); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--dim); cursor: pointer; background: transparent; user-select: none; }
+  .cv-page-add:hover { border-color: var(--ink); color: var(--ink); }
+  .cv-page-add .plus { font-size: 1.5rem; line-height: 1; }
+  .cv-page-add .at { font-size: 11.5px; }
+
+  /* modal */
+  .modal { position: fixed; inset: 0; background: rgba(17,17,17,.32); display: none; align-items: center; justify-content: center; padding: 4vh 4vw; z-index: 50; }
+  .modal.show { display: flex; }
+  .modal .box { background: #fff; border: 1px solid var(--line); border-radius: 16px; max-width: 960px; width: 100%; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 24px 70px rgba(0,0,0,.18); }
+  .modal .box.wide { max-width: 94vw; height: 88vh; }
+  #mm-svg { width: 100%; height: 100%; min-height: 70vh; color: var(--ink); }
+  #mm-svg .markmap-foreign { color: var(--ink); font-family: "Noto Sans SC", "PingFang SC", ui-sans-serif, system-ui, sans-serif; }
+  #mm-svg .markmap-foreign code { background: var(--fill); padding: 0 4px; border-radius: 4px; }
+  .modal .box .bar { display: flex; padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: center; }
+  .modal .box .bar .mt { font-weight: 700; font-size: 14px; }
+  .modal .box .bar .x { margin-left: auto; cursor: pointer; color: var(--dim); font-size: 13px; }
+  .modal .box .bar .x:hover { color: var(--ink); }
+  .modal pre { overflow: auto; padding: 18px; font-size: 13px; white-space: pre-wrap; line-height: 1.6; }
+  .modal img.full { max-width: 100%; max-height: 78vh; object-fit: contain; }
+
+  /* 新建项目弹窗 */
+  .nbox { background: #fff; border-radius: 16px; width: 440px; max-width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 24px 70px rgba(0,0,0,.18); }
+  .nbox h3 { font-size: 18px; font-weight: 900; letter-spacing: -.2px; }
+  .nbox label { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+  .nbox input, .nbox textarea { background: #fff; border: 1px solid var(--field); border-radius: 10px; color: var(--ink); padding: 12px 13px; font: inherit; font-size: 13.5px; resize: none; }
+  .nbox textarea { height: 80px; line-height: 1.6; }
+  .nbox input:focus, .nbox textarea:focus { outline: none; border-color: var(--ink); }
+  .nbox input::placeholder, .nbox textarea::placeholder { color: #b9b9b9; }
+  .nbox .nrow { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+  .nbox .note-txt { margin-top: 0; }
+
+  /* ── 新建项目向导（照原型设计稿） ── */
+  .wz-h1 { font-size: 28px; font-weight: 900; letter-spacing: -.3px; }
+  .wz-sub { color: var(--dim); font-size: 13.5px; margin-top: 8px; }
+  .wz-sec { margin-top: 40px; }
+  .wz-label { font-size: 14px; font-weight: 800; }
+  .wz-hint2 { color: var(--dim); font-size: 12.5px; margin-top: 4px; margin-bottom: 14px; }
+  .wz-input { width: 100%; max-width: 520px; border: 1px solid var(--field); border-radius: 10px; padding: 13px 14px; font: inherit; font-size: 14px; color: var(--ink); outline: none; }
+  .wz-input:focus { border-color: var(--ink); }
+  .wz-input::placeholder { color: #b9b9b9; }
+  .wz-platforms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 14px; }
+  .wz-pcard { position: relative; border: 1px solid var(--line); border-radius: 16px; padding: 28px 22px; cursor: pointer; text-align: center; transition: box-shadow .15s, border-color .15s; }
+  .wz-pcard:hover { border-color: #cfcfcf; }
+  .wz-pcard.on { box-shadow: 0 0 0 1.5px var(--ink) inset; border-color: var(--ink); }
+  .wz-pcard .pico { color: var(--ink); margin-bottom: 14px; display: flex; justify-content: center; }
+  .wz-pcard .pnm { font-size: 18px; font-weight: 800; }
+  .wz-pcard .pds { color: var(--dim); font-size: 12.5px; margin-top: 6px; }
+  .wz-check { position: absolute; top: 14px; right: 14px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--dash); background: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; color: transparent; }
+  .wz-pcard.on .wz-check, .wz-ref.on .wz-check, .wz-hero.on .wz-check { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .wz-primary { display: flex; gap: 12px; margin-top: 14px; }
+  .wz-pr { display: flex; align-items: center; gap: 9px; border: 1px solid var(--field); border-radius: 10px; padding: 11px 18px; cursor: pointer; font-weight: 600; font-size: 13.5px; }
+  .wz-pr .rdo { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--dash); flex: none; display: flex; align-items: center; justify-content: center; }
+  .wz-pr.on { box-shadow: 0 0 0 1.5px var(--ink) inset; border-color: var(--ink); }
+  .wz-pr.on .rdo { border-color: var(--ink); }
+  .wz-pr.on .rdo::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+  .wz-prio { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .wz-prio-item { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px; background: #fff; cursor: grab; }
+  .wz-prio-item.dragging { opacity: .4; }
+  .wz-prio-item .grip { color: var(--faint); letter-spacing: -2px; }
+  .wz-prio-item .idx { width: 22px; height: 22px; border-radius: 50%; background: var(--fill); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none; }
+  .wz-prio-item .pnm2 { font-weight: 600; }
+  .wz-prio-item .main-tag { margin-left: auto; background: var(--ink); color: #fff; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 10px; }
+  .wz-numstep { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .wz-numstep .nn { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none; }
+  .wz-numstep .nt { font-size: 15px; font-weight: 800; }
+  .wz-numstep .ntag { font-size: 11.5px; color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+  .wz-numstep .nbtn { margin-left: auto; }
+  .wz-textarea { width: 100%; border: 1px solid var(--field); border-radius: 14px; padding: 16px; font: inherit; font-size: 14px; line-height: 1.7; color: var(--ink); outline: none; min-height: 120px; resize: vertical; }
+  .wz-textarea:focus { border-color: var(--ink); }
+  .wz-textarea::placeholder { color: #b9b9b9; }
+  .wz-aibox { border: 1.5px dashed var(--dash); border-radius: 14px; padding: 30px; text-align: center; color: var(--dim); font-size: 13px; }
+  .wz-airow { display: flex; gap: 14px; padding: 14px 2px; border-bottom: 1px solid var(--line-2); align-items: flex-start; }
+  .wz-airow:last-child { border-bottom: 0; }
+  .wz-airow .ak { width: 6em; flex: none; font-weight: 700; font-size: 13px; color: var(--ink); }
+  .wz-airow .av { color: var(--ink-2); font-size: 13px; line-height: 1.6; }
+  .wz-substeps { display: flex; align-items: center; margin: 10px 0 30px; }
+  .wz-substep { display: flex; align-items: center; gap: 8px; }
+  .wz-substep .sn { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: #fff; color: var(--faint); }
+  .wz-substep.cur .sn { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .wz-substep.done .sn { color: var(--ink); }
+  .wz-substep .sl { font-size: 12.5px; color: var(--dim); font-weight: 500; }
+  .wz-substep.cur .sl { color: var(--ink); font-weight: 700; }
+  .wz-subline { width: 40px; border-top: 1px dashed var(--dash); margin: 0 6px; }
+  .wz-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 44px; padding-top: 24px; border-top: 1px solid var(--line-2); }
+  .wz-todo { border: 1.5px dashed var(--dash); border-radius: 16px; padding: 44px; text-align: center; color: var(--dim); margin-top: 24px; font-size: 13px; line-height: 1.7; }
+  .wz-todo .tt { font-weight: 800; color: var(--ink-2); margin-bottom: 8px; font-size: 14.5px; }
+  .wz-tags { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+  .wz-tag { border: 1px solid var(--field); border-radius: 999px; padding: 8px 16px; font-size: 13px; cursor: pointer; user-select: none; }
+  .wz-tag:hover { border-color: var(--ink); }
+  .wz-tag.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  /* 参考：一行一个大图，方便看清整张设计 + 放大查阅 */
+  .wz-refgrid { display: flex; flex-direction: column; gap: 18px; margin-top: 16px; }
+  .wz-ref { position: relative; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; cursor: pointer; }
+  .wz-ref:hover { border-color: #cfcfcf; }
+  .wz-ref.on { box-shadow: 0 0 0 2px var(--ink) inset; border-color: var(--ink); }
+  /* 图满宽、原比例、不留白：卡片高度跟着图走 */
+  .wz-ref .rthumb { background: #f4f4f4; overflow: hidden; line-height: 0; }
+  .wz-ref .rthumb img { width: 100%; height: auto; display: block; }
+  .wz-ref .rbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); }
+  .wz-ref.on .rbar { background: var(--ink); }
+  .wz-ref.on .rcap { color: #fff; }
+  .wz-ref.on .rbtn { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); color: #fff; }
+  .wz-ref.on .rbtn:hover { background: rgba(255,255,255,.22); border-color: #fff; }
+  .wz-ref .rsel { flex: none; font-size: 11px; padding: 2px 9px; border-radius: 999px; background: #fff; color: var(--ink); font-weight: 700; }
+  .wz-ref .rcap { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .wz-ref .ract { display: flex; align-items: center; gap: 6px; flex: none; }
+  .wz-ref .rbtn { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; line-height: 1; padding: 5px 9px; border: 1px solid var(--line);
+    border-radius: 8px; background: #fff; color: var(--ink-2); cursor: pointer; text-decoration: none; white-space: nowrap; }
+  .wz-ref .rbtn:hover { border-color: var(--ink); color: var(--ink); }
+  .wz-ref .rbtn.del:hover { border-color: #c0392b; color: #c0392b; }
+  .wz-ref .wz-check { top: 12px; left: 12px; right: auto; }
+  .wz-ref .wz-del { top: 12px; right: 12px; opacity: 1; }
+  .wz-herogrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 16px; }
+  .wz-hero { position: relative; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; cursor: pointer; }
+  .wz-hero:hover { border-color: #cfcfcf; }
+  .wz-hero.on { box-shadow: 0 0 0 1.5px var(--ink) inset; border-color: var(--ink); }
+  .wz-hero img { width: 100%; display: block; }
+  .wz-hero .rcap { padding: 10px 14px; font-size: 13px; color: var(--ink-2); }
+  .wz-hero .wz-check { top: 12px; right: 12px; }
+
+  /* agent 进度流（视觉探索找参考/生成首图占位区） */
+  .wz-log { margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .wz-log-head { display: flex; align-items: center; gap: 8px; padding: 11px 16px; border-bottom: 1px solid var(--line-2); font-size: 12.5px; font-weight: 700; color: var(--ink); }
+  .wz-log-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+  .wz-log.running .wz-log-dot { background: var(--ink); animation: wz-pulse 1.1s ease-in-out infinite; }
+  @keyframes wz-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+  .wz-log-state { margin-left: auto; font-weight: 500; color: var(--dim); }
+  .wz-log-list { max-height: 190px; overflow-y: auto; padding: 6px 0; }
+  .wz-log-line { display: flex; gap: 10px; padding: 5px 16px; font-size: 12.5px; line-height: 1.55; color: var(--ink-2); }
+  .wz-log-line .lt { color: var(--faint); flex: none; font-variant-numeric: tabular-nums; }
+  .wz-log-empty { padding: 14px 16px; font-size: 12.5px; color: var(--dim); }
+
+  /* toast */
+  #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff;
+    padding: 10px 20px; border-radius: 10px; z-index: 99; opacity: 0; transition: opacity .25s; pointer-events: none; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  #toast.show { opacity: 1; }
+
+  /* ⑥成品预览缩略图 + 圈选批注遮罩 */
+  .pv-thumbs { display: flex; flex-wrap: wrap; gap: 12px; }
+  .pv-thumb { width: 144px; cursor: pointer; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; transition: border-color .12s; }
+  .pv-thumb:hover { border-color: var(--ink); }
+  .pv-thumb img { width: 100%; display: block; }
+  .pv-thumb .cap { font-size: 11px; padding: 6px 8px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pv-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(18,18,18,.84); display: none; flex-direction: column; }
+  #pv-overlay.show { display: flex; }
+  .pv-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 22px; color: #fff; font-size: 13px; }
+  .pv-head .x { cursor: pointer; margin-left: 14px; color: #ddd; }
+  .pv-head .x:hover { color: #fff; }
+  .pv-wrap { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 0 22px; }
+  .pv-stage { position: relative; display: inline-block; line-height: 0; cursor: crosshair; touch-action: none; }
+  .pv-stage img { display: block; max-width: 90vw; max-height: 74vh; user-select: none; -webkit-user-drag: none; }
+  .pv-box { position: absolute; border: 2px solid #ff5a5a; background: rgba(255,90,90,.12); box-sizing: border-box; }
+  .pv-box .pvn { position: absolute; left: -2px; top: -19px; background: #ff5a5a; color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 4px; line-height: 1.4; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  .pv-box .pvx { position: absolute; right: -2px; top: -19px; background: #fff; color: #c0392b; border: 1px solid #ff5a5a; font-size: 11px; padding: 0 5px; border-radius: 4px; cursor: pointer; line-height: 1.5; }
+  .pv-draft { position: absolute; border: 2px dashed #ff5a5a; background: rgba(255,90,90,.08); box-sizing: border-box; pointer-events: none; display: none; }
+  .pv-hint { color: #cfcfcf; font-size: 12px; text-align: center; padding: 10px 22px 16px; }
+  #compat-banner .compat-warn { margin: 14px 24px 0; padding: 12px 16px; border: 1px solid #e0b4b4; background: #fdf4f4;
+    color: #8a3b3b; border-radius: 10px; font-size: 13px; line-height: 1.6; }
+  #compat-banner a { color: #8a3b3b; text-decoration: underline; }
+  #update-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 9px 22px; font-size: 13px;
+    background: var(--ink); color: #fff; }
+  #update-bar .btn { background: #fff; color: var(--ink); border-color: #fff; }
+  #update-bar #update-msg { color: #d7e0ff; }
+</style>
+<link rel="stylesheet" href="/vendor/viewer.min.css">
+</head>
+<body>
+
+<!-- ── 左侧侧边栏（常驻） ── -->
+<aside id="sidebar">
+  <button class="sb-collapse" onclick="toggleSidebar()" title="折叠/展开">‹</button>
+  <a class="sb-logo" href="/">
+    <span class="mark">P</span>
+    <span class="name">ProductFlow<small>操作台</small></span>
+  </a>
+  <nav class="sb-nav">
+    <a href="/" id="nav-proj"><span class="ico">▢</span><span class="lbl">项目</span></a>
+    <a onclick="toast('资产库即将上线')"><span class="ico">◫</span><span class="lbl">资产</span></a>
+    <a onclick="toast('设置即将上线')"><span class="ico">⚙</span><span class="lbl">设置</span></a>
+  </nav>
+  <div class="sb-acct">
+    <span class="av">P</span>
+    <span class="meta"><b>ProductFlow</b><br><small>本地工作站</small></span>
+  </div>
+</aside>
+
+<div id="main">
+
+<!-- 有新版本时顶部提示（首页/项目页都显示） -->
+<div id="update-bar" style="display:none"></div>
+
+<!-- ── 首页：项目卡片墙 ── -->
+<div id="page-home" class="page">
+  <div class="topbar">
+    <span class="ttl">总览</span>
+    <div class="right">
+      <button class="btn sm" onclick="openNewModal()">＋ 新建项目</button>
+    </div>
+  </div>
+  <div id="home-scroll">
+    <div class="home-h1">我的项目</div>
+    <div class="home-sub">从想法到上线，每个项目的全过程都在这里。</div>
+    <div class="grid" id="proj-grid"></div>
+    <div id="arch-sec" style="display:none">
+      <div class="arch-toggle" id="arch-toggle" onclick="toggleArch()"></div>
+      <div class="grid" id="arch-grid" style="display:none; margin-top:14px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 项目视图：看板 + 画布 ── -->
+<div id="page-project" class="page">
+  <div class="topbar">
+    <a class="back" href="/">← 全部项目</a>
+    <span class="ttl"><span class="prod" id="product">…</span></span>
+    <div class="steps-bar" id="stepper"></div>
+    <div class="right">
+      <button class="btn ghost sm" id="chat-btn" onclick="toggleChatDrawer()" title="给 Agent 留言（任何阶段都可用）">💬 留言</button>
+      <button class="btn ghost sm" onclick="openOverview()" title="一屏看全项目所有产物">📋 全部产物</button>
+      <span class="meta" id="meta"></span>
+      <button class="btn sm" id="next-stage-btn" onclick="nextStage()" style="display:none">下一步 →</button>
+    </div>
+  </div>
+
+  <!-- 旧版数据（非 7 阶段）不兼容提示 -->
+  <div id="compat-banner" style="display:none"></div>
+
+  <!-- Agent 抛来的「待确认问题」浮在顶部，任意阶段可见、点选即答复 -->
+  <div id="choices-bar"></div>
+
+  <div id="view-board">
+    <div class="health-line" id="health-line" style="display:none"></div>
+    <div class="wrap">
+      <main>
+        <div id="stage-extra"></div>
+        <div class="card"><h2 id="phase-title">阶段步骤</h2><ul class="steps" id="steps"></ul></div>
+        <div class="card"><h2>产物 <span class="hint">点击预览 · 画布可自由布局</span></h2><div class="gallery" id="gallery"></div></div>
+        <div class="card"><h2>进展日志</h2><div class="log" id="log"></div></div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 跨阶段常驻留言抽屉（面板/画布所有阶段都可用，顶栏「💬留言」开关）-->
+  <div id="chat-drawer">
+    <div class="card chat" style="height:100%;border:0;box-shadow:none;padding:0">
+      <h2 style="display:flex;align-items:center;gap:8px">给 Agent 留言
+        <span style="margin-left:auto;cursor:pointer;color:var(--dim);font-size:13px" onclick="toggleChatDrawer()">✕ 收起</span></h2>
+      <div class="msgs" id="msgs"></div>
+      <form id="chat-form">
+        <textarea id="chat-input" placeholder="写下你的想法 / 修改意见…&#10;Enter 发送，Shift+Enter 换行"></textarea>
+        <button type="submit">发送</button>
+      </form>
+      <div class="note-txt">消息进入 Agent 收件箱，Agent 在每个检查点读取并回应。也可直接在 CLI 对话，两边状态同步。</div>
+    </div>
+  </div>
+
+  <div id="view-canvas">
+    <div id="cv-world"></div>
+    <div id="cv-stagebar"></div>
+    <div id="cv-empty" style="display:none">画布还是空的 — 产物登记后会自动出现在这里</div>
+    <div class="cv-toolbar">
+      <button onclick="addNote()">＋ 便签</button>
+      <button class="primary" id="cv-send" onclick="sendCanvasFeedback()">发给 Agent ♡0</button>
+    </div>
+    <div class="cv-hint">拖拽空白处平移 · 滚轮缩放 · 拖动卡片摆位 · 双击预览 · 选中喜欢的产物</div>
+    <div class="cv-controls">
+      <button onclick="cvZoomBy(1.25)">＋</button>
+      <button onclick="cvZoomBy(0.8)">－</button>
+      <button onclick="cvFit()" title="适配全部">⊡</button>
+      <div id="cv-zoom">100%</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<div class="modal" id="modal">
+  <div class="box">
+    <div class="bar"><span id="modal-title" class="mt"></span><span class="x" onclick="closeModal()">✕ 关闭</span></div>
+    <div id="modal-body" style="overflow:auto; display:flex; justify-content:center;"></div>
+  </div>
+</div>
+
+<!-- ⑥成品预览圈选批注遮罩 -->
+<div id="pv-overlay">
+  <div class="pv-head"><span id="pv-title"></span>
+    <span><button class="btn sm" onclick="sendPreviewFeedback()">发送给 Agent</button>
+      <span class="x" onclick="closePreview()">✕ 关闭</span></span>
+  </div>
+  <div class="pv-wrap"><div class="pv-stage" id="pv-stage">
+    <img id="pv-img" src="" alt="">
+    <div id="pv-boxes"></div>
+    <div id="pv-draft" class="pv-draft"></div>
+  </div></div>
+  <div class="pv-hint">拖拽框选有问题的区域 → 填一句意见（可框多处）。发送后 Agent 知道是「哪张图、哪块区域、什么问题」。</div>
+</div>
+
+<!-- 极简创建项目：只要 名称 + 平台 -->
+<div class="modal" id="new-modal">
+  <div class="box" style="max-width:640px">
+    <div class="bar"><span class="mt">新建项目</span><span class="x" onclick="closeNewModal()">✕ 关闭</span></div>
+    <div id="new-body" style="overflow:auto; padding:22px 24px 24px"></div>
+  </div>
+</div>
+
+<!-- 删除项目：两档（从操作台移除 / 彻底删除磁盘文件） -->
+<div class="modal" id="del-modal">
+  <div class="box" style="max-width:500px">
+    <div class="bar"><span class="mt">删除项目</span><span class="x" onclick="closeDelModal()">✕ 关闭</span></div>
+    <div id="del-body" style="overflow:auto; padding:22px 24px 24px"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="/vendor/viewer.min.js"></script>
+<script>
+/* ===== 路由：/p/<id>/ → 项目视图，其余 → 首页卡片墙 ===== */
+const PF_MATCH = location.pathname.match(/^\/p\/([a-z0-9-]{1,64})\/?$/);
+const PF_BASE = PF_MATCH ? '/p/' + PF_MATCH[1] : '';
+const IS_PROJECT = !!PF_MATCH;
+
+let state = null;
+let selectedPhase = null;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const artUrl = file => PF_BASE + '/artifacts/' + file.replace(/^artifacts\//, '');
+
+function toggleSidebar() { document.body.classList.toggle('collapsed'); }
+let lastMsgCount = 0, chatSeen = 0;
+function toggleChatDrawer() {
+  const d = $('chat-drawer'); if (!d) return;
+  d.classList.toggle('open');
+  if (d.classList.contains('open')) {   // 打开即已读，清未读点
+    chatSeen = lastMsgCount;
+    const btn = $('chat-btn'); if (btn) btn.classList.remove('has-unread');
+  }
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function hideToast() { const t = $('toast'); if (t) { clearTimeout(toastTimer); t.classList.remove('show'); }
+}
+
+function relTime(s) {
+  if (!s) return '';
+  const t = new Date(String(s).replace(' ', 'T'));
+  if (isNaN(t)) return s;
+  const d = (Date.now() - t.getTime()) / 1000;
+  if (d < 60) return '刚刚';
+  if (d < 3600) return Math.floor(d / 60) + ' 分钟前';
+  if (d < 86400) return Math.floor(d / 3600) + ' 小时前';
+  return Math.floor(d / 86400) + ' 天前';
+}
+
+/* ===== 首页卡片墙 ===== */
+let homeData = null, archOpen = false;
+
+async function pollProjects() {
+  try {
+    const r = await fetch('/api/projects');
+    if (!r.ok) return;
+    homeData = await r.json();
+    renderHome();
+  } catch (e) {}
+}
+
+function projCard(p) {
+  const cover = p.cover
+    ? `<img class="cover" src="${esc(p.cover)}" loading="lazy">`
+    : `<div class="cover ph">${esc((p.name || p.id || '?').trim()[0] || '?')}</div>`;
+  const segs = (p.phases || []).map(ph => `<span class="seg ${ph.status}"></span>`).join('');
+  const flags = [];
+  if (p.working) flags.push('<span class="badge-working">进行中</span>');
+  if (p.health && p.health.url) {
+    flags.push(`<span class="hdot">${p.health.ok ? '🟢' : '🔴'}${p.health.ms != null ? ' ' + p.health.ms + 'ms' : ''}</span>`);
+  }
+  const broken = p.missing ? '目录缺失' : (p.error ? '状态损坏' : '');
+  return `<div class="pcard ${broken ? 'broken' : ''}" onclick="location.href='/p/${p.id}/'">
+    <button class="pcard-del" title="删除项目" onclick="event.stopPropagation();openDelete('${p.id}')">🗑</button>
+    ${cover}
+    <div class="pbody">
+      <div class="pname">${esc(p.name || p.id)} ${flags.join(' ')}</div>
+      <div class="pdir mono">${esc(p.dir_label || '')}${broken ? ` · <span class="warntag">${broken}</span>` : ''}</div>
+      <div class="segs">${segs}</div>
+      <div class="pmeta">${p.done ?? 0}/${(p.phases || []).length || 7} 阶段 · ${esc(relTime(p.updated))}</div>
+    </div>
+  </div>`;
+}
+
+function ghostCard(g) {
+  return `<div class="pcard ghost">
+    <div class="pbody">
+      <div class="pname">${esc(g.name)}</div>
+      <div class="pdir">${esc(g.brief || '')}</div>
+      <div class="gtag">待 CLI 接单</div>
+    </div>
+  </div>`;
+}
+
+function renderHome() {
+  if (!homeData) return;
+  const act = (homeData.projects || []).filter(p => !p.archived);
+  const arch = (homeData.projects || []).filter(p => p.archived);
+  const pending = homeData.pending || [];
+  $('proj-grid').innerHTML = (act.length || pending.length)
+    ? act.map(projCard).join('') + pending.map(ghostCard).join('')
+    : '<div class="home-empty">还没有项目 — 点「＋ 新建项目」，或在 CLI 里启动 ProductFlow。</div>';
+  $('arch-sec').style.display = arch.length ? '' : 'none';
+  $('arch-toggle').textContent = `已归档 ${arch.length} ${archOpen ? '▾' : '▸'}`;
+  $('arch-grid').style.display = archOpen ? '' : 'none';
+  $('arch-grid').innerHTML = archOpen ? arch.map(projCard).join('') : '';
+}
+
+function toggleArch() { archOpen = !archOpen; renderHome(); }
+
+/* ===== 新建项目引导向导（照原型设计稿 · 和 Agent 协作） ===== */
+const PLAT = {
+  PC:  { nm: 'PC',  ds: '面向桌面浏览器的网页应用。' },
+  H5:  { nm: 'H5',  ds: '面向现代浏览器的移动端网页体验。' },
+  APP: { nm: 'APP', ds: 'iOS 与 Android 的原生移动应用。' },
+};
+/* ===== 极简新建项目（名称 + 平台），创建即进项目，阶段内再做产品需求/设计 ===== */
+let nm = null;
+// 新建项目草稿持久化：填到一半关掉/刷新/切走，再回来自动回填（不丢内容）
+const NM_DRAFT_KEY = 'pf-new-project-draft';
+function freshNm() {
+  return { name: '', slug: '', slugEdited: false, fb: 'pf-' + Math.random().toString(36).slice(2, 6),
+           platforms: { PC: true, H5: true, APP: false }, primary: 'PC', priority: ['PC', 'H5', 'APP'] };
+}
+function saveNmDraft() { try { if (nm) localStorage.setItem(NM_DRAFT_KEY, JSON.stringify(nm)); } catch (_) {} }
+function clearNmDraft() { try { localStorage.removeItem(NM_DRAFT_KEY); } catch (_) {} nm = null; }
+function loadNmDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem(NM_DRAFT_KEY) || 'null');
+    if (d && typeof d === 'object') {
+      const base = freshNm();   // 兜底缺失字段（旧草稿/损坏）
+      return Object.assign(base, d, {
+        platforms: Object.assign({ PC: true, H5: true, APP: false }, d.platforms || {}),
+        priority: Array.isArray(d.priority) ? d.priority : base.priority,
+        fb: d.fb || base.fb,
+      });
+    }
+  } catch (_) {}
+  return null;
+}
+function openNewModal() {
+  const draft = loadNmDraft();
+  nm = draft || freshNm();
+  renderNewModal();
+  $('new-modal').classList.add('show');
+  if (draft && (draft.name || draft.slug)) toast('已恢复上次未完成的草稿（可继续填或清空重来）');
+}
+function closeNewModal() { saveNmDraft(); $('new-modal').classList.remove('show'); }   // 关掉=存草稿，下次回填
+
+/* ===== 删除项目（两档：从操作台移除 / 彻底删除磁盘文件） ===== */
+let delTarget = null;
+function openDelete(id) {
+  const p = ((homeData && homeData.projects) || []).find(x => x.id === id);
+  delTarget = { id, name: (p && (p.name || p.id)) || id, dir: (p && p.dir_label) || '' };
+  renderDelModal();
+  $('del-modal').classList.add('show');
+}
+function closeDelModal() { $('del-modal').classList.remove('show'); delTarget = null; }
+function renderDelModal() {
+  const t = delTarget; if (!t) return;
+  $('del-body').innerHTML = `
+    <div style="font-size:13.5px;color:var(--ink-2);line-height:1.7;margin-bottom:18px">
+      项目「<b>${esc(t.name)}</b>」 <span class="mono" style="color:var(--dim);font-size:12px">${esc(t.dir)}</span></div>
+    <div style="border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px">从操作台移除</div>
+      <div class="wz-hint2" style="margin:4px 0 12px">只把卡片从这里移除，<b>磁盘文件保留</b>（之后重新 init 可找回）。</div>
+      <button class="btn ghost" onclick="removeProject()">从操作台移除</button>
+    </div>
+    <div style="border:1px solid #f0d2d2;border-radius:12px;padding:16px;background:#fdf6f6">
+      <div style="font-weight:700;font-size:13px;color:#c0392b">彻底删除（不可恢复）</div>
+      <div class="wz-hint2" style="margin:4px 0 12px">连同磁盘文件夹一起删，<b>含你的产品代码</b>。请输入项目名「${esc(t.name)}」确认：</div>
+      <input class="wz-input" id="del-confirm" placeholder="输入项目名确认" oninput="syncDelConfirm()" style="margin-bottom:12px">
+      <button class="btn" id="del-hard-btn" disabled style="background:var(--dash);cursor:not-allowed" onclick="hardDeleteProject()">彻底删除</button>
+    </div>`;
+}
+function syncDelConfirm() {
+  const v = (($('del-confirm') || {}).value || '').trim();
+  const ok = !!delTarget && v === delTarget.name;
+  const btn = $('del-hard-btn'); if (!btn) return;
+  btn.disabled = !ok;
+  btn.style.background = ok ? '#c0392b' : 'var(--dash)';
+  btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+}
+async function removeProject() {
+  if (!delTarget) return;
+  try { await fetch('/api/project-remove', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: delTarget.id }) }); } catch (e) {}
+  toast('已从操作台移除（文件保留）'); closeDelModal(); pollProjects();
+}
+async function hardDeleteProject() {
+  if (!delTarget) return;
+  if ((($('del-confirm') || {}).value || '').trim() !== delTarget.name) return;
+  try {
+    const r = await fetch('/api/project-delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: delTarget.id }) });
+    const d = await r.json();
+    toast(d.ok ? '项目已彻底删除' : '删除失败：' + (d.error || '未知'));
+  } catch (e) { toast('删除失败'); }
+  closeDelModal(); pollProjects();
+}
+
+// 平台多选 + 主平台 + 优先级片段（创建模态与未来阶段共用；删向导后保留）
+function platformPickerHtml(s) {
+  const plats = ['PC', 'H5', 'APP'].map(k => `
+    <div class="wz-pcard ${s.platforms[k] ? 'on' : ''}" data-plat="${k}">
+      <div class="wz-check">✓</div><div class="pico">${deviceIcon(k)}</div>
+      <div class="pnm">${PLAT[k].nm}</div><div class="pds">${PLAT[k].ds}</div></div>`).join('');
+  const prim = ['PC', 'H5', 'APP'].map(k => {
+    const dis = !s.platforms[k];
+    return `<div class="wz-pr ${s.primary === k ? 'on' : ''}" data-prim="${k}" ${dis ? 'style="opacity:.4;pointer-events:none"' : ''}><span class="rdo"></span>${k}</div>`;
+  }).join('');
+  const prio = s.priority.filter(k => s.platforms[k]).map((k, i) => `
+    <div class="wz-prio-item" draggable="true" data-prio="${k}">
+      <span class="grip">⠿</span><span class="idx">${i + 1}</span><span class="pnm2">${k}</span>
+      ${s.primary === k ? '<span class="main-tag">主平台</span>' : ''}</div>`).join('');
+  return `<div class="wz-sec" style="margin-top:24px"><div class="wz-label">输出平台</div><div class="wz-hint2">选择平台，可多选。</div>
+      <div class="wz-platforms">${plats}</div></div>
+    <div class="wz-sec" style="margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div><div class="wz-label">主平台</div><div class="wz-primary">${prim}</div></div>
+      <div><div class="wz-label">优先级</div><div class="wz-prio" id="nm-prio">${prio}</div></div></div>`;
+}
+
+function renderNewModal() {
+  $('new-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div><div class="wz-label">项目名称</div>
+        <input class="wz-input" id="nm-name" placeholder="例如：咖啡订阅" value="${esc(nm.name)}"></div>
+      <div><div class="wz-label">项目标识 <span style="color:var(--dim);font-weight:400">(目录名)</span></div>
+        <input class="wz-input" id="nm-slug" placeholder="如 coffee-sub（留空按名生成）" value="${esc(nm.slug)}">
+        <div class="wz-hint2" style="margin-top:6px">作目录名/链接，小写英文/数字/连字符。中文名会自动占位，建议改成有意义的英文名。</div></div></div>
+    ${platformPickerHtml(nm)}
+    <div class="wz-actions" style="margin-top:24px;display:flex;gap:12px;align-items:center">
+      <button class="btn ghost sm" onclick="resetNewModal()">清空重填</button>
+      <div style="margin-left:auto;display:flex;gap:12px">
+        <button class="btn ghost" onclick="closeNewModal()">取消</button>
+        <button class="btn" onclick="createProject()">创建项目 →</button></div></div>`;
+}
+function resetNewModal() {
+  try { localStorage.removeItem(NM_DRAFT_KEY); } catch (_) {}
+  nm = freshNm(); renderNewModal();
+}
+
+async function createProject() {
+  const n = $('nm-name'); if (n) nm.name = n.value;
+  const s = $('nm-slug'); if (s) nm.slug = s.value;
+  nm.priority.sort((a, b) => (a === nm.primary ? -1 : b === nm.primary ? 1 : 0));  // 主平台排首
+  try {
+    const r = await fetch('/api/create', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name: (nm.name || '').trim() || '未命名项目', slug: (nm.slug || '').trim(),
+        platforms: Object.keys(nm.platforms).filter(k => nm.platforms[k]), primary: nm.primary,
+        priority: nm.priority.filter(k => nm.platforms[k]) }) });
+    const d = await r.json();
+    if (d.id) { clearNmDraft(); location.href = '/p/' + d.id + '/'; }   // 创建成功才清草稿
+    else toast('创建失败：' + (d.error || '未知错误'));
+  } catch (e) { toast('创建失败'); }
+}
+
+// 创建模态交互：平台多选 / 主平台 / 优先级拖拽（事件委托，独立于向导）
+(function () {
+  const body = $('new-body');
+  if (!body) return;
+  body.addEventListener('click', e => {
+    const pc = e.target.closest('.wz-pcard');
+    if (pc) {
+      const k = pc.dataset.plat;
+      nm.platforms[k] = !nm.platforms[k];
+      if (!nm.platforms[nm.primary]) nm.primary = ['PC', 'H5', 'APP'].find(x => nm.platforms[x]) || '';
+      saveNmDraft(); renderNewModal(); return;
+    }
+    const pr = e.target.closest('.wz-pr');
+    if (pr) { nm.primary = pr.dataset.prim; saveNmDraft(); renderNewModal(); return; }
+  });
+  body.addEventListener('input', e => {
+    if (e.target.id === 'nm-name') {
+      nm.name = e.target.value;
+      if (!nm.slugEdited) {
+        // 中文名 autoSlug 为空时兜底一个干净可改的标识，避免标识框空着让人犹豫
+        nm.slug = autoSlug(e.target.value) || (e.target.value.trim() ? nm.fb : '');
+        const si = $('nm-slug'); if (si) si.value = nm.slug;
+      }
+    } else if (e.target.id === 'nm-slug') { nm.slug = e.target.value; nm.slugEdited = true; }
+    saveNmDraft();   // 每次输入即存草稿
+  });
+  let dragK = null;
+  body.addEventListener('dragstart', e => {
+    const it = e.target.closest('.wz-prio-item'); if (!it) return;
+    dragK = it.dataset.prio; it.classList.add('dragging');
+  });
+  body.addEventListener('dragend', e => {
+    const it = e.target.closest('.wz-prio-item'); if (it) it.classList.remove('dragging'); dragK = null;
+  });
+  body.addEventListener('dragover', e => {
+    const it = e.target.closest('.wz-prio-item');
+    if (!it || !dragK || it.dataset.prio === dragK) return;
+    e.preventDefault();
+    const arr = nm.priority;
+    arr.splice(arr.indexOf(dragK), 1);
+    arr.splice(arr.indexOf(it.dataset.prio), 0, dragK);
+    saveNmDraft(); renderNewModal();
+  });
+})();
+
+function deviceIcon(k) {
+  return {
+    PC:  '<svg width="38" height="38" viewBox="0 0 38 38" fill="none"><rect x="5" y="8" width="28" height="19" rx="2.5" stroke="currentColor" stroke-width="2"/><path d="M13 32h12M19 27v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    H5:  '<svg width="38" height="38" viewBox="0 0 38 38" fill="none"><rect x="7" y="6" width="24" height="26" rx="3" stroke="currentColor" stroke-width="2"/><path d="M7 11h24" stroke="currentColor" stroke-width="2"/><circle cx="19" cy="28.5" r="1.3" fill="currentColor"/></svg>',
+    APP: '<svg width="38" height="38" viewBox="0 0 38 38" fill="none"><rect x="11" y="5" width="16" height="28" rx="3" stroke="currentColor" stroke-width="2"/><path d="M17 29h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  }[k] || '';
+}
+
+function autoSlug(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+
+/* ===== 项目视图 ===== */
+// 点阶段进各自视图：面板阶段(1,2,5,6,7) 显看板容器，画布阶段(3 首图 / 4 页面) 显画布容器
+const CANVAS_STAGES = [3, 4];
+function isCanvasStage(id) { return CANVAS_STAGES.includes(id); }
+function nextStage() {
+  if (!state) return;
+  const ni = state.phases.findIndex(p => p.id === selectedPhase);
+  const next = state.phases[ni + 1];
+  if (next) selectStage(next.id);
+}
+
+/* ===== Agent 待确认问题（通用选项确认，任意阶段可见） ===== */
+let pChoices = [];
+async function pollChoices() {
+  if (!IS_PROJECT) return;
+  try {
+    const r = await fetch(PF_BASE + '/api/choices'); if (!r.ok) return;
+    const d = await r.json();
+    pChoices = (d.choices || []).filter(c => c.answer == null);   // 只显示未答的
+    renderChoices();
+  } catch (e) {}
+}
+function renderChoices() {
+  const bar = $('choices-bar'); if (!bar) return;
+  if (!pChoices.length) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
+  // 输入框聚焦时不重渲染，避免打断打字
+  const ae = document.activeElement;
+  if (ae && bar.contains(ae) && ae.tagName === 'INPUT') return;
+  bar.classList.add('show');
+  bar.innerHTML = pChoices.map(c => {
+    const opts = (c.options || []).map(o => `<span class="copt" data-cid="${c.id}" data-opt="${esc(o)}">${esc(o)}</span>`).join('');
+    const stg = c.stage ? `<span style="margin-left:auto;font-weight:500;color:var(--dim);font-size:12px">阶段 ${c.stage}</span>` : '';
+    return `<div class="choice-card"><div class="cq">💬 Agent 在问你${stg}</div>
+      <div class="cqt">${esc(c.question)}</div>
+      <div class="copts">${opts}</div>
+      <div class="crow"><input class="wz-input" id="ci-${c.id}" placeholder="都不合适？这里填你的答复" style="max-width:none">
+        <button class="btn ghost" style="white-space:nowrap" onclick="answerChoiceInput('${c.id}')">回复</button></div></div>`;
+  }).join('');
+}
+function answerChoice(id, ans) {
+  pChoices = pChoices.filter(c => c.id !== id);
+  renderChoices();
+  fetch(PF_BASE + '/api/choice', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id, answer: ans }) }).catch(() => {});
+  toast('已回复 Agent：' + ans);
+}
+function answerChoiceInput(id) {
+  const el = $('ci-' + id); const v = el ? el.value.trim() : '';
+  if (!v) { toast('填一下你的答复'); return; }
+  answerChoice(id, v);
+}
+(function () {
+  const bar = $('choices-bar'); if (!bar) return;
+  bar.addEventListener('click', e => {
+    const opt = e.target.closest('.copt');
+    if (opt) answerChoice(opt.dataset.cid, opt.dataset.opt);
+  });
+})();
+function selectStage(id) {
+  const leavingCanvas = isCanvasStage(selectedPhase) && !isCanvasStage(id);
+  hideToast();   // 切阶段清掉上一阶段残留的 toast
+  selectedPhase = id;
+  try { history.replaceState(null, '', '#s' + id); } catch (_) {}   // 阶段写进 URL，刷新/分享不丢位置
+  const canvas = isCanvasStage(id);
+  if (leavingCanvas) flushCanvasSave();   // 画布→面板：先把待存布局刷盘
+  $('view-board').style.display = canvas ? 'none' : '';
+  $('view-canvas').style.display = canvas ? 'block' : 'none';
+  renderBoard();          // 渲步骤条(始终) + 面板内容
+  if (canvas) enterCanvas(id);   // 加载本阶段画布（内部会先 flush 上一块）
+  if (id === 1) { pollBrief(); pollResearch(); }
+  else if (id === 2) { pollExplore(); pollSearchLog(); }
+  else if (canvas) { pollExplore(); if (id === 4) pollStageRun(); }
+  else if (id === 5 || id === 6 || id === 7) { pollStageRun(); if (id === 7) pollDeployCreds(); }
+}
+
+function renderCompatBanner() {
+  const el = $('compat-banner'); if (!el || !state) return;
+  const np = (state.phases || []).length;
+  if (np === 7) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `<div class="compat-warn">⚠️ 此项目是<b>旧版数据（${np} 阶段）</b>，与当前 7 阶段流程不兼容，下面的步骤/按钮会显示异常。
+    请回 <a href="/">全部项目</a> 点「＋ 新建项目」重新开始（旧项目可在总览页删除）。
+    当前 7 阶段：市场调研 → 找参考 → 首图设计 → 页面设计 → 功能与数据设计 → 开发实现 → 部署上线。</div>`;
+}
+async function poll() {
+  try {
+    const r = await fetch(PF_BASE + '/api/state');
+    if (r.ok) {
+      state = await r.json();
+      renderCompatBanner();
+      if (selectedPhase === null) {   // 首次：URL hash 里有 #s<id> 就回到那个阶段，否则进当前阶段
+        const hs = parseInt(((location.hash || '').match(/s(\d+)/) || [])[1]);
+        const valid = hs >= 1 && (state.phases || []).some(p => p.id === hs);
+        selectStage(valid ? hs : state.current_phase);
+      }
+      else { renderBoard(); if (isCanvasStage(selectedPhase) && cvLoaded && cvStage === selectedPhase) renderCanvas(); }
+    } else if (r.status === 404) { $('product').textContent = '（等待初始化…）'; }
+  } catch (e) {}
+}
+
+async function pollInbox() {
+  try {
+    const r = await fetch(PF_BASE + '/api/inbox');
+    if (!r.ok) return;
+    const { messages } = await r.json();
+    const box = $('msgs');
+    const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+    box.innerHTML = messages.length
+      ? messages.map(m => {
+          const side = m.from === 'agent' ? 'agent' : 'me';
+          let body;
+          if (m.type === 'canvas-feedback') {
+            const nl = (m.liked || []).length, nn = (m.notes || []).length, nc = (m.comments || []).length;
+            body = `<div class="fb">📌 画布反馈：❤${nl} 张 · ${nn} 条便签 · ${nc} 条针对意见</div>${esc(m.text).replace(/\n/g, '<br>')}`;
+          } else if (m.type === 'preview-feedback') {
+            body = `<div class="fb">🖼 成品预览圈选：${(m.regions || []).length} 处意见</div>${esc(m.text).replace(/\n/g, '<br>')}`;
+          } else {
+            body = esc(m.text);
+          }
+          return `<div class="msg ${side}">${body}<div class="ts">${esc(m.ts)}</div></div>`;
+        }).join('')
+      : '<div class="empty">还没有留言。</div>';
+    if (stick) box.scrollTop = box.scrollHeight;
+    // 未读点：抽屉关着时来了新消息，在「💬 留言」上提示
+    lastMsgCount = messages.length;
+    const open = $('chat-drawer') && $('chat-drawer').classList.contains('open');
+    if (open) chatSeen = lastMsgCount;
+    const btn = $('chat-btn');
+    if (btn) btn.classList.toggle('has-unread', lastMsgCount > chatSeen && !open);
+  } catch (e) {}
+}
+
+async function pollHealth() {
+  try {
+    const r = await fetch(PF_BASE + '/api/health');
+    if (!r.ok) return;
+    const h = await r.json();
+    const el = $('health-line');
+    if (!h || !h.url) { el.style.display = 'none'; return; }
+    const ms = h.ms != null ? ` ${h.ms}ms` : '';
+    const at = String(h.checked || '').replace(' ', 'T').slice(11, 16);
+    el.style.display = '';
+    el.textContent = `线上 ${h.ok ? '🟢' : '🔴'}${ms}${at ? ' · 检查于 ' + at : ''}`;
+  } catch (e) {}
+}
+
+/* ===== 看板 ===== */
+function renderBoard() {
+  $('product').textContent = state.product;
+  const done = state.phases.filter(p => p.status === 'done').length;
+  $('meta').textContent = `${done}/${state.phases.length} 完成`;
+  if (selectedPhase === null) selectedPhase = state.current_phase;
+
+  // 顶部步骤胶囊条（胶囊 + 连线）——点胶囊进该阶段的视图
+  $('stepper').innerHTML = state.phases.map((p, i) => {
+    const cls = p.status === 'done' ? 'done' : (p.id === selectedPhase ? 'cur' : '');
+    const numTxt = p.status === 'done' ? '✓' : (i + 1);
+    const sep = i < state.phases.length - 1 ? '<span class="step-sep"></span>' : '';
+    return `<div class="step-pill ${cls}" onclick="selectStage(${p.id})">
+      <span class="num">${numTxt}</span><span class="lbl">${esc(p.name)}</span></div>${sep}`;
+  }).join('');
+
+  // 顶栏「下一步」：进入下一阶段（最后一步隐藏）
+  const ni = state.phases.findIndex(p => p.id === selectedPhase);
+  const nextPh = state.phases[ni + 1];
+  const nb = $('next-stage-btn');
+  if (nb) { nb.style.display = nextPh ? '' : 'none'; if (nextPh) nb.textContent = `下一步：${nextPh.name} →`; }
+
+  const ph = state.phases.find(p => p.id === selectedPhase);
+  $('phase-title').innerHTML = `${esc(ph.name)} <span class="hint">${ph.status === 'done' ? '已完成' : ph.status === 'active' ? '进行中' : '待开始'}</span>`;
+  $('steps').innerHTML = ph.steps.map(s => `
+    <li><span class="dot ${s.status}"></span><span class="st-title ${s.status}">${esc(s.title)}</span>
+        <span class="hint mono" style="margin-left:auto;color:var(--faint);font-size:11px">${esc(s.id)}</span></li>`).join('');
+
+  $('gallery').innerHTML = ph.artifacts.length ? ph.artifacts.map(a => {
+    const inner = a.type === 'image'
+      ? `<img src="${artUrl(a.file)}" loading="lazy">`
+      : `<div class="ic">${{md:'📄',html:'🌐',code:'⌘',json:'{}',mindmap:'🧠'}[a.type] || '📦'}</div>`;
+    return `<div class="art" onclick="openArtifact('${artUrl(a.file)}','${esc(a.title)}','${a.type}')">${inner}<div class="cap">${esc(a.title)}</div></div>`;
+  }).join('') : '<div class="empty">本阶段还没有产物。</div>';
+
+  $('log').innerHTML = state.log.slice(-60).reverse().map(l =>
+    `<div class="row"><span class="ts mono">${l.ts.slice(5, 16)}</span><span class="m">${esc(l.msg)}</span></div>`).join('');
+  renderStageExtra();
+}
+
+/* ===== 阶段内嵌：P1 产品需求 / P2 找参考（取代向导，阶段内做） ===== */
+let pBrief = { description: '', summary: { goal: '', users: '', need: '', scope: '' }, ready: false, generating: false, request: {}, clarify: '', questions: [], answers: {}, confirmed: false };
+let pExplore = { stylePrefs: [], request: {}, refs: [], selectedRefs: [], styleSummary: '', heroes: [], selectedHero: '', searchFailed: false };
+
+async function pollBrief() {
+  try {
+    const r = await fetch(PF_BASE + '/api/brief'); if (!r.ok) return;
+    const b = await r.json();
+    if ((document.activeElement || {}).id !== 'st-brief' && !pBrief.description) pBrief.description = b.description || '';
+    pBrief.summary = b.summary || pBrief.summary;
+    pBrief.ready = !!b.ready;
+    pBrief.request = b.request || {};
+    // 已本地确认但服务端写入还没追上 → 暂不让 server 的旧 questions 把面板刷回（避免确认后问题闪回）
+    if (pBrief.confirmed && !b.confirmed) { /* 保持本地确认态 */ }
+    else { if (Array.isArray(b.questions)) pBrief.questions = b.questions; pBrief.confirmed = !!b.confirmed; }
+    // 生成状态以服务端 request 槽为准：槽消失=已结束（成功或失败）→ 停止转圈，避免失败后一直转
+    const serverGen = !!(b.request && b.request.kind === 'gen-summary');
+    if (pBrief._serverGen && !serverGen && !b.ready) pBrief.failed = true;  // 刚结束却没 ready = 失败
+    if (serverGen) pBrief.failed = false;
+    pBrief._serverGen = serverGen;
+    if (!serverGen) pBrief.generating = false;
+    if (selectedPhase === 1 && (document.activeElement || {}).id !== 'st-brief') renderStageExtra();
+  } catch (e) {}
+}
+async function pollExplore() {
+  try {
+    const r = await fetch(PF_BASE + '/api/explore'); if (!r.ok) return;
+    const e = await r.json();
+    pExplore.refs = e.refs || []; pExplore.heroes = e.heroes || [];
+    pExplore.selectedRefs = e.selectedRefs || []; pExplore.selectedHero = e.selectedHero || '';
+    pExplore.styleSummary = e.styleSummary || '';
+    let req = e.request || {};
+    if (req.kind) req = { [req.kind]: req };  // 兼容 server 过渡期单槽（M5 后是 per-kind）
+    pExplore.request = req;
+    if (!pExplore.stylePrefs.length && Array.isArray(e.stylePrefs)) pExplore.stylePrefs = e.stylePrefs;
+    if (selectedPhase === 2) renderStageExtra();
+    else if (isCanvasStage(selectedPhase) && cvLoaded && cvStage === selectedPhase) renderCanvas();
+  } catch (e) {}
+}
+// 读 search-refs 进度流尾行：最后一条是 error 即「访问失败」→ 面板显可重试
+async function pollSearchLog() {
+  if (selectedPhase !== 2) return;
+  try {
+    const r = await fetch(PF_BASE + '/api/agent-log?phase=search-refs'); if (!r.ok) return;
+    const lines = (await r.json()).lines || [];
+    if (!lines.length) return;
+    const failed = lines[lines.length - 1].kind === 'error';
+    if (failed !== !!pExplore.searchFailed) { pExplore.searchFailed = failed; if (selectedPhase === 2) renderStageExtra(); }
+  } catch (e) {}
+}
+
+function renderStageExtra() {
+  const el = $('stage-extra'); if (!el) return;
+  // 用户正在本区输入框里打字时（如产品需求描述框），轮询不要重渲染——否则会重建 DOM 抢走焦点
+  const ae = document.activeElement;
+  if (ae && el.contains(ae) && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT')) return;
+  if (selectedPhase === 2 && refsViewerOpen) return;   // 正在放大查看参考，别重渲染（否则会把查看器关掉）
+  if (selectedPhase === 1) el.innerHTML = briefSectionHtml();
+  else if (selectedPhase === 2) { el.innerHTML = refsPanelHtml(); initRefsViewer(); }
+  else if ([5, 6, 7].includes(selectedPhase)) el.innerHTML = runStageHtml(selectedPhase);
+  else el.innerHTML = '';
+}
+
+let researchLog = { line: '', running: false, failed: false };
+function briefSectionHtml() {
+  const running = pBrief.generating || (pBrief.request && pBrief.request.kind === 'gen-summary');
+  let sum;
+  if (pBrief.ready) {
+    const s = pBrief.summary || {};
+    const rows = [['产品目标', s.goal], ['目标用户', s.users], ['核心需求', s.need], ['输出范围', s.scope]];
+    sum = `<div>${rows.map(([k, v]) => `<div class="wz-airow"><span class="ak">${k}</span><span class="av">${esc(v || '—')}</span></div>`).join('')}</div>`;
+  } else if (running) sum = `<div class="wz-aibox">✦ 本地 Agent 正在理解你的产品、生成摘要…完成后自动回填。</div>`;
+  else if (pBrief.failed) sum = `<div class="wz-aibox" style="border-color:#e0b4b4;background:#fdf4f4;color:#b3403a">❌ 上次生成没成功（可能 claude 未登录 / 超时）。点下面「生成摘要」重试，或在 CLI 里让 agent 直接登记。</div>`;
+  else sum = `<div class="wz-aibox">填好描述点「✦ 生成摘要」，本地 Agent 会生成产品理解摘要回填这里。</div>`;
+  // 待确认问题 → 点选选项；都不合适再补充描述（比纯打字方便）
+  const qs = pBrief.questions || [];
+  let clarifyBox = '';
+  if (pBrief.ready && qs.length) {
+    const qaRows = qs.map((q, i) => `
+      <div style="margin-top:10px">
+        <div style="font-size:12.5px;font-weight:600">${esc(q.q)}</div>
+        <div class="wz-tags" style="margin-top:6px">
+          ${(q.options || []).map(o => `<span class="wz-tag ${pBrief.answers[i] === o ? 'on' : ''}" data-qi="${i}" data-opt="${esc(o)}">${esc(o)}</span>`).join('')}
+        </div></div>`).join('');
+    clarifyBox = `<div style="margin-top:16px;border:1px solid #f0e2c8;border-radius:12px;padding:14px 16px;background:#fdfaf2">
+      <div class="wz-label" style="font-size:13px;color:#9a6a1a">⚠ 还有几点需要你确认（点选即可）</div>
+      ${qaRows}
+      <div style="margin-top:12px">
+        <div class="wz-label" style="font-size:12px;color:var(--dim)">都不合适？补充说明：</div>
+        <textarea class="wz-textarea" id="st-clarify" style="height:60px;margin-top:6px" oninput="pBrief.clarify=this.value" placeholder="例如：其实是给开发者的支付 SDK 接入工具…">${esc(pBrief.clarify || '')}</textarea>
+      </div></div>`;
+  } else if (pBrief.ready) {
+    clarifyBox = `<div style="margin-top:16px">
+      <div class="wz-label" style="font-size:13px">补充 / 修正（可选）</div>
+      <textarea class="wz-textarea" id="st-clarify" style="height:60px;margin-top:6px" oninput="pBrief.clarify=this.value" placeholder="想调整哪个方向，写一句，点重新生成。">${esc(pBrief.clarify || '')}</textarea></div>`;
+  }
+  const btnLabel = pBrief.ready ? '↻ 重新生成摘要' : '✦ 生成摘要';
+  const accHint = /问题澄清|用户澄清/.test(pBrief.description || '')
+    ? '<br><span style="color:var(--dim);font-size:11.5px">下方已累积你的原始描述 + 历次澄清，可直接编辑，重新生成时整段一起发给 Agent。</span>' : '';
+  const dis = running ? 'disabled style="background:var(--dash);cursor:not-allowed"' : '';
+  // AI 有提问时给两个动作：①重新生成摘要（带答复再跑 AI） ②确认（记下答复、定稿、不跑 AI）
+  const hasQs = pBrief.ready && (pBrief.questions || []).length;
+  let actions;
+  if (hasQs) {
+    actions = `<div style="margin-top:14px;display:flex;gap:10px;align-items:center">
+      <button class="btn ghost" ${dis} onclick="genSummary()">↻ 重新生成摘要</button>
+      <button class="btn" ${dis} onclick="confirmBrief()">✓ 确认需求</button>
+      <span class="hint" style="font-size:11.5px;color:var(--dim)">选完点「确认」即可定稿，不必再让 AI 跑；想让 AI 据答复refine就点「重新生成」</span></div>`;
+  } else {
+    actions = `<button class="btn" style="margin-top:14px" ${dis} onclick="genSummary()">${btnLabel}</button>`
+      + (pBrief.confirmed ? '<span class="hint" style="margin-left:10px;color:#2e7d52">✓ 已确认产品需求</span>' : '');
+  }
+  const briefCard = `<div class="card"><h2>产品需求 <span class="hint">描述产品 → Agent 生成理解摘要 → 点选/补充后「确认」或「重新生成」</span></h2>${accHint}
+    <textarea class="wz-textarea" id="st-brief" style="min-height:120px" oninput="pBrief.description=this.value" placeholder="例如：一个每月寄到家的精品手冲咖啡订阅，帮上班族在家喝到新鲜烘焙。">${esc(pBrief.description)}</textarea>
+    <div style="margin-top:16px">${sum}</div>${clarifyBox}
+    ${actions}</div>`;
+  // 市场调研：让 Agent 自动跑竞品调研全流程（产物登记后出现在下方「产物」与画布）
+  const ph1 = state && (state.phases || []).find(p => p.id === 1);
+  const doneSteps = ph1 ? ph1.steps.filter(s => s.id !== 'define-product' && s.status === 'done').length : 0;
+  const rRun = researchLog.running;
+  const researchCard = `<div class="card"><h2>市场调研 <span class="hint">让 Agent 自动竞品调研</span></h2>
+    <div class="wz-hint2" style="margin:0 0 12px">Agent 自动：竞品搜索 → 整页截图 → 风格/卖点分析 → 核心矛盾分析 → 复刻要点报告。产物出现在下方「产物」与画布。${pBrief.ready ? '' : '<br>建议先在上方生成产品需求摘要，调研更聚焦。'}</div>
+    ${(doneSteps && !rRun) ? `<input class="wz-input" id="st-research-req" style="max-width:none;margin-bottom:10px" oninput="researchLog.instr=this.value" value="${esc(researchLog.instr || '')}" placeholder="重做要求（可选）：如竞品换成 stripe/square 这类、核心矛盾往 X 方向想">` : ''}
+    <button class="btn" ${rRun ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="doResearch()">✦ ${doneSteps ? '重新做市场调研' : '让 Agent 做市场调研'}</button>
+    ${rRun ? `<div class="wz-aibox" style="margin-top:14px">✦ Agent 调研中…${researchLog.line ? `<br><span style="color:var(--dim);font-size:12px">${esc(researchLog.line)}</span>` : ''}<br><span style="color:var(--dim);font-size:12px">进度见下方「阶段步骤 / 产物 / 进展日志」</span></div>` : ''}
+    ${researchLog.failed ? `<div class="wz-aibox" style="margin-top:14px;border-color:#e0b4b4;background:#fdf4f4;color:#b3403a">❌ Agent 中断了（可能 claude 未登录 / 超时 / 中途报错）。点上面按钮重试，或在💬留言说明、或在 CLI 里接手。</div>` : ''}</div>`;
+  return briefCard + researchCard;
+}
+// 把本轮「点选的澄清答案 + 自由补充」结构化地累加进需求描述（可见、可编辑、可持久化），返回累加后的描述。
+// 重新生成 与 确认 都先调它——区别只在之后是否再交给 AI 生成。
+function foldClarifications() {
+  const t = $('st-brief'); if (t) pBrief.description = t.value;     // 先吃下用户对描述框的手动编辑
+  const c = $('st-clarify'); const clar = c ? c.value.trim() : '';
+  const picked = (pBrief.questions || []).map((q, i) => pBrief.answers[i] ? { q: q.q, a: pBrief.answers[i] } : null).filter(Boolean);
+  let acc = (pBrief.description || '').trim();
+  if (picked.length || clar) {
+    if (acc && !/^用户原始提问[：:]/.test(acc)) acc = '用户原始提问：' + acc;   // 首次加澄清时给原始描述打标签
+    let qn = (acc.match(/问题澄清\s*\d+/g) || []).length;
+    let un = (acc.match(/用户澄清\s*\d+/g) || []).length;
+    const lines = [];
+    for (const p of picked) lines.push(`问题澄清${++qn}：${p.q} 用户选择：${p.a}`);
+    if (clar) lines.push(`用户澄清${++un}：${clar}`);
+    acc = acc + '\n' + lines.join('\n');
+  }
+  pBrief.description = acc;             // 回填进描述框（表单随之更新）
+  pBrief.answers = {}; pBrief.clarify = '';
+  return acc;
+}
+function genSummary() {
+  const acc = foldClarifications();
+  if (!acc.trim()) { toast('先描述一下你的产品'); return; }
+  pBrief.confirmed = false;            // 重新生成 = 重新打开，等新摘要/新问题
+  pBrief.questions = [];               // 立刻清掉旧的待确认问题（有新问题等生成完再显示）
+  pBrief.ready = false;                // 进入「生成中」态，旧摘要/问题让位给进度
+  pBrief.generating = true; pBrief.failed = false; renderStageExtra();
+  fetch(PF_BASE + '/api/brief', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ description: acc, confirmed: false, request: { kind: 'gen-summary', description: acc } }) }).catch(() => {});
+  toast('已交给本地 Agent 生成摘要');
+}
+// 确认：把答复记进描述、收起待确认问题、标记已确认——**不再跑 AI**，直接定稿可往下走
+function confirmBrief() {
+  const acc = foldClarifications();
+  if (!acc.trim()) { toast('先描述一下你的产品'); return; }
+  pBrief.questions = [];               // 问题已答复/确认，收起
+  pBrief.confirmed = true;
+  renderStageExtra();
+  fetch(PF_BASE + '/api/brief', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ description: acc, questions: [], confirmed: true }) }).catch(() => {});   // 无 request → 不触发 AI
+  toast('已确认产品需求，可往下走');
+}
+function doResearch() {
+  const el = $('st-research-req'); const instr = (el ? el.value : (researchLog.instr || '')).trim();
+  researchLog.running = true; researchLog.failed = false; researchLog.instr = ''; renderStageExtra();
+  fetch(PF_BASE + '/api/research', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ instruction: instr }) }).catch(() => {});
+  toast(instr ? '已让 Agent 带要求重做市场调研' : '已让 Agent 开始市场调研（进度见下方步骤/产物/日志）');
+}
+async function pollResearch() {
+  try {
+    const r = await fetch(PF_BASE + '/api/agent-log?phase=research'); if (!r.ok) return;
+    const lines = (await r.json()).lines || [];
+    if (!lines.length) return;
+    const last = lines[lines.length - 1];
+    researchLog.line = last.text || '';
+    researchLog.running = !['done', 'error'].includes(last.kind);
+    researchLog.failed = last.kind === 'error';
+    if (selectedPhase === 1 && (document.activeElement || {}).id !== 'st-brief') renderStageExtra();
+  } catch (e) {}
+}
+
+// ⑦ 部署凭证（存本机仓库外，不进 git/留言；Agent 部署时作为环境变量取用）
+let pDeployCreds = { keys: [] };
+async function pollDeployCreds() {
+  try {
+    const r = await fetch(PF_BASE + '/api/deploy-creds'); if (!r.ok) return;
+    pDeployCreds = await r.json();
+    if (selectedPhase === 7) renderStageExtra();
+  } catch (e) {}
+}
+function pdcDraft(k, v) { (pDeployCreds.draft = pDeployCreds.draft || {})[k] = v; }
+function deployCredsHtml() {
+  const ks = (pDeployCreds.keys || []);
+  const d = pDeployCreds.draft || {};
+  const storedList = ks.length
+    ? `<div class="wz-hint2" style="margin-top:8px">已存储 ${ks.length} 项（点 ✕ 删单条）：</div>
+       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">${ks.map(k =>
+         `<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:3px 6px 3px 10px;font-size:12px">
+            <code>${esc(k.key)}=${esc(k.masked)}</code>
+            <span onclick="removeCred('${esc(k.key)}')" title="删除这条凭证" style="cursor:pointer;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:0 5px">✕</span></span>`).join('')}
+         <button class="btn ghost sm" onclick="clearCreds()">清空全部</button></div>`
+    : `<div class="wz-hint2" style="margin-top:8px">还没存任何凭证。</div>`;
+  return `<div class="card"><h2>部署凭证 <span class="hint">填一次，Agent 部署时直接用</span></h2>
+    <div class="wz-hint2" style="margin:0 0 12px">存在本机 <code>~/.productflow/secrets/</code>（600 权限），<b>不进 git、不进留言</b>。Agent 部署时作为环境变量 <code>$PF_SSH_HOST</code> 等取用；只填要改的项即可（与已存的合并）。</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <input class="wz-input" id="dc-host" oninput="pdcDraft('host',this.value)" value="${esc(d.host || '')}" placeholder="服务器地址 PF_SSH_HOST（如 1.2.3.4）">
+      <input class="wz-input" id="dc-user" oninput="pdcDraft('user',this.value)" value="${esc(d.user || '')}" placeholder="用户 PF_SSH_USER（如 root）">
+      <input class="wz-input" id="dc-port" oninput="pdcDraft('port',this.value)" value="${esc(d.port || '')}" placeholder="端口 PF_SSH_PORT（如 22）">
+      <input class="wz-input" id="dc-target" oninput="pdcDraft('target',this.value)" value="${esc(d.target || '')}" placeholder="部署目标 PF_DEPLOY_TARGET（可选）">
+    </div>
+    <textarea class="wz-textarea" id="dc-extra" oninput="pdcDraft('extra',this.value)" style="height:58px;margin-top:10px" placeholder="其他凭证，每行一条 KEY=VALUE（如 CF_API_TOKEN=xxxx）">${esc(d.extra || '')}</textarea>
+    ${storedList}
+    <button class="btn" style="margin-top:12px" onclick="saveDeployCreds()">💾 保存凭证</button></div>`;
+}
+function removeCred(key) {
+  fetch(PF_BASE + '/api/deploy-creds', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ remove: key }) })
+    .then(() => { toast('已删除凭证 ' + key); pollDeployCreds(); }).catch(() => {});
+}
+function clearCreds() {
+  if (!confirm('清空本项目的全部部署凭证？')) return;
+  fetch(PF_BASE + '/api/deploy-creds', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ clear: true }) })
+    .then(() => { toast('已清空全部凭证'); pollDeployCreds(); }).catch(() => {});
+}
+function saveDeployCreds() {
+  const creds = {};
+  const add = (k, id) => { const el = $(id); const v = el ? el.value.trim() : ''; if (v) creds[k] = v; };
+  add('PF_SSH_HOST', 'dc-host'); add('PF_SSH_USER', 'dc-user'); add('PF_SSH_PORT', 'dc-port'); add('PF_DEPLOY_TARGET', 'dc-target');
+  const ex = $('dc-extra');
+  if (ex) ex.value.split('\n').forEach(l => { const m = l.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/); if (m && m[2].trim()) creds[m[1]] = m[2].trim(); });
+  if (!Object.keys(creds).length) { toast('先填至少一项凭证'); return; }
+  fetch(PF_BASE + '/api/deploy-creds', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ creds }) })
+    .then(r => r.json()).then(j => {
+      toast(`已保存，共 ${j.count || 0} 项凭证（本机 600，不进 git）`);
+      pDeployCreds.draft = {};   // 存成功 → 清草稿（输入框随重渲染清空）
+      ['dc-host', 'dc-user', 'dc-port', 'dc-target', 'dc-extra'].forEach(id => { const e = $(id); if (e) e.value = ''; });
+      pollDeployCreds();
+    }).catch(() => {});
+}
+
+// ⑤⑥⑦ 面板阶段：让 Agent 做本阶段（④页面在画布里，不在这里触发）
+let pStageRun = {};   // phase -> {line, running, failed}
+function runStageHtml(phase) {
+  const names = { 5: '功能与数据设计', 6: '开发实现', 7: '部署上线' };
+  const hints = {
+    5: '功能模块清单 → ER 图 → 表结构 DDL → API 契约 → 选开发模板。',
+    6: '按模板脚手架 → 前端 → 后端 → 测试 → 接口文档（产品代码写进项目目录）。',
+    7: '选部署目标 → 部署 → 线上冒烟 → 交付报告。',
+  };
+  const ph = state && (state.phases || []).find(p => p.id === phase);
+  const done = ph && ph.status === 'done';
+  const st = pStageRun[phase] || {};
+  const credsCard = phase === 7 ? deployCredsHtml() : '';
+  const previewCard = phase === 6 ? previewSectionHtml() : '';
+  return credsCard + previewCard + `<div class="card"><h2>${names[phase]} <span class="hint">交给 Agent 自动完成</span></h2>
+    <div class="wz-hint2" style="margin:0 0 12px">${hints[phase]}<br>遇到要你拍板的（如选模板、部署目标），Agent 会在页面顶部弹出选项让你点选。产物出现在下方「产物 / 进展日志」。</div>
+    ${(done && !st.running) ? `<input class="wz-input" id="st-stage-req" style="max-width:none;margin-bottom:10px" oninput="(pStageRun[${phase}]=pStageRun[${phase}]||{}).instr=this.value" value="${esc(st.instr || '')}" placeholder="重做要求（可选）：写一句你想调整的方向">` : ''}
+    <button class="btn" ${st.running ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="doRunStage(${phase})">✦ ${done ? '重做本阶段' : '让 Agent 做本阶段'}</button>
+    ${st.running ? `<div class="wz-aibox" style="margin-top:14px">✦ Agent 进行中…${st.line ? `<br><span style="color:var(--dim);font-size:12px">${esc(st.line)}</span>` : ''}<br><span style="color:var(--dim);font-size:12px">进度见下方步骤 / 产物 / 进展日志</span></div>` : ''}
+    ${st.failed ? `<div class="wz-aibox" style="margin-top:14px;border-color:#e0b4b4;background:#fdf4f4;color:#b3403a">❌ Agent 中断了（可能 claude 未登录 / 超时 / 中途报错）。点上面按钮重试，或在💬留言说明、或在 CLI 里接手本阶段。</div>` : ''}</div>`;
+}
+function doRunStage(phase) {
+  if (pStageRun[phase] && pStageRun[phase].running) { toast('本阶段 Agent 已在进行中'); return; }   // 防双击
+  const el = $('st-stage-req'); const instr = (el ? el.value : ((pStageRun[phase] || {}).instr || '')).trim();
+  pStageRun[phase] = { running: true, line: '', failed: false }; renderStageExtra();   // 提交后 instr 归零，下次重做从空开始
+  fetch(PF_BASE + '/api/run-stage', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phase, instruction: instr }) })
+    .then(r => { if (r.status === 409) toast('本阶段 Agent 已在进行中（服务端拦截了重复触发）'); }).catch(() => {});
+  toast(instr ? '已让 Agent 带要求重做本阶段' : '已让 Agent 做本阶段（进度见下方步骤/产物/日志）');
+}
+async function pollStageRun() {
+  const phase = selectedPhase;
+  if (![4, 5, 6, 7].includes(phase)) return;   // ④页面(画布)也用它显示「让 Agent 列出页面」进度
+  try {
+    const r = await fetch(PF_BASE + '/api/agent-log?phase=stage-' + phase); if (!r.ok) return;
+    const lines = (await r.json()).lines || [];
+    if (!lines.length) return;
+    const last = lines[lines.length - 1];
+    pStageRun[phase] = {
+      line: last.text || '',
+      running: !['done', 'error'].includes(last.kind),
+      failed: last.kind === 'error',
+    };
+    if (selectedPhase !== phase) return;
+    if (phase === 4) { if (cvLoaded && cvStage === 4) renderCanvas(); }   // 画布阶段：刷 stagebar
+    else if ((document.activeElement || {}).id !== 'st-stage-req') renderStageExtra();
+  } catch (e) {}
+}
+
+const STAGE_TAGS = ['极简', '现代', '玻璃拟态', '暗色', '暖色调', '编辑风', '科技感', '大胆活力', '柔和未来', '瑞士国际'];
+function refsPanelHtml() {
+  const searching = !!(pExplore.request && pExplore.request['search-refs']);
+  const tags = STAGE_TAGS.map(t => `<span class="wz-tag ${pExplore.stylePrefs.includes(t) ? 'on' : ''}" data-tag="${t}">${t}</span>`).join('');
+  let grid;
+  if (pExplore.refs.length) {
+    const cards = pExplore.refs.map(r => {
+      const on = pExplore.selectedRefs.includes(r.id);
+      const url = PF_BASE + '/artifacts/' + esc(r.file).replace(/^artifacts\//, '');
+      const srcBtn = r.source ? `<a class="rbtn" title="打开源链接看原帖" href="${esc(r.source)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 源</a>` : '';
+      return `<div class="wz-ref ${on ? 'on' : ''}" data-ref="${r.id}">
+        <div class="wz-check" title="点卡片选中（喂给③首图）">✓</div>
+        <div class="wz-del" title="删除这张参考" onclick="event.stopPropagation();removeRef('${r.id}')">✕</div>
+        <div class="rthumb"><img src="${url}" loading="lazy"></div>
+        <div class="rbar">
+          <span class="rcap">${esc(r.title || '参考')}</span>
+          ${on ? '<span class="rsel">✓ 已选</span>' : ''}
+          <span class="ract">
+            <button class="rbtn" title="放大查阅（缩放 / 平移 / 上一张下一张）" onclick="event.stopPropagation();zoomRef('${r.id}')">🔍 放大</button>
+            ${srcBtn}
+            <button class="rbtn" title="结合需求，找更多类似这张风格的参考" onclick="event.stopPropagation();moreLikeRef('${r.id}')">＋ 类似</button>
+          </span>
+        </div></div>`;
+    }).join('');
+    // 隐藏画廊：交给 Viewer.js 做放大/平移/翻页，与可见卡片解耦（避免点图既选中又放大的冲突）
+    const gallery = `<div id="refs-viewer" style="display:none">${pExplore.refs.map(r =>
+      `<img src="${PF_BASE}/artifacts/${esc(r.file).replace(/^artifacts\//, '')}" alt="${esc(r.title || '参考')}">`).join('')}</div>`;
+    grid = `<div class="wz-refgrid" style="margin-top:14px">${cards}</div>${gallery}`;
+  } else if (searching) grid = `<div class="wz-aibox" style="margin-top:14px">✦ Agent 正在 Dribbble 找参考、下载高清原图，完成后自动出现…</div>`;
+  else grid = `<div class="wz-aibox" style="margin-top:14px">选好风格方向点「找参考」，Agent 去 Dribbble 找图、下载高清原图放进项目。<b>不选也行（零输入）</b>，Agent 会读产品需求自己推断方向。</div>`;
+  const collecting = !!(pExplore.request && pExplore.request['collect-ref']);
+  return `<div class="card"><h2>找参考 <span class="hint">Agent 找 / 你贴链接 → 挑选（喂给③首图）</span></h2>
+    <div class="wz-tags">${tags}</div>
+    <button class="btn" style="margin-top:14px" ${searching ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="searchRefs()">🔍 ${pExplore.refs.length ? '再找一批（累积）' : '让 Agent 找参考'}</button>
+    ${pExplore.refs.length ? `<span class="hint" style="margin-left:10px">已选 ${pExplore.selectedRefs.length}</span>` : ''}
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+      <input class="wz-input" id="st-ref-url" style="flex:1;max-width:none" placeholder="或贴一个参考链接（任意作品页/网站），Agent 截图采集进来">
+      <button class="btn ghost" style="white-space:nowrap" ${collecting ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="collectRef()">＋ 采集链接</button></div>
+    ${collecting ? `<div class="wz-aibox" style="margin-top:10px">✦ Agent 正在打开并采集你贴的链接…</div>` : ''}
+    ${(pExplore.searchFailed && !searching) ? `<div class="wz-aibox" style="margin-top:12px;border-color:#e0b4b4;background:#fdf4f4;color:#b3403a">❌ 访问失败 / 没拿到参考（可能 Dribbble 打不开或被拦截）。点上面「找参考」重试即可。</div>` : ''}
+    ${grid}</div>`;
+}
+function removeRef(id) {
+  pExplore.refs = (pExplore.refs || []).filter(r => r.id !== id);
+  pExplore.selectedRefs = (pExplore.selectedRefs || []).filter(x => x !== id);
+  renderStageExtra();
+  fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ removeRef: id }) }).catch(() => {});
+  toast('已删除该参考');
+}
+function collectRef() {
+  const el = $('st-ref-url'); const u = el ? el.value.trim() : '';
+  if (!u) { toast('先贴一个参考链接'); return; }
+  pExplore.request = Object.assign({}, pExplore.request, { 'collect-ref': { kind: 'collect-ref' } });
+  renderStageExtra();
+  fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ request: { kind: 'collect-ref', url: u } }) }).catch(() => {});
+  toast('已让 Agent 采集这个链接的参考');
+}
+function searchRefs() {
+  pExplore.searchFailed = false;
+  pExplore.request = Object.assign({}, pExplore.request, { 'search-refs': { kind: 'search-refs' } });
+  renderStageExtra();
+  fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ stylePrefs: pExplore.stylePrefs,
+      request: { kind: 'search-refs', keywords: pExplore.stylePrefs, product: (state && state.product) || '' } }) }).catch(() => {});
+  toast(pExplore.stylePrefs.length ? '已请 Agent 去 Dribbble 找参考（累积）' : '已请 Agent 按产品需求自己定方向找参考');
+}
+// 「找更多类似这张」：以某张参考为种子，结合需求做下一轮精炼搜索（可多轮累积）
+function moreLikeRef(id) {
+  const r = (pExplore.refs || []).find(x => x.id === id); if (!r) return;
+  if (pExplore.request && pExplore.request['search-refs']) { toast('正在找参考，等这轮结束再来'); return; }
+  pExplore.searchFailed = false;
+  pExplore.request = Object.assign({}, pExplore.request, { 'search-refs': { kind: 'search-refs' } });
+  renderStageExtra();
+  fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ request: { kind: 'search-refs', keywords: pExplore.stylePrefs,
+      product: (state && state.product) || '', seedRef: { file: r.file, title: r.title || '', source: r.source || '' } } }) }).catch(() => {});
+  toast('已让 Agent 找更多类似这张风格的参考');
+}
+// 图片放大查看（Viewer.js）：隐藏画廊承载所有参考，按需打开到指定那张
+let refsViewer = null, refsViewerOpen = false;
+function initRefsViewer() {
+  const g = document.getElementById('refs-viewer');
+  if (refsViewer) { try { refsViewer.destroy(); } catch (_) {} refsViewer = null; }
+  if (g && window.Viewer) {
+    refsViewer = new Viewer(g, {
+      navbar: true, title: false, transition: false, keyboard: true,
+      shown() { refsViewerOpen = true; }, hidden() { refsViewerOpen = false; },
+    });
+  }
+}
+function zoomRef(id) {
+  const idx = (pExplore.refs || []).findIndex(r => r.id === id);
+  if (idx < 0 || !refsViewer) { toast('图片查看器未就绪，稍后再试'); return; }
+  refsViewer.view(idx);
+}
+
+// 阶段面板事件委托：风格标签多选 / 参考选择 / 描述输入
+(function () {
+  const el = $('stage-extra'); if (!el) return;
+  el.addEventListener('click', e => {
+    const tag = e.target.closest('.wz-tag');
+    if (tag) {
+      if (tag.dataset.qi !== undefined) {   // 产品需求「待确认问题」的选项（单选，可再点取消）
+        const qi = +tag.dataset.qi, opt = tag.dataset.opt;
+        pBrief.answers[qi] = (pBrief.answers[qi] === opt) ? undefined : opt;
+        renderStageExtra(); return;
+      }
+      const t = tag.dataset.tag, i = pExplore.stylePrefs.indexOf(t);   // 找参考的风格标签（多选）
+      if (i >= 0) pExplore.stylePrefs.splice(i, 1); else pExplore.stylePrefs.push(t);
+      // 即时落服务端（对齐 selectedRefs）——选了标签还没点找参考就刷新，也不丢勾选
+      fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ stylePrefs: pExplore.stylePrefs }) }).catch(() => {});
+      renderStageExtra(); return;
+    }
+    const ref = e.target.closest('.wz-ref');
+    if (ref) {
+      const id = ref.dataset.ref, i = pExplore.selectedRefs.indexOf(id);
+      if (i >= 0) pExplore.selectedRefs.splice(i, 1); else pExplore.selectedRefs.push(id);
+      fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ selectedRefs: pExplore.selectedRefs }) }).catch(() => {});
+      renderStageExtra(); return;
+    }
+  });
+  el.addEventListener('input', e => {
+    if (e.target.id === 'st-brief') pBrief.description = e.target.value;
+    else if (e.target.id === 'st-clarify') pBrief.clarify = e.target.value;
+  });
+})();
+/* ===== 无限画布 ===== */
+const ITEM_W = 320, CARD_GAP = 44, GRID_COLS = 4, ROW_GAP = 360;
+let cv = { view: { x: 60, y: 80, z: 0.7 }, items: {}, notes: [], pages: [] };
+let cvStage = null;             // 当前已加载的画布属于哪个阶段（3 首图 / 4 页面）
+let cvLoaded = false, cvSaveTimer = null, cvDirty = false;
+let cvDragging = false, cvEditing = false;
+const PLAT_LIST = ['PC', 'H5', 'APP'];
+function cvDefaultView() { return { x: 60, y: 80, z: 0.7 }; }
+
+async function loadCanvas(stage) {
+  const st = stage ?? cvStage ?? selectedPhase;
+  try {
+    const r = await fetch(PF_BASE + '/api/canvas?stage=' + st);
+    const d = r.ok ? (await r.json() || {}) : {};
+    cv.view = (d && d.view) ? d.view : cvDefaultView();
+    cv.items = (d && typeof d.items === 'object' && d.items) || {};
+    cv.notes = (d && Array.isArray(d.notes)) ? d.notes : [];
+  } catch (e) { cv.view = cvDefaultView(); cv.items = {}; cv.notes = []; }
+}
+
+function cvSave() {
+  if (cvStage == null) return;
+  cvDirty = true;
+  clearTimeout(cvSaveTimer);
+  const st = cvStage;
+  cvSaveTimer = setTimeout(async () => {
+    cvDirty = false;
+    try {
+      await fetch(PF_BASE + '/api/canvas', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ stage: String(st), view: cv.view, items: cv.items, notes: cv.notes }) });
+    } catch (e) {}
+  }, 600);
+}
+
+// 离开画布前立刻刷盘待存布局（用离开阶段的 stage），避免最后一次拖拽丢失 / 串到别阶段
+async function flushCanvasSave() {
+  if (!cvDirty || cvStage == null) return;
+  clearTimeout(cvSaveTimer); cvDirty = false;
+  const st = cvStage;
+  try {
+    await fetch(PF_BASE + '/api/canvas', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ stage: String(st), view: cv.view, items: cv.items, notes: cv.notes }) });
+  } catch (e) {}
+}
+
+// 进入某画布阶段：先 flush 上一块，再加载本阶段（两块画布互不串）
+async function enterCanvas(stage) {
+  await flushCanvasSave();
+  cvLoaded = false; cvStage = stage;
+  cv.items = {}; cv.notes = []; cv.view = cvDefaultView();
+  $('cv-world').innerHTML = '<div class="cv-loading">加载画布…</div>';
+  await loadCanvas(stage);
+  cvLoaded = true;
+  if (stage === 4) pollPages();
+  renderCanvas();
+}
+
+function likedCount() {
+  return Object.values(cv.items).filter(v => v && v.liked).length;
+}
+
+// 当前阶段的卡片：P3 首图(explore.heroes)，P4 页面(pages × 平台矩阵)
+function stageCards() {
+  if (cvStage === 3) {
+    return (pExplore.heroes || []).map(h => ({
+      id: 'hero:' + h.id, kind: 'hero',
+      img: PF_BASE + '/artifacts/' + String(h.file).replace(/^artifacts\//, ''),
+      title: h.style || '首图', file: h.file, base: (pExplore.selectedHero === h.file),
+    }));
+  }
+  if (cvStage === 4) return (cv.pages || []).map(pg => ({ id: 'page:' + pg.id, kind: 'page', pg }));
+  return [];
+}
+
+function cvAutoPlaceCards(cards) {
+  let placed = cards.filter(c => cv.items[c.id]).length;
+  for (const c of cards) {
+    if (cv.items[c.id]) continue;
+    const col = placed % GRID_COLS, row = Math.floor(placed / GRID_COLS);
+    cv.items[c.id] = { x: 40 + col * (ITEM_W + CARD_GAP), y: 40 + row * ROW_GAP };
+    placed++;
+    cvSave();
+  }
+}
+
+function heroCardHtml(c, pos) {
+  return `<div class="cv-item ${pos.liked ? 'liked' : ''} ${c.base ? 'base' : ''}" data-id="${esc(c.id)}" data-title="${esc(c.title)}" data-img="${esc(c.img)}"
+    style="left:${pos.x}px; top:${pos.y}px"><img src="${c.img}" loading="lazy">
+    <div class="cv-heart" title="选中喜欢的">${pos.liked ? '❤' : '♡'}</div>
+    <div class="cv-del" title="删除这张首图">✕</div>
+    <div class="cv-base" data-file="${esc(c.file)}" title="设为视觉基调">${c.base ? '★ 基调' : '设为基调'}</div>
+    <div class="bar"><span class="ti">${esc(c.title)}</span>${cmtIconHtml(pos)}</div></div>`;
+}
+
+// 卡片上的「针对这张写一句意见」图标——有意见时高亮并把意见作为 tooltip
+function cmtIconHtml(pos) {
+  const c = (pos && pos.comment || '').trim();
+  return `<span class="cv-cmt ${c ? 'has' : ''}" title="${c ? esc(c) : '针对这张写一句意见'}">${c ? '💬' : '💭'}</span>`;
+}
+
+function pageCardHtml2(c, pos) {
+  const pg = c.pg, st = pg.status || 'placeholder';
+  const versions = pg.versions || [];
+  const byPlat = {}; for (const v of versions) { if (v && v.platform) byPlat[v.platform] = v; }
+  const matrix = PLAT_LIST.map(p => {
+    const has = byPlat[p];
+    return `<span class="cv-plat ${has ? 'on' : ''}" data-pgid="${esc(pg.id)}" data-plat="${p}" ${has ? `data-file="${esc(has.file)}"` : `title="点击让 Agent 生成 ${p} 版"`}>${p}</span>`;
+  }).join('');
+  const primary = versions.find(v => v && v.file);
+  const thumb = primary
+    ? `<div class="pthumb"><img src="${artUrl(primary.file)}" loading="lazy"></div>`
+    : `<div class="pthumb ph">${st === 'designing' ? '设计中…' : '待设计'}</div>`;
+  return `<div class="cv-item page-card" data-id="${esc(c.id)}" data-pgid="${esc(pg.id)}"
+    style="left:${pos.x}px; top:${pos.y}px">
+    <div class="cv-page-del" title="删除">×</div>${thumb}
+    <div class="bar col"><div class="pn"><span class="pdot ${st}"></span>${esc(pg.name)} <span class="pg-g">${esc(pg.group || '')}</span></div>
+      <div class="cv-platrow">${matrix}${cmtIconHtml(pos)}</div></div></div>`;
+}
+
+function stagebarHtml() {
+  if (cvStage === 3) {
+    const gen = !!(pExplore.request && pExplore.request['gen-heroes']);
+    const n = (pExplore.selectedRefs || []).length;
+    // 始终给生成按钮——没选参考也能生成（零输入：Agent 按产品需求来），选了更贴合
+    const basis = n
+      ? `<span class="sb-sum">依据 ${n} 张选中参考${pExplore.styleSummary ? '　·　风格：' + esc(pExplore.styleSummary) : ''}</span>`
+      : `<span class="sb-guide">没选参考也能生成（Agent 按产品需求来）；想更贴合就去 ② 选几张 <button class="btn ghost sm" onclick="selectStage(2)">去 ② 找参考</button></span>`;
+    return `<button class="btn" ${gen ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="genHeroes()">✦ ${(pExplore.heroes || []).length ? '再生成一批首图（累积）' : '生成首图'}</button>${basis}`;
+  }
+  if (cvStage === 4) {
+    const st = pStageRun[4] || {};
+    const guide = !pExplore.selectedHero
+      ? `<span class="sb-guide">建议先在 ③ 定首图基调 <button class="btn ghost sm" onclick="selectStage(3)">跳到 ③ 首图</button></span>` : '';
+    const fail = st.failed ? `<span class="sb-guide" style="color:#b3403a">❌ Agent 中断，点上面重试</span>` : '';
+    return `<button class="btn" ${st.running ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="runPageMap()">✦ ${st.running ? 'Agent 铺页面中…' : '让 Agent 列出页面'}</button>
+      <button class="btn ghost" onclick="addPagePrompt()">＋ 手动添加</button>${guide}${fail}`;
+  }
+  return '';
+}
+// ④页面：让 Agent 读需求列出本产品应有的所有页面（page-map）；逐页平台版本仍由用户点平台格生成
+function runPageMap() {
+  if (pStageRun[4] && pStageRun[4].running) { toast('Agent 正在铺页面，稍等'); return; }
+  pStageRun[4] = { running: true, line: '', failed: false };
+  if (cvStage === 4) renderCanvas();
+  fetch(PF_BASE + '/api/run-stage', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ phase: 4, instruction: '重点先做第一步 page-map：读 brief.json / replicate-notes 推断本产品应有的所有页面，逐个 page add 占位（带 --note 写依据，按当前主平台）。先不急着出设计图——用户会逐页点平台格让你生成对应平台版本。' }) })
+    .then(r => { if (r.status === 409) toast('本阶段 Agent 已在进行中'); }).catch(() => {});
+  toast('已让 Agent 按需求列出页面（完成后页面卡会出现在画布）');
+}
+
+function renderCanvas() {
+  if (!cvLoaded || cvStage == null) return;
+  if (cvEditing || cvDragging) return;
+  const cards = stageCards();
+  cvAutoPlaceCards(cards);
+  $('cv-stagebar').innerHTML = stagebarHtml();
+  $('cv-empty').style.display = (cards.length || cv.notes.length) ? 'none' : 'flex';
+  const n = likedCount();
+  $('cv-send').textContent = `发给 Agent ${n ? '❤' : '♡'}${n}`;
+  let html = '';
+  for (const c of cards) {
+    const pos = cv.items[c.id]; if (!pos) continue;
+    html += c.kind === 'hero' ? heroCardHtml(c, pos) : pageCardHtml2(c, pos);
+  }
+  for (const note of cv.notes) {
+    html += `<div class="cv-note" data-id="${esc(note.id)}" style="left:${note.x}px; top:${note.y}px">
+      <div class="nx" title="删除">×</div><div class="nt">${note.text ? esc(note.text) : '<span class="ph-empty">双击编辑…</span>'}</div></div>`;
+  }
+  $('cv-world').innerHTML = html;
+  cvApply();
+}
+
+// P3 生成首图（累积，不清旧的，用 ② 选中的参考）
+function genHeroes() {
+  // 没选参考也能生成（零输入：Agent 按产品需求来），不再硬挡
+  pExplore.request = Object.assign({}, pExplore.request, { 'gen-heroes': { kind: 'gen-heroes' } });
+  renderCanvas();
+  fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ selectedRefs: pExplore.selectedRefs, request: { kind: 'gen-heroes', selectedRefs: pExplore.selectedRefs } }) }).catch(() => {});
+  toast((pExplore.selectedRefs || []).length ? '已请 Agent 按选中参考生成首图（累积）' : '已请 Agent 按产品需求生成首图（累积）');
+}
+function removeHero(hid) {
+  if (!hid) return;
+  pExplore.heroes = (pExplore.heroes || []).filter(h => h.id !== hid);
+  delete cv.items['hero:' + hid];
+  renderCanvas();
+  fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ removeHero: hid }) }).catch(() => {});
+  toast('已删除该首图');
+}
+function setHeroBase(file) {
+  pExplore.selectedHero = file;
+  fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ selectedHero: file }) }).catch(() => {});
+  renderCanvas();
+  toast('已设为视觉基调');
+}
+function addPagePrompt() {
+  const name = (prompt('页面名称（如 首页 / 定价 / 关于）：') || '').trim();
+  if (!name) return;
+  const group = (prompt('分组（如 核心 / 营销，可留空）：') || '').trim() || '未分组';
+  fetch(PF_BASE + '/api/pages', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ action: 'add', name, group }) }).then(() => { toast('已添加页面占位'); pollPages(); }).catch(() => {});
+}
+
+async function pollPages() {
+  try {
+    const r = await fetch(PF_BASE + '/api/pages');
+    if (!r.ok) return;
+    const d = await r.json();
+    cv.pages = d.pages || [];
+    if (cvStage === 4 && selectedPhase === 4) renderCanvas();
+  } catch (e) {}
+}
+
+function cvApply() {
+  $('cv-world').style.transform = `translate(${cv.view.x}px, ${cv.view.y}px) scale(${cv.view.z})`;
+  $('cv-zoom').textContent = Math.round(cv.view.z * 100) + '%';
+}
+
+function cvZoomAt(cx, cy, factor) {
+  const z2 = Math.min(3, Math.max(0.08, cv.view.z * factor));
+  const k = z2 / cv.view.z;
+  cv.view.x = cx - (cx - cv.view.x) * k;
+  cv.view.y = cy - (cy - cv.view.y) * k;
+  cv.view.z = z2;
+  cvApply(); cvSave();
+}
+function cvZoomBy(f) {
+  const vp = $('view-canvas').getBoundingClientRect();
+  cvZoomAt(vp.width / 2, vp.height / 2, f);
+}
+function cvFit() {
+  const pts = Object.values(cv.items).filter(p => p && typeof p.x === 'number');
+  if (!pts.length && !cv.notes.length) return;
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const p of pts) {
+    x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y - 40);
+    x1 = Math.max(x1, p.x + ITEM_W); y1 = Math.max(y1, p.y + 320);
+  }
+  for (const note of cv.notes) {
+    x0 = Math.min(x0, note.x); y0 = Math.min(y0, note.y - 40);
+    x1 = Math.max(x1, note.x + 200); y1 = Math.max(y1, note.y + 160);
+  }
+  const vp = $('view-canvas').getBoundingClientRect();
+  const z = Math.min(2, Math.max(0.08, Math.min(vp.width / (x1 - x0 + 120), vp.height / (y1 - y0 + 120))));
+  cv.view = { z, x: (vp.width - (x1 - x0) * z) / 2 - x0 * z, y: (vp.height - (y1 - y0) * z) / 2 - y0 * z };
+  cvApply(); cvSave();
+}
+
+/* 便签 */
+function addNote() {
+  const vp = $('view-canvas').getBoundingClientRect();
+  const wx = (vp.width / 2 - cv.view.x) / cv.view.z - 100;
+  const wy = (vp.height / 2 - cv.view.y) / cv.view.z - 50;
+  const id = 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  cv.notes.push({ id, x: wx, y: wy, text: '' });
+  renderCanvas();
+  cvSave();
+}
+
+function startNoteEdit(el) {
+  const n = cv.notes.find(n => n.id === el.dataset.id);
+  if (!n) return;
+  cvEditing = true;
+  el.classList.add('editing');
+  el.innerHTML = '<textarea></textarea>';
+  const ta = el.querySelector('textarea');
+  ta.value = n.text || '';
+  ta.focus();
+  ta.addEventListener('blur', () => {
+    n.text = ta.value;
+    cvEditing = false;
+    el.classList.remove('editing');
+    cvSave();
+    renderCanvas();
+  });
+}
+
+function sendCanvasFeedback() {
+  const liked = Object.entries(cv.items).filter(([, v]) => v && v.liked).map(([id]) => id);
+  const notes = cv.notes.map(n => n.text).filter(t => t && t.trim());
+  // 把每张卡片上的针对意见收集成 {ref(标题), file, text}，让 Agent 知道是「哪张图的什么问题」
+  const cards = stageCards();
+  const labelOf = {}, fileOf = {};
+  for (const c of cards) { labelOf[c.id] = c.title || (c.pg && c.pg.name) || c.id; fileOf[c.id] = c.file || c.img || ''; }
+  const comments = Object.entries(cv.items)
+    .filter(([, v]) => v && v.comment && v.comment.trim())
+    .map(([id, v]) => ({ ref: labelOf[id] || id, file: fileOf[id] || '', text: v.comment.trim() }));
+  const sname = { 3: '首图设计', 4: '页面设计' }[cvStage] || '';
+  let text = `【${sname}】画布反馈：❤${liked.length} 张、${notes.length} 条便签、${comments.length} 条针对意见`;
+  if (comments.length) text += '\n针对性意见（按卡片）：\n' + comments.map(c => `· 「${c.ref}」：${c.text}`).join('\n');
+  if (notes.length) text += '\n便签：\n' + notes.map(n => `· ${n}`).join('\n');
+  if (!liked.length && !notes.length && !comments.length) { toast('先❤选中、贴便签、或给某张卡片写一句意见'); return; }
+  fetch(PF_BASE + '/api/inbox', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ text, type: 'canvas-feedback', stage: cvStage, liked, notes, comments }) })
+    .then(() => {
+      toast(`已发给 Agent：❤${liked.length} + 便签${notes.length} + 意见${comments.length}`);
+      pollInbox();
+    }).catch(() => {});
+}
+
+// ⑥ 成品预览：缩略图 → 圈选批注 → 把「哪张图哪块区域什么问题」发给 Agent
+function previewSectionHtml() {
+  const ph = state && (state.phases || []).find(p => p.id === 6);
+  const imgs = ph ? ph.artifacts.filter(a => a.type === 'image') : [];
+  if (!imgs.length) return '';   // 还没有成品截图就不显示这块
+  const thumbs = imgs.map(a =>
+    `<div class="pv-thumb" onclick="openPreview('${esc(a.file)}','${esc(a.title)}')">
+       <img src="${artUrl(a.file)}" loading="lazy"><div class="cap">${esc(a.title)}</div></div>`).join('');
+  return `<div class="card"><h2>成品预览 <span class="hint">圈选有问题的区域提意见</span></h2>
+    <div class="wz-hint2" style="margin:0 0 12px">点开成品截图，拖拽框选有问题的区域并写一句，发给 Agent——它会知道「哪张图、哪块区域、什么问题」，比纯文字描述精准。</div>
+    <div class="pv-thumbs">${thumbs}</div></div>`;
+}
+let pvState = { file: '', title: '', boxes: [] };
+function openPreview(file, title) {
+  pvState = { file, title: title || '成品预览', boxes: [] };
+  $('pv-title').textContent = '圈选反馈 · ' + pvState.title;
+  $('pv-img').src = artUrl(file);
+  renderPvBoxes();
+  $('pv-overlay').classList.add('show');
+}
+function closePreview() { $('pv-overlay').classList.remove('show'); }
+function renderPvBoxes() {
+  $('pv-boxes').innerHTML = pvState.boxes.map((b, i) => {
+    const short = b.text.length > 18 ? b.text.slice(0, 18) + '…' : b.text;
+    return `<div class="pv-box" style="left:${b.x * 100}%;top:${b.y * 100}%;width:${b.w * 100}%;height:${b.h * 100}%">
+      <span class="pvn" title="${esc(b.text)}">${i + 1}. ${esc(short)}</span>
+      <span class="pvx" data-i="${i}" title="删除">✕</span></div>`;
+  }).join('');
+}
+function sendPreviewFeedback() {
+  if (!pvState.boxes.length) { toast('先在图上框选区域并写一句意见'); return; }
+  const regions = pvState.boxes.map((b, i) => ({
+    n: i + 1, x: +b.x.toFixed(4), y: +b.y.toFixed(4), w: +b.w.toFixed(4), h: +b.h.toFixed(4), text: b.text }));
+  const text = `成品预览反馈 @ ${pvState.title}（${pvState.file}），${regions.length} 处：\n`
+    + regions.map(r => `${r.n}. 区域(左${Math.round(r.x * 100)}% 上${Math.round(r.y * 100)}% 宽${Math.round(r.w * 100)}% 高${Math.round(r.h * 100)}%)：${r.text}`).join('\n');
+  fetch(PF_BASE + '/api/inbox', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ text, type: 'preview-feedback', file: pvState.file, regions }) })
+    .then(() => { toast(`已发给 Agent：${regions.length} 处圈选意见`); pollInbox(); closePreview(); }).catch(() => {});
+}
+// 预览图上拖拽画框（坐标归一化 0~1，与显示尺寸无关，Agent 可映射回截图像素）
+(function () {
+  const stage = $('pv-stage'); if (!stage) return;
+  let drawing = false, sx = 0, sy = 0;
+  const frac = e => {
+    const r = stage.getBoundingClientRect();
+    return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+             y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
+  };
+  const draftStyle = (x, y, w, h) => {
+    const d = $('pv-draft');
+    d.style.left = x * 100 + '%'; d.style.top = y * 100 + '%';
+    d.style.width = w * 100 + '%'; d.style.height = h * 100 + '%';
+  };
+  stage.addEventListener('pointerdown', e => {
+    if (e.target.closest('.pvx')) return;   // 点删除按钮不画框
+    e.preventDefault();
+    const p = frac(e); sx = p.x; sy = p.y; drawing = true;
+    try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+    $('pv-draft').style.display = 'block'; draftStyle(sx, sy, 0, 0);
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!drawing) return;
+    const p = frac(e);
+    draftStyle(Math.min(sx, p.x), Math.min(sy, p.y), Math.abs(p.x - sx), Math.abs(p.y - sy));
+  });
+  stage.addEventListener('pointerup', e => {
+    if (!drawing) return;
+    drawing = false; $('pv-draft').style.display = 'none';
+    const p = frac(e);
+    const x = Math.min(sx, p.x), y = Math.min(sy, p.y), w = Math.abs(p.x - sx), h = Math.abs(p.y - sy);
+    if (w < 0.02 || h < 0.02) return;   // 太小当误触
+    const t = prompt('这块区域有什么问题 / 想怎么改？');
+    if (!t || !t.trim()) return;
+    pvState.boxes.push({ x, y, w, h, text: t.trim() });
+    renderPvBoxes();
+  });
+  $('pv-boxes').addEventListener('click', e => {
+    const x = e.target.closest('.pvx'); if (!x) return;
+    pvState.boxes.splice(+x.dataset.i, 1); renderPvBoxes();
+  });
+})();
+
+// 交互：平移 / 拖卡片 / 拖便签 / 缩放 / 双击预览或编辑 / ❤ 与 × 点击
+(function () {
+  const vp = $('view-canvas');
+  let mode = null, sx = 0, sy = 0, ox = 0, oy = 0, dragEl = null, dragId = null, dragNote = null, moved = false, captured = false;
+
+  vp.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    if (e.target.closest('.cv-heart') || e.target.closest('.nx') || e.target.closest('textarea')
+        || e.target.closest('.cv-base') || e.target.closest('.cv-page-del') || e.target.closest('.cv-del') || e.target.closest('.cv-plat') || e.target.closest('.cv-cmt')
+        || e.target.closest('.cv-toolbar') || e.target.closest('.cv-controls') || e.target.closest('#cv-stagebar')) return;
+    const note = e.target.closest('.cv-note');
+    const item = e.target.closest('.cv-item');
+    sx = e.clientX; sy = e.clientY; moved = false;
+    if (note) {
+      if (note.classList.contains('editing')) return;
+      dragNote = cv.notes.find(n => n.id === note.dataset.id);
+      if (!dragNote) return;
+      mode = 'note'; dragEl = note; ox = dragNote.x; oy = dragNote.y;
+      note.classList.add('dragging');
+      cvDragging = true;
+    } else if (item) {
+      mode = 'item'; dragEl = item; dragId = item.dataset.id;
+      const p = cv.items[dragId]; if (!p) { mode = null; return; }
+      ox = p.x; oy = p.y;
+      item.classList.add('dragging');
+      cvDragging = true;
+    } else {
+      mode = 'pan'; ox = cv.view.x; oy = cv.view.y;
+      vp.classList.add('panning');
+    }
+  });
+  vp.addEventListener('pointermove', e => {
+    if (!mode) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+    if (moved && !captured) { vp.setPointerCapture(e.pointerId); captured = true; }
+    if (mode === 'pan') { cv.view.x = ox + dx; cv.view.y = oy + dy; cvApply(); }
+    else if (mode === 'note') { dragNote.x = ox + dx / cv.view.z; dragNote.y = oy + dy / cv.view.z;
+           dragEl.style.left = dragNote.x + 'px'; dragEl.style.top = dragNote.y + 'px'; }
+    else { const p = cv.items[dragId]; p.x = ox + dx / cv.view.z; p.y = oy + dy / cv.view.z;
+           dragEl.style.left = p.x + 'px'; dragEl.style.top = p.y + 'px'; }
+  });
+  vp.addEventListener('pointerup', e => {
+    if (mode) cvSave();
+    if (dragEl) dragEl.classList.remove('dragging');
+    vp.classList.remove('panning');
+    mode = null; dragEl = null; dragNote = null; cvDragging = false; captured = false;
+  });
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = vp.getBoundingClientRect();
+    if (e.ctrlKey || e.metaKey || Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      cvZoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0018));
+    } else { cv.view.x -= e.deltaX; cvApply(); cvSave(); }
+  }, { passive: false });
+  vp.addEventListener('dblclick', e => {
+    const note = e.target.closest('.cv-note');
+    if (note) { if (!note.classList.contains('editing')) startNoteEdit(note); return; }
+    const item = e.target.closest('.cv-item');
+    if (!item) return;
+    if (item.dataset.img) openArtifact(item.dataset.img, item.dataset.title || '', 'image');
+    else if (item.dataset.pgid) {
+      const pg = (cv.pages || []).find(p => p.id === item.dataset.pgid);
+      const v = pg && (pg.versions || []).find(x => x && x.file);
+      if (v) openArtifact(artUrl(v.file), pg.name, 'image');
+    }
+  });
+  vp.addEventListener('click', e => {
+    const x = e.target.closest('.nx');
+    if (x) {
+      const id = x.closest('.cv-note').dataset.id;
+      cv.notes = cv.notes.filter(n => n.id !== id);
+      renderCanvas(); cvSave();
+      return;
+    }
+    const h = e.target.closest('.cv-heart');
+    if (h) {
+      const id = h.closest('.cv-item').dataset.id;
+      const it = cv.items[id];
+      if (!it) return;
+      if (it.liked) delete it.liked; else it.liked = true;
+      renderCanvas(); cvSave();
+      return;
+    }
+    // 针对单张卡片写一句意见（绑定到这张图，不再是游离便签）
+    const cmt = e.target.closest('.cv-cmt');
+    if (cmt) {
+      const id = cmt.closest('.cv-item').dataset.id;
+      const it = cv.items[id];
+      if (!it) return;
+      const val = prompt('针对这张写一句意见（留空清除）：', it.comment || '');
+      if (val === null) return;
+      if (val.trim()) it.comment = val.trim(); else delete it.comment;
+      renderCanvas(); cvSave();
+      return;
+    }
+    // 设为视觉基调（P3 首图）
+    const base = e.target.closest('.cv-base');
+    if (base) { setHeroBase(base.dataset.file); return; }
+    // 删除首图（P3）
+    const hdel = e.target.closest('.cv-del');
+    if (hdel) {
+      const itemId = hdel.closest('.cv-item').dataset.id || '';
+      removeHero(itemId.replace(/^hero:/, ''));
+      return;
+    }
+    // 删除页面（P4）
+    const del = e.target.closest('.cv-page-del');
+    if (del) {
+      const id = del.closest('.cv-item').dataset.pgid;
+      fetch(PF_BASE + '/api/pages', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ action: 'remove', id }) })
+        .then(() => { toast('已删除页面'); pollPages(); }).catch(() => {});
+      return;
+    }
+    // 点已有平台版本徽章 → 预览该平台设计稿
+    const plat = e.target.closest('.cv-plat.on');
+    if (plat && plat.dataset.file) {
+      openArtifact(artUrl(plat.dataset.file), plat.dataset.plat + ' 版', 'image');
+      return;
+    }
+    // 点空平台徽章 → 让 Agent 生成此页此平台版本（spawn 会真跑 claude，先确认避免误点）
+    const emptyPlat = e.target.closest('.cv-plat:not(.on)');
+    if (emptyPlat) {
+      const pgId = emptyPlat.dataset.pgid, platform = emptyPlat.dataset.plat;
+      const pg = (cv.pages || []).find(p => p.id === pgId);
+      const pname = pg ? pg.name : '该页面';
+      if (confirm(`让 Agent 生成「${pname}」的 ${platform} 版设计？`)) {
+        fetch(PF_BASE + '/api/pages', { method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ action: 'gen-version', id: pgId, platform }) }).catch(() => {});
+        toast(`已让 Agent 生成「${pname}」的 ${platform} 版（完成后版本徽章会变亮）`);
+      }
+      return;
+    }
+  });
+})();
+
+/* ===== modal ===== */
+let mmLoaded = false;
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+async function ensureMarkmap() {
+  if (mmLoaded) return;
+  await loadScript('/vendor/d3.min.js');
+  await loadScript('/vendor/markmap-lib.js');
+  await loadScript('/vendor/markmap-view.js');
+  mmLoaded = true;
+}
+
+/* 全部产物总览：一屏看全项目跨阶段产物（只读缩略图墙，取代拆 per-stage 后丢失的全局视角） */
+// 总览：跨阶段汇集所有产出——不止 state.json 的 artifact，还含找参考(explore.refs)、
+// 首图(explore.heroes)、页面设计(pages.json 各页×平台版本)、产品需求摘要(brief)。
+function _ovImgCard(file, label) {
+  const u = artUrl(file);
+  return `<div style="cursor:pointer" onclick="openArtifact('${u}','${esc(label)}','image')">
+    <img src="${u}" loading="lazy" style="width:100%;height:108px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">
+    <div style="font-size:11.5px;color:var(--ink-2);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label)}</div></div>`;
+}
+function _ovDocCard(file, label, type) {
+  const u = artUrl(file);
+  const ic = { md: '📄', html: '🌐', code: '⌘', json: '{}', mindmap: '🧠' }[type] || '📦';
+  return `<div style="cursor:pointer" onclick="openArtifact('${u}','${esc(label)}','${type}')">
+    <div style="height:108px;display:flex;align-items:center;justify-content:center;font-size:30px;border:1px solid var(--line);border-radius:8px;background:var(--fill)">${ic}</div>
+    <div style="font-size:11.5px;color:var(--ink-2);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label)}</div></div>`;
+}
+function _ovTextCard(title, text) {
+  return `<div style="grid-column:1/-1;border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--fill)">
+    <div style="font-weight:700;font-size:12.5px;margin-bottom:4px">${esc(title)}</div>
+    <div style="font-size:12px;color:var(--ink-2);line-height:1.6">${esc(text)}</div></div>`;
+}
+async function openOverview() {
+  if (!state) return;
+  $('modal-title').textContent = '全部产物 · 项目总览';
+  document.querySelector('#modal .box').classList.remove('wide');
+  $('modal-body').innerHTML = '<div style="padding:42px;text-align:center;color:var(--dim)">加载中…</div>';
+  $('modal').classList.add('show');
+  const [brief, ex, pgs] = await Promise.all([
+    fetch(PF_BASE + '/api/brief').then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch(PF_BASE + '/api/explore').then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch(PF_BASE + '/api/pages').then(r => r.ok ? r.json() : null).catch(() => null),
+  ]);
+  let html = '<div style="width:100%;max-width:1100px;padding:6px 4px">';
+  let any = false;
+  for (const ph of (state.phases || [])) {
+    const cards = [];
+    // ① 产品需求摘要
+    if (ph.id === 1 && brief && brief.ready) {
+      const s = brief.summary || {};
+      const parts = [s.goal, s.users, s.need, s.scope].filter(Boolean).join('　·　');
+      if (parts) cards.push(_ovTextCard('产品需求摘要', parts));
+    }
+    // ② 找参考
+    if (ph.id === 2 && ex) for (const r of (ex.refs || [])) cards.push(_ovImgCard(r.file, r.title || '参考'));
+    // ③ 首图
+    if (ph.id === 3 && ex) for (const h of (ex.heroes || []))
+      cards.push(_ovImgCard(h.file, (h.style || '首图') + (ex.selectedHero === h.file ? ' ★基调' : '')));
+    // ④ 页面设计：每页 × 平台版本
+    if (ph.id === 4 && pgs) for (const pg of (pgs.pages || []))
+      for (const v of (pg.versions || [])) cards.push(_ovImgCard(v.file, `${pg.name}·${v.platform || ''}`));
+    // 各阶段 state.json artifact
+    for (const a of (ph.artifacts || []))
+      cards.push(a.type === 'image' ? _ovImgCard(a.file, a.title) : _ovDocCard(a.file, a.title, a.type));
+    if (!cards.length) continue;
+    any = true;
+    html += `<div style="font-weight:800;font-size:13px;margin:16px 0 9px">P${ph.id} ${esc(ph.name)} <span style="color:var(--dim);font-weight:500">· ${cards.length}</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">${cards.join('')}</div>`;
+  }
+  if (!any) html += '<div class="empty" style="padding:36px;text-align:center;color:var(--dim)">还没有任何产物——各阶段产出后会在这里汇总。</div>';
+  html += '</div>';
+  $('modal-body').innerHTML = html;
+}
+
+async function openArtifact(url, title, type) {
+  $('modal-title').textContent = title;
+  const body = $('modal-body');
+  const box = document.querySelector('#modal .box');
+  box.classList.toggle('wide', type === 'mindmap');
+  if (type === 'image') body.innerHTML = `<img class="full" src="${url}">`;
+  else if (type === 'html') { window.open(url, '_blank'); return; }
+  else if (type === 'mindmap') {
+    body.innerHTML = `<svg id="mm-svg"></svg>`;
+    $('modal').classList.add('show');
+    await ensureMarkmap();
+    const md = await (await fetch(url)).text();
+    const { Transformer, Markmap } = window.markmap;
+    const { root } = new Transformer().transform(md);
+    // 单色灰阶 palette，贴合壹零极简
+    const palette = ['#111111', '#444444', '#777777', '#999999', '#555555', '#333333'];
+    Markmap.create('#mm-svg', {
+      duration: 300, maxWidth: 340, paddingX: 18, autoFit: true, initialExpandLevel: -1,
+      color: n => palette[(parseInt((n.state?.path || '0.0').split('.')[1]) || 0) % palette.length],
+    }, root);
+    return;
+  }
+  else {
+    const text = await (await fetch(url)).text();
+    body.innerHTML = `<pre>${esc(text)}</pre>`;
+  }
+  $('modal').classList.add('show');
+}
+function closeModal() { $('modal').classList.remove('show'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closePreview(); } });
+window.addEventListener('hashchange', () => {
+  const hs = parseInt(((location.hash || '').match(/s(\d+)/) || [])[1]);
+  if (hs >= 1 && hs !== selectedPhase && state && (state.phases || []).some(p => p.id === hs)) selectStage(hs);
+});
+
+$('chat-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const input = $('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  await fetch(PF_BASE + '/api/inbox', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ text }) });
+  input.value = '';
+  pollInbox();
+});
+$('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('chat-form').requestSubmit(); }
+});
+
+/* ===== 版本 / 自动更新 ===== */
+// /api/update-check 是全局路由（不带 /p/<id>），故用绝对路径 '/api/...'，首页和项目页都能命中
+async function pollUpdate() {
+  const bar = $('update-bar'); if (!bar) return;
+  try {
+    const r = await fetch('/api/update-check'); if (!r.ok) return;
+    const u = await r.json();
+    if (!u.update_available) { bar.style.display = 'none'; return; }
+    bar.style.display = '';
+    const action = u.git
+      ? `<button class="btn sm" onclick="doUpdate()">立即更新</button>`
+      : `<span style="opacity:.85">（git clone 安装才支持一键更新；或重装最新包）</span>`;
+    bar.innerHTML = `🆕 有新版本 <b>v${u.latest}</b>（当前 v${u.current}）${action} <span id="update-msg"></span>`;
+  } catch (e) { /* 离线/拉取失败：静默，不打扰 */ }
+}
+function doUpdate() {
+  const m = $('update-msg'); if (m) m.textContent = '更新中…（git pull + 数据迁移）';
+  fetch('/api/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' })
+    .then(r => r.json())
+    .then(j => {
+      if (!m) return;
+      if (j.ok) {
+        m.innerHTML = `✓ 已更新到 <b>v${j.version}</b>，<b>重启操作台</b>后生效（重跑 <code>/productflow-start</code>，或终端 <code>lsof -ti:7717｜xargs kill</code> 后重启）`;
+      } else {
+        const hint = j.hint || j.error || '未知错误';
+        m.textContent = '更新失败：' + hint;
+      }
+    })
+    .catch(() => { if (m) m.textContent = '更新失败：网络错误'; });
+}
+
+/* ===== 启动 ===== */
+if (IS_PROJECT) {
+  document.title = 'ProductFlow · 操作台';
+  $('page-project').classList.add('on');
+  $('nav-proj').classList.add('on');
+  poll();   // 首次 poll → selectStage(current_phase)；画布按需在 enterCanvas 里加载
+  pollInbox();
+  pollHealth();
+  pollPages();
+  pollChoices();
+  pollUpdate();
+  setInterval(poll, 2000);
+  setInterval(pollUpdate, 60000);   // 版本检测走 server 端缓存，开销极小
+  setInterval(pollInbox, 4000);
+  setInterval(pollHealth, 15000);
+  setInterval(pollPages, 5000);
+  setInterval(pollChoices, 3000);
+  // 阶段内的 brief/explore 轮询（按当前阶段拉对应数据回填面板）
+  setInterval(() => {
+    if (selectedPhase === 1) { pollBrief(); pollResearch(); }
+    else if (selectedPhase === 2) { pollExplore(); pollSearchLog(); }
+    else if (isCanvasStage(selectedPhase)) { pollExplore(); if (selectedPhase === 4) pollStageRun(); }
+    else if ([5, 6, 7].includes(selectedPhase)) pollStageRun();
+  }, 2500);
+} else {
+  document.title = 'ProductFlow · 总览';
+  $('page-home').classList.add('on');
+  $('nav-proj').classList.add('on');
+  pollProjects();
+  pollUpdate();
+  setInterval(pollProjects, 3000);
+  setInterval(pollUpdate, 60000);
+}
+</script>
+</body>
+</html>

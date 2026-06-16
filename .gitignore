@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# skill-dev internal (eval workspaces, not part of the shipped tool)
+**/evals/
+*-workspace/
+
+# user/runtime data must never be committed (lives outside the skill anyway)
+.productflow/
+secrets/
+*.env
+
+# misc
+*.tar.gz
+.understand-anything/
+node_modules/

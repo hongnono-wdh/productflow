@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ProductFlow — 把做落地页变成一条流水线 | Claude Code 本地 skill</title>
+<meta name="description" content="ProductFlow 是一个 Claude Code 本地 skill：把做一个产品落地页变成 7 阶段可视化流水线，从市场调研到本地上线，全程 agent 驱动、本地操作台盯关键节点。数据全在自己机器上。" />
+<link rel="canonical" href="https://github.com/hongnono-wdh/productflow" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="ProductFlow — 把做落地页变成一条流水线" />
+<meta property="og:description" content="一个 Claude Code 本地 skill。从一句话产品想法，到本地 Docker 跑起来的落地页，7 阶段流水线 + 本地操作台，全程本地运行。" />
+<meta property="og:image" content="https://github.com/hongnono-wdh/productflow/raw/main/og.png" />
+<meta property="og:url" content="https://github.com/hongnono-wdh/productflow" />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="ProductFlow — 把做落地页变成一条流水线" />
+<meta name="twitter:description" content="Claude Code 本地 skill：7 阶段流水线 + 本地操作台，从想法到本地上线，全程本地运行。" />
+<meta name="twitter:image" content="https://github.com/hongnono-wdh/productflow/raw/main/og.png" />
+
+<meta name="theme-color" content="#15140f" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%2315140f'/%3E%3Ctext x='50' y='50' dy='.34em' text-anchor='middle' font-family='ui-sans-serif,system-ui,sans-serif' font-weight='700' font-size='58' fill='%23fbf6d2'%3EP%3C/text%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://github.com" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<a class="skip-link" href="#install">跳到安装</a>
+
+<header class="nav" id="top">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top" aria-label="ProductFlow 首页">
+      <span class="brand-mark" aria-hidden="true">P</span>
+      <span class="brand-name">ProductFlow<small>landing pipeline</small></span>
+    </a>
+
+    <nav class="nav-links" aria-label="主导航">
+      <a href="#how">怎么工作</a>
+      <a href="#console">操作台</a>
+      <a href="#features">特性</a>
+      <a href="#install" class="nav-cta">一键安装</a>
+    </nav>
+
+    <button class="nav-toggle" id="navToggle" aria-label="打开菜单" aria-expanded="false" aria-controls="mobileMenu">
+      <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
+    </button>
+  </div>
+
+  <nav class="mobile-menu" id="mobileMenu" aria-label="移动导航" hidden>
+    <a href="#how">怎么工作</a>
+    <a href="#console">操作台</a>
+    <a href="#features">特性</a>
+    <a href="#install">一键安装</a>
+    <a href="https://github.com/hongnono-wdh/productflow">GitHub</a>
+  </nav>
+</header>
+
+<main id="main">
+
+  <!-- HERO -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Claude Code 本地 skill · v2.1</p>
+        <h1 id="hero-title">把做一个落地页，<br>变成一条流水线。</h1>
+        <p class="lede">从一句话产品想法，到本地 Docker 跑起来的页面。7 个阶段，agent 驱动，你只在关键节点拍板。</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#install">一键安装</a>
+          <a class="btn btn-ghost" href="#how">看它怎么工作</a>
+        </div>
+      </div>
+
+      <div class="hero-rail" aria-hidden="true">
+        <div class="rail-window">
+          <div class="rail-bar">
+            <span class="rail-dot"></span><span class="rail-dot"></span><span class="rail-dot"></span>
+            <span class="rail-host mono">127.0.0.1:7717</span>
+          </div>
+          <div class="rail-body">
+            <div class="rail-row done"><span class="rail-n mono">01</span><span class="rail-l">市场调研</span><span class="rail-s">已完成</span></div>
+            <div class="rail-row done"><span class="rail-n mono">02</span><span class="rail-l">找参考</span><span class="rail-s">已完成</span></div>
+            <div class="rail-row done"><span class="rail-n mono">03</span><span class="rail-l">首图设计</span><span class="rail-s">已完成</span></div>
+            <div class="rail-row cur"><span class="rail-n mono">04</span><span class="rail-l">页面设计</span><span class="rail-s">进行中</span></div>
+            <div class="rail-row"><span class="rail-n mono">05</span><span class="rail-l">功能与数据设计</span><span class="rail-s">待办</span></div>
+            <div class="rail-row"><span class="rail-n mono">06</span><span class="rail-l">开发实现</span><span class="rail-s">待办</span></div>
+            <div class="rail-row"><span class="rail-n mono">07</span><span class="rail-l">部署上线</span><span class="rail-s">待办</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOCAL STRIP -->
+  <section class="strip" aria-label="核心事实">
+    <div class="wrap strip-grid">
+      <div class="strip-item"><span class="strip-k mono">本地优先</span><span class="strip-v">操作台只 bind 127.0.0.1，数据在你机器上</span></div>
+      <div class="strip-item"><span class="strip-k mono">零云依赖</span><span class="strip-v">不上云、不共享，不暴露公网</span></div>
+      <div class="strip-item"><span class="strip-k mono">一个进程</span><span class="strip-v">纯 Python3 起服务，无第三方依赖</span></div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how" id="how" aria-labelledby="how-title">
+    <div class="wrap">
+      <header class="sec-head">
+        <h2 id="how-title">7 个阶段，从想法走到上线</h2>
+        <p class="sec-sub">每个阶段都有产物、有进度、有可以拍板的节点。前两步看板登记，第三第四步铺到画布上拖拽对比，最后三步交付到本地。</p>
+      </header>
+
+      <ol class="pipeline" role="list">
+        <li class="stage">
+          <span class="stage-n mono">01</span>
+          <h3>市场调研</h3>
+          <p>竞品分析、核心矛盾梳理，产出产品 brief 与竞品矩阵。</p>
+          <span class="stage-view">看板</span>
+        </li>
+        <li class="stage">
+          <span class="stage-n mono">02</span>
+          <h3>找参考</h3>
+          <p>抓参考图、整页截图，登记成可点选的参考清单。</p>
+          <span class="stage-view">看板</span>
+        </li>
+        <li class="stage accent">
+          <span class="stage-n mono">03</span>
+          <h3>首图设计</h3>
+          <p>批量出首图方案，铺到无限画布上缩放、点心、对比。</p>
+          <span class="stage-view">画布</span>
+        </li>
+        <li class="stage accent">
+          <span class="stage-n mono">04</span>
+          <h3>页面设计</h3>
+          <p>每个页面 × 每个平台的设计稿排到画布，页面地图盯版本。</p>
+          <span class="stage-view">画布</span>
+        </li>
+        <li class="stage">
+          <span class="stage-n mono">05</span>
+          <h3>功能与数据设计</h3>
+          <p>模块清单、ER 图、表结构、API 约定，定清楚再动手。</p>
+          <span class="stage-view">看板</span>
+        </li>
+        <li class="stage">
+          <span class="stage-n mono">06</span>
+          <h3>开发实现</h3>
+          <p>脚手架、前后端、冒烟测试、接口文档，逐步登记。</p>
+          <span class="stage-view">看板</span>
+        </li>
+        <li class="stage">
+          <span class="stage-n mono">07</span>
+          <h3>部署上线</h3>
+          <p>本地 Docker、Cloudflare Pages/Workers 或单机，上线即出交付报告。</p>
+          <span class="stage-view">看板</span>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- INSTALL (most important) -->
+  <section class="install" id="install" aria-labelledby="install-title">
+    <div class="wrap install-grid">
+      <div class="install-copy">
+        <h2 id="install-title">第一次安装</h2>
+        <p class="sec-sub">把下面这段提示词复制，粘进 Claude Code（或 Claude 桌面端）。它会自己从克隆装到启动操作台，全程不用你手动分步。</p>
+
+        <ol class="steps" role="list">
+          <li><span class="step-n mono">1</span><div><strong>复制</strong>右侧整段提示词</div></li>
+          <li><span class="step-n mono">2</span><div><strong>粘进</strong> Claude Code / Claude 桌面端</div></li>
+          <li><span class="step-n mono">3</span><div>它<strong>自动装好</strong>，跟着 <code>/productflow-init</code>、<code>/productflow-start</code> 走</div></li>
+        </ol>
+
+        <p class="install-note">只有 <strong>Python3</strong> 必需。Docker / Playwright / OpenAI 生图 key 都可选，缺了只降级不挡主流程；<code>/productflow-init</code> 会告诉你缺什么、怎么补。</p>
+      </div>
+
+      <div class="install-code">
+        <div class="code-head">
+          <span class="code-title mono">install-prompt</span>
+          <button class="copy-btn" id="copyBtn" type="button" aria-live="polite">
+            <span class="copy-ico" aria-hidden="true">⧉</span>
+            <span class="copy-label">复制提示词</span>
+          </button>
+        </div>
+        <pre class="code-block"><code id="installPrompt">请帮我在这台电脑上安装并启动 ProductFlow（一个把"做产品落地页"变成 7 阶段流水线、配本地操作台的 Claude Code 工具）。下面每一步你来执行，做完告诉我怎么用：
+
+1. 克隆代码到固定位置（已存在就进目录 git pull 更新）：
+   git clone https://github.com/hongnono-wdh/productflow.git ~/.local/share/productflow 2>/dev/null || (cd ~/.local/share/productflow &amp;&amp; git pull)
+
+2. 把 4 个 skill 软链进 Claude Code 的 skills 目录：
+   mkdir -p ~/.claude/skills
+   ln -sfn ~/.local/share/productflow/productflow ~/.claude/skills/productflow
+   ln -sfn ~/.local/share/productflow/productflow-init ~/.claude/skills/productflow-init
+   ln -sfn ~/.local/share/productflow/productflow-start ~/.claude/skills/productflow-start
+   ln -sfn ~/.local/share/productflow/productflow-update ~/.claude/skills/productflow-update
+
+3. 跑自检（查依赖 + 跑测试，确认装对了）：
+   python3 ~/.local/share/productflow/productflow/scripts/setup.py
+   缺 Playwright 就装 pip install playwright &amp;&amp; playwright install chromium（可选）；没 Docker / 没 OpenAI 生图 key 就提醒我（都可选，缺了只降级不挡主流程）。
+
+4. 启动操作台并打开浏览器：
+   sh ~/.local/share/productflow/productflow/scripts/start.sh
+   然后告诉我操作台地址 http://127.0.0.1:7717/，以及"新开会话可用 /productflow-init、/productflow-start，或直接说想做什么落地页"。
+
+只有 Python3 必需，其余可选。</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONSOLE -->
+  <section class="console" id="console" aria-labelledby="console-title">
+    <div class="wrap">
+      <header class="sec-head">
+        <h2 id="console-title">一个跑在本地的操作台</h2>
+        <p class="sec-sub">对话是主通道，操作台是另一只眼睛。两边共享同一份状态，你随时看进度、翻产物、给 agent 留言、在画布上拍板。</p>
+      </header>
+
+      <div class="console-bento">
+        <article class="cb cb-lg">
+          <h3>无限画布对比设计</h3>
+          <p>首图和页面设计阶段，所有方案铺在一张可缩放的画布上。拖拽摆放、双击预览、点心标记，多平台多版本一眼看清。</p>
+          <div class="cb-canvas" aria-hidden="true">
+            <div class="cb-tile t1"></div>
+            <div class="cb-tile t2"><span class="cb-like">♥</span></div>
+            <div class="cb-tile t3"></div>
+            <div class="cb-tile t4"></div>
+          </div>
+        </article>
+
+        <article class="cb cb-note">
+          <h3>给 agent 留言</h3>
+          <p>右侧收件箱常驻所有阶段。你写反馈，agent 回复，有未读会亮角标。</p>
+        </article>
+
+        <article class="cb">
+          <h3>点选确认</h3>
+          <p>agent 不确定时，顶部浮出选择条，给你几个具体选项点一下，它再继续。</p>
+        </article>
+
+        <article class="cb cb-wide">
+          <h3>圈一块发回去</h3>
+          <p>预览图上画个框、加句话，把标注过的局部发给 agent，比打字描述准得多。</p>
+        </article>
+
+        <article class="cb">
+          <h3>多项目进度墙</h3>
+          <p>首页一排卡片，7 段进度条显示每个项目走到第几步。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features" id="features" aria-labelledby="features-title">
+    <div class="wrap">
+      <header class="sec-head">
+        <h2 id="features-title">为什么是它</h2>
+      </header>
+
+      <div class="feat-list">
+        <div class="feat">
+          <span class="feat-k mono">本地优先</span>
+          <div>
+            <h3>数据都在你机器上</h3>
+            <p>操作台只监听 127.0.0.1，项目、key、部署凭证全在本机，不上云、不暴露公网。</p>
+          </div>
+        </div>
+        <div class="feat">
+          <span class="feat-k mono">人盯节点</span>
+          <div>
+            <h3>关键决策不全自动</h3>
+            <p>选参考、挑首图、确认理解这些拍板动作留给你，agent 跑流程、你定方向。</p>
+          </div>
+        </div>
+        <div class="feat">
+          <span class="feat-k mono">可视化</span>
+          <div>
+            <h3>进度与产物看得见</h3>
+            <p>每一步实时登记产物和进度，markdown / SQL / 图片直接在台子里翻。</p>
+          </div>
+        </div>
+        <div class="feat">
+          <span class="feat-k mono">本地部署</span>
+          <div>
+            <h3>一条命令上线</h3>
+            <p>静态站走 nginx:alpine 本地 Docker，也能推到 Cloudflare Pages/Workers 或单机。</p>
+          </div>
+        </div>
+        <div class="feat">
+          <span class="feat-k mono">优雅降级</span>
+          <div>
+            <h3>缺依赖也跑得通</h3>
+            <p>没 Playwright、没 Docker、没生图 key？相关阶段自动降级，整条流水线照样走完。</p>
+          </div>
+        </div>
+        <div class="feat">
+          <span class="feat-k mono">自动更新</span>
+          <div>
+            <h3>一键升级，数据不丢</h3>
+            <p>操作台检测到新版会提示更新；网页一键或 <code>/productflow-update</code> 都行——git pull + 自动迁移，项目数据原样保留。</p>
+          </div>
+        </div>
+      </div>
+
+      <p class="feat-foot">v2.1 已由 3 个用户视角端到端走完 ①调研 → ⑦部署，三个项目全部用本地 Docker 上线、E2E 8/8 通过。</p>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="final" aria-labelledby="final-title">
+    <div class="wrap final-inner">
+      <h2 id="final-title">说一句你想做的落地页，剩下的交给流水线。</h2>
+      <a class="btn btn-primary" href="#install">一键安装</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <div class="footer-brand">
+      <span class="brand-mark sm" aria-hidden="true">P</span>
+      <span>ProductFlow</span>
+    </div>
+    <nav class="footer-links" aria-label="页脚链接">
+      <a href="https://github.com/hongnono-wdh/productflow">GitHub</a>
+      <a href="#how">怎么工作</a>
+      <a href="#install">安装</a>
+    </nav>
+    <p class="footer-note">开源 · MIT。本地工具，只监听 127.0.0.1，不暴露公网。</p>
+  </div>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>
