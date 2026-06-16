@@ -4,7 +4,7 @@
 
 ## 何时遵循本流程
 
-当用户要"做一个产品落地页 / 官网 / waitlist 页"、"复刻某产品的页面"、"从调研到上线"，或提到 ProductFlow / 操作台 / landing page pipeline 时，按下面五步推进，并读对应的 `references/phase-N-*.md` 手册。
+当用户要"做一个网站 / Web 产品 / 应用 / 落地页 / 官网 / waitlist"、"做一个带后端和数据库的产品"、"复刻某产品"、"从调研到上线"，或提到 ProductFlow / 操作台 / landing page pipeline 时，按下面的阶段推进，并读对应的 `references/phase-N-*.md` 手册。ProductFlow 做的是**完整互联网产品**（从落地页到带数据库与后端的功能性 Web 应用），落地页只是最简单的一种。
 
 ```
 ①市场调研 → ②页面设计 → ③功能与数据设计 → ④开发实现 → ⑤部署上线

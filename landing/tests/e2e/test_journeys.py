@@ -237,62 +237,57 @@ class LandingE2E(unittest.TestCase):
         finally:
             ctx.close()
 
-    # 10 — a .glass element actually reports backdrop-filter (defensive: headless_shell may say 'none')
-    def test_glass_has_backdrop_filter(self):
+    # 10 — cards carry a soft-shadow / elevation token (replaces old .glass backdrop-filter check)
+    def test_cards_have_soft_shadow_elevation(self):
         ctx, page, _ = self._new_page()
         try:
-            glass = page.locator(".glass").first
-            self.assertTrue(glass.count() >= 1, "page must have .glass surfaces")
-            bf = page.evaluate(
-                """() => {
-                    const el = document.querySelector('.glass');
-                    if (!el) return null;
-                    const s = getComputedStyle(el);
-                    return s.backdropFilter || s.webkitBackdropFilter || 'none';
+            # the light design declares a tinted --shadow-lg / --shadow-sm token in styles.css
+            css = page.evaluate(
+                """async () => {
+                    const r = await fetch('styles.css');
+                    return await r.text();
                 }"""
             )
-            if bf and bf != "none":
-                # the real, ideal path: blur is actually applied
-                self.assertIn("blur", bf)
-            else:
-                # headless_shell returned 'none' — soft-pass by asserting the CSS
-                # rule that declares backdrop-filter on .glass exists in styles.css.
-                css = page.evaluate(
-                    """async () => {
-                        const r = await fetch('styles.css');
-                        return await r.text();
-                    }"""
-                )
-                self.assertIn("backdrop-filter", css)
-                self.assertRegexpMatches(
-                    css, r"\.glass\s*\{[^}]*backdrop-filter:\s*blur"
-                )
+            self.assertRegex(
+                css,
+                r"--shadow-(?:lg|sm):\s*[^;]*rgba\(16,\s*24,\s*40",
+                "styles.css must define a tinted soft-shadow elevation token",
+            )
+            # and a real card / console surface must actually compute a non-'none' box-shadow
+            box = page.evaluate(
+                """() => {
+                    const el = document.querySelector('.console-card, .cb, .feat, .install-code');
+                    if (!el) return null;
+                    return getComputedStyle(el).boxShadow;
+                }"""
+            )
+            self.assertIsNotNone(box, "page must have an elevated card/console surface")
+            self.assertNotEqual(box, "none", "card must apply a soft-shadow elevation")
         finally:
             ctx.close()
 
-    # 11 — under reduced-motion: parallax + auto-run disabled; run jumps to instant final state
-    def test_reduced_motion_disables_parallax_and_autorun(self):
+    # 11 — under reduced-motion: no scroll-driven style drift; run jumps to instant final state
+    def test_reduced_motion_no_drift_and_instant_run(self):
         ctx, page, _ = self._new_page(reduced_motion="reduce")
         try:
-            ambient = page.locator(".ambient")
-            self.assertTrue(ambient.count() >= 1)
-
-            def blob_transform():
+            # no ambient/parallax layer exists in the light design — reveal elements
+            # must render their final state (transform 'none') and not drift on scroll.
+            def reveal_transform():
                 return page.evaluate(
                     """() => {
-                        const a = document.querySelector('.ambient');
-                        return a ? getComputedStyle(a).getPropertyValue('--blob-y') : '';
+                        const el = document.querySelector('.reveal');
+                        return el ? getComputedStyle(el).transform : '';
                     }"""
                 )
 
-            before = blob_transform()
+            before = reveal_transform()
+            self.assertIn(before, ("none", "matrix(1, 0, 0, 1, 0, 0)", ""))
             page.evaluate("window.scrollTo(0, 1400)")
             page.wait_for_timeout(250)
-            after = blob_transform()
-            # parallax JS early-returns under reduced motion → no --blob-y drift written
+            after = reveal_transform()
             self.assertEqual(
                 (before or "").strip(), (after or "").strip(),
-                "parallax must not write blob offset under reduced motion",
+                "reveal elements must not drift under reduced motion",
             )
 
             # pressing 运行流水线 must yield the INSTANT final state (stage 07), no tween

@@ -1,6 +1,6 @@
 # ProductFlow
 
-把"做一个产品落地页"变成一条可视化流水线的 **Claude Code 工具**。装上后说一句"做一个 XX 的落地页"，AI 就启动一个跑在 `localhost:7717` 的操作台，逐阶段往前推：
+把"做一个互联网产品"变成一条可视化流水线的 **Claude Code 工具**——从落地页、官网，到带数据库与后端的功能性 Web 应用（落地页只是最简单的一种）。装上后说一句"做一个 XX"，AI 就启动一个跑在 `localhost:7717` 的操作台，逐阶段往前推：
 
 > 🌐 在线介绍页：**https://pf.gjs.ink**
 
@@ -17,7 +17,7 @@
 把下面这整段复制，**粘进 Claude Code**（或 Claude 桌面端）。它会自己从克隆装到启动操作台，全程不用手动分步：
 
 ```
-请帮我在这台电脑上安装并启动 ProductFlow（一个把"做产品落地页"变成 7 阶段流水线、配本地操作台的 Claude Code 工具）。下面每一步你来执行，做完告诉我怎么用：
+请帮我在这台电脑上安装并启动 ProductFlow（一个把"做互联网产品"变成 7 阶段流水线、配本地操作台的 Claude Code 工具，从落地页到带后端和数据库的 Web 应用都能做）。下面每一步你来执行，做完告诉我怎么用：
 
 1. 克隆代码到固定位置（已存在就进目录 git pull 更新）：
    git clone https://github.com/hongnono-wdh/productflow.git ~/.local/share/productflow 2>/dev/null || (cd ~/.local/share/productflow && git pull)
@@ -35,7 +35,7 @@
 
 4. 启动操作台并打开浏览器：
    sh ~/.local/share/productflow/productflow/scripts/start.sh
-   然后告诉我操作台地址 http://127.0.0.1:7717/，以及"新开会话可用 /productflow-init、/productflow-start，或直接说想做什么落地页"。
+   然后告诉我操作台地址 http://127.0.0.1:7717/，以及"新开会话可用 /productflow-init、/productflow-start，或直接说想做什么产品/网站"。
 
 只有 Python3 必需，其余可选。
 ```
@@ -44,7 +44,7 @@
 
 | 命令 | 作用 |
 |------|------|
-| `/productflow` | 主 skill —— 走 7 阶段流水线做落地页 |
+| `/productflow` | 主 skill —— 走 7 阶段流水线做互联网产品 |
 | `/productflow-init` | 装好后自检（查依赖 + 跑测试，确认装对了） |
 | `/productflow-start` | 启动操作台并打开浏览器 |
 | `/productflow-update` | 升级到最新版（git pull + 数据迁移 + 重启，数据不丢） |

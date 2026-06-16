@@ -1,4 +1,4 @@
-// ProductFlow landing — "Glass Terminal" deck. Vanilla JS, no framework, no build.
+// ProductFlow landing — "Greenfield" light deck. Vanilla JS, no framework, no build.
 (function () {
   "use strict";
 
@@ -13,38 +13,31 @@
     prefersReduced.addEventListener("change", function (e) { reducedMotion = e.matches; });
   }
 
-  var isTouch = window.matchMedia
-    ? window.matchMedia("(hover: none), (pointer: coarse)").matches
-    : ("ontouchstart" in window);
-
   /* ============================================================
-     STAGE DATA — verbatim source copy + view-tags per preset
+     STAGE DATA — verbatim names + per-stage mini-graphic that
+     sells the FULL product (ER/DDL/API · 全栈+TDD · 部署上线).
      ============================================================ */
   var STAGES = [
-    { n: "01", tag: "看板", title: "市场调研", desc: "竞品分析、核心矛盾梳理，产出产品 brief 与竞品矩阵。" },
-    { n: "02", tag: "看板", title: "找参考", desc: "抓参考图、整页截图，登记成可点选的参考清单。" },
-    { n: "03", tag: "画布", title: "首图设计", desc: "批量出首图方案，铺到无限画布上缩放、点心、对比。" },
-    { n: "04", tag: "画布", title: "页面设计", desc: "每个页面 × 每个平台的设计稿排到画布，页面地图盯版本。" },
-    { n: "05", tag: "看板", title: "功能与数据设计", desc: "模块清单、ER 图、表结构、API 约定，定清楚再动手。" },
-    { n: "06", tag: "看板", title: "开发实现", desc: "脚手架、前后端、冒烟测试、接口文档，逐步登记。" },
-    { n: "07", tag: "看板", title: "部署上线", desc: "本地 Docker、Cloudflare Pages/Workers 或单机，上线即出交付报告。" }
+    { n: "01", tag: "看板", title: "市场调研", desc: "竞品分析、核心矛盾梳理，产出产品 brief 与竞品矩阵。",
+      art: '<div class="art-row"><span class="art-chip">brief.md</span><span class="art-chip">竞品矩阵</span></div>' },
+    { n: "02", tag: "看板", title: "找参考", desc: "抓参考图、整页截图，登记成可点选的参考清单。",
+      art: '<div class="art-canvas"><span></span><span></span><span></span><span></span></div>' },
+    { n: "03", tag: "画布", title: "首图设计", desc: "批量出首图方案，铺到无限画布上缩放、点心、对比。",
+      art: '<div class="art-canvas"><span></span><span class="lit"></span><span></span><span></span></div>' },
+    { n: "04", tag: "画布", title: "页面设计", desc: "每个页面 × 每个平台的设计稿排到画布，页面地图盯版本。",
+      art: '<div class="art-canvas"><span class="lit"></span><span></span><span class="lit"></span><span></span></div>' },
+    { n: "05", tag: "看板", title: "功能与数据设计", desc: "模块清单、ER 图、表结构 DDL、API 契约，定清楚再动手。",
+      art: '<div class="art-er"><span class="art-node">user</span><i class="art-link"></i><span class="art-node">project</span><i class="art-link"></i><span class="art-node">deploy</span></div><div class="art-row" style="margin-top:8px"><span class="art-chip">DDL</span><span class="art-chip">API 契约</span></div>' },
+    { n: "06", tag: "看板", title: "开发实现", desc: "脚手架、前后端全栈、TDD 测试、接口文档，逐步登记。",
+      art: '<div class="art-row"><span class="art-chip">前端</span><span class="art-chip">后端</span><span class="art-chip ok">TDD 通过 ✓</span></div>' },
+    { n: "07", tag: "看板", title: "部署上线", desc: "本地 Docker、Cloudflare Pages/Workers 或单机，上线即出交付报告。",
+      art: '<div class="art-deploy">▲ 已上线 · 127.0.0.1</div>' }
   ];
 
   var PRESETS = {
     saas: { label: "极简 SaaS", subject: "极简 SaaS" },
     portfolio: { label: "作品集", subject: "作品集" },
-    waitlist: { label: "waitlist", subject: "waitlist 页" }
-  };
-
-  // log lines per stage; {subject} re-themed by the prompt <select>
-  var LOG = {
-    1: ["扫描 {subject} 同类竞品 …", "核心矛盾已梳理", "产出 brief + 竞品矩阵"],
-    2: ["抓取参考图与整页截图 …", "登记 14 张可点选参考"],
-    3: ["批量生成首图方案 …", "铺到无限画布，等你点心对比"],
-    4: ["排布每页 × 每平台设计稿 …", "页面地图盯版本中"],
-    5: ["生成模块清单 / ER 图 / 表结构 …", "API 约定已定"],
-    6: ["脚手架 + 前后端落地 …", "冒烟测试通过"],
-    7: ["构建 nginx:alpine 本地 Docker …", "E2E 8/8 ✓ · 本地 Docker 已上线"]
+    waitlist: { label: "waitlist", subject: "waitlist" }
   };
 
   /* ============================================================
@@ -53,26 +46,25 @@
   var rail = document.getElementById("stageRail");
   var nodes = rail ? Array.prototype.slice.call(rail.querySelectorAll(".rail-node")) : [];
   var termHost = document.getElementById("termHost");
-  var termLog = document.getElementById("termLog");
+  var railFill = document.getElementById("railFill");
   var prevTag = document.getElementById("prevTag");
   var prevStage = document.getElementById("prevStage");
   var prevTitle = document.getElementById("prevTitle");
   var prevDesc = document.getElementById("prevDesc");
+  var prevArt = document.getElementById("prevArt");
   var status = document.getElementById("stageStatus");
   var runBtn = document.getElementById("runBtn");
   var presetSelect = document.getElementById("presetSelect");
 
-  var currentStage = 4;     // default resting state mirrors the old hero
+  var currentStage = 4;     // default resting state: 04 页面设计 进行中
   var isAnimating = false;
   var runTimer = null;
-  var typeTimer = null;
+  var introTimer = null;
   var preset = "saas";
-
-  function subject() { return PRESETS[preset].subject; }
 
   function statusWord(n) {
     if (n < currentStage) return "已完成";
-    if (n === currentStage) return n === 7 ? "已完成" : "进行中";
+    if (n === currentStage) return n === 7 ? "已上线" : "进行中";
     return "待办";
   }
 
@@ -89,6 +81,11 @@
         node.setAttribute("aria-current", "step");
       }
     });
+    // connector sweep: green fill grows left->right with progress
+    if (railFill) {
+      var pct = (currentStage - 1) / 6 * 100;
+      railFill.style.width = pct + "%";
+    }
   }
 
   function renderPreview() {
@@ -97,75 +94,47 @@
     if (prevStage) prevStage.textContent = "阶段 " + s.n;
     if (prevTitle) prevTitle.textContent = s.title;
     if (prevDesc) prevDesc.textContent = s.desc;
+    if (prevArt) prevArt.innerHTML = s.art;
     if (termHost) termHost.textContent = "127.0.0.1:7717 · stage " + s.n + "/07";
     if (status) {
       status.textContent = "阶段 " + s.n + " / " + s.title + " · " + statusWord(currentStage);
     }
   }
 
-  // build the streaming log for stage n. animated = char-batch typing (appends only).
-  function renderLog(n, animated) {
-    if (!termLog) return;
-    if (typeTimer) { clearTimeout(typeTimer); typeTimer = null; }
-    termLog.innerHTML = "";
-
-    var lines = (LOG[n] || []).map(function (l) {
-      return l.replace("{subject}", subject());
-    });
-    // include a header line with the prompt
-    var header = "$ pf run \"做一个 " + subject() + " 落地页\"";
-    var allLines = [header].concat(lines.map(function (l) { return "› " + l; }));
-    var finalLine = STAGES[n - 1].title;
-
-    if (!animated) {
-      // print fully, no tween
-      allLines.forEach(function (text, i) {
-        var div = document.createElement("span");
-        div.className = "log-line " + (i === 0 ? "log-dim" : (i === allLines.length - 1 ? "log-ok" : ""));
-        div.textContent = text;
-        termLog.appendChild(div);
-      });
-      void finalLine;
-      return;
-    }
-
-    // animated: append line by line, last line gets a caret
-    var li = 0;
-    function nextLine() {
-      if (li >= allLines.length) return;
-      var span = document.createElement("span");
-      span.className = "log-line " + (li === 0 ? "log-dim" : (li === allLines.length - 1 ? "log-ok log-caret" : ""));
-      // strip caret class from previous last line
-      var prev = termLog.querySelector(".log-caret");
-      if (prev) prev.classList.remove("log-caret");
-      span.textContent = allLines[li];
-      termLog.appendChild(span);
-      li++;
-      typeTimer = setTimeout(nextLine, 130);
-    }
-    nextLine();
-  }
-
-  // single source of truth
+  // preview swap: 140ms cross-fade + 4px rise (transform/opacity only)
+  var preview = document.getElementById("stagePreview");
   function setStage(n, opts) {
     opts = opts || {};
     n = Math.max(1, Math.min(7, n));
     currentStage = n;
     renderRail();
-    renderPreview();
-    renderLog(n, opts.animated && !reducedMotion);
+    if (preview && opts.animated && !reducedMotion) {
+      preview.style.transition = "none";
+      preview.style.opacity = "0";
+      preview.style.transform = "translateY(4px)";
+      renderPreview();
+      // force reflow, then fade in
+      void preview.offsetWidth;
+      preview.style.transition = "opacity .14s var(--ease), transform .14s var(--ease)";
+      preview.style.opacity = "1";
+      preview.style.transform = "none";
+    } else {
+      if (preview) { preview.style.opacity = "1"; preview.style.transform = "none"; }
+      renderPreview();
+    }
   }
 
   /* ---------- drive path 1: rail node click + keyboard ---------- */
   function stopRun() {
     if (runTimer) { clearTimeout(runTimer); runTimer = null; }
+    if (introTimer) { clearTimeout(introTimer); introTimer = null; }
     isAnimating = false;
     if (runBtn) runBtn.removeAttribute("disabled");
   }
 
   nodes.forEach(function (node) {
     node.addEventListener("click", function () {
-      stopRun();                          // click always overrides autoplay/scroll
+      stopRun();                          // click always overrides autoplay
       var n = parseInt(node.getAttribute("data-stage"), 10);
       setStage(n, { animated: true });
       node.focus();
@@ -198,21 +167,21 @@
   function runPipeline() {
     stopRun();
     if (reducedMotion) {
-      // jump straight to final state with full text, no tween
+      // jump straight to final state, no tween
       setStage(7, { animated: false });
       return;
     }
     isAnimating = true;
     if (runBtn) runBtn.setAttribute("disabled", "");
-    var n = 1;
     setStage(1, { animated: true });
+    var n = 1;
     function step() {
       n++;
       if (n > 7) { stopRun(); return; }
       setStage(n, { animated: true });
-      runTimer = setTimeout(step, 520);
+      runTimer = setTimeout(step, 260);
     }
-    runTimer = setTimeout(step, 520);
+    runTimer = setTimeout(step, 260);
   }
   if (runBtn) runBtn.addEventListener("click", runPipeline);
 
@@ -220,9 +189,8 @@
   if (presetSelect) {
     presetSelect.addEventListener("change", function () {
       preset = presetSelect.value;
+      void preset;            // subject re-theme is reflected in command line text already
       stopRun();
-      // re-theme current stage log + preview labels (no stage change)
-      renderLog(currentStage, false);
       renderPreview();
     });
   }
@@ -232,25 +200,27 @@
     setStage(4, { animated: false });
   }
 
-  /* ---------- hero intro: type seed then ONE rail pass to 04 ---------- */
+  /* ---------- hero intro: ONE gentle cascade 01->04, rest on 04 ---------- */
   function heroIntro() {
     if (reducedMotion || !nodes.length) {
-      // reduced motion: render completed-ish resting state, log fully printed
-      setStage(4, { animated: false });
+      setStage(4, { animated: false });   // render final resting state, no tween
       return;
     }
-    var n = 1;
     setStage(1, { animated: true });
+    var n = 1;
     function adv() {
       n++;
-      if (n > 4) { return; }      // idle on 04 进行中 pulse
-      setStage(n, { animated: n === 4 });
-      typeTimer = setTimeout(adv, 360);
+      if (n > 4) { return; }               // rest on 04 页面设计 · 进行中
+      setStage(n, { animated: true });
+      introTimer = setTimeout(adv, 340);
     }
-    typeTimer = setTimeout(adv, 700);
+    introTimer = setTimeout(adv, 600);
   }
-  // run intro shortly after load so the terminal "comes alive"
-  setTimeout(heroIntro, 500);
+  if (reducedMotion) {
+    setStage(4, { animated: false });
+  } else {
+    setTimeout(heroIntro, 450);
+  }
 
   /* ============================================================
      mobile nav (preserved contract)
@@ -283,7 +253,7 @@
   }
 
   /* ============================================================
-     copy install prompt (preserved contract + SVG check-morph)
+     copy install prompt (preserved contract + green check fade-in)
      ============================================================ */
   var copyBtn = document.getElementById("copyBtn");
   var promptEl = document.getElementById("installPrompt");
@@ -347,9 +317,10 @@
   }
 
   /* ============================================================
-     scroll reveal (IntersectionObserver, one-shot)
+     scroll reveal (IntersectionObserver, one-shot, 40ms stagger)
+     Under reduced motion: render final state, observers early-return.
      ============================================================ */
-  var revealTargets = document.querySelectorAll(".reveal, .reveal-c");
+  var revealTargets = document.querySelectorAll(".reveal");
   function revealAll() {
     revealTargets.forEach(function (el) { el.classList.add("in"); });
   }
@@ -357,130 +328,16 @@
     revealAll();
   } else {
     var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
+      entries.forEach(function (entry, i) {
         if (entry.isIntersecting) {
-          entry.target.classList.add("in");
-          io.unobserve(entry.target);
+          var el = entry.target;
+          setTimeout(function () { el.classList.add("in"); }, (i % 6) * 40);
+          io.unobserve(el);
         }
       });
-    }, { threshold: 0, rootMargin: "0px 0px -10% 0px" });
+    }, { threshold: 0, rootMargin: "0px 0px -8% 0px" });
     revealTargets.forEach(function (el) { io.observe(el); });
     setTimeout(revealAll, 2500);
     window.addEventListener("load", function () { setTimeout(revealAll, 400); });
-  }
-
-  /* ============================================================
-     scroll-morph graft (progressive enhancement, NOT load-bearing)
-     #how cards crossing viewport midline advance the SAME terminal.
-     Click always overrides (guarded by isAnimating + a user-click flag).
-     ============================================================ */
-  var userInterrupted = false;
-  nodes.forEach(function (n) { n.addEventListener("click", function () { userInterrupted = true; }); });
-  if (runBtn) runBtn.addEventListener("click", function () { userInterrupted = true; });
-
-  if (!reducedMotion && !isTouch && "IntersectionObserver" in window) {
-    var scrollCards = document.querySelectorAll("[data-scroll-stage]");
-    var scrollIO = new IntersectionObserver(function (entries) {
-      if (isAnimating || userInterrupted) return;     // never fight click/run
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
-          var n = parseInt(entry.target.getAttribute("data-scroll-stage"), 10);
-          if (n && n !== currentStage) setStage(n, { animated: false });
-        }
-      });
-    }, { threshold: [0.5], rootMargin: "-30% 0px -30% 0px" });
-    scrollCards.forEach(function (c) { scrollIO.observe(c); });
-  }
-
-  /* ============================================================
-     EFFECT 1+2: parallax + cursor halo + terminal tilt
-     ONE rAF loop, passive listeners, transform/opacity only.
-     Early-returns under reduced motion.
-     ============================================================ */
-  if (!reducedMotion) {
-    var halo = document.querySelector(".cursor-halo");
-    var blobs = document.querySelector(".ambient");
-    var mesh = document.querySelector(".mesh");
-    var terminal = document.getElementById("terminal");
-
-    var scrollY = window.pageYOffset || 0;
-    var pointerX = window.innerWidth / 2;
-    var pointerY = window.innerHeight / 2;
-    var haloX = pointerX, haloY = pointerY;
-    var tiltX = 0, tiltY = 0, targetTiltX = 0, targetTiltY = 0;
-    var ticking = false;
-
-    function onScroll() {
-      scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-      requestTick();
-    }
-    function onMove(e) {
-      pointerX = e.clientX;
-      pointerY = e.clientY;
-      if (halo) halo.style.opacity = "1";
-
-      // terminal tilt from pointer position relative to its center
-      if (terminal && !isTouch && window.innerWidth > 760) {
-        var r = terminal.getBoundingClientRect();
-        var cx = r.left + r.width / 2;
-        var cy = r.top + r.height / 2;
-        targetTiltY = Math.max(-5, Math.min(5, ((pointerX - cx) / r.width) * 10));
-        targetTiltX = Math.max(-5, Math.min(5, -((pointerY - cy) / r.height) * 10));
-      }
-      requestTick();
-    }
-    function requestTick() {
-      if (!ticking) { ticking = true; requestAnimationFrame(frame); }
-    }
-    function frame() {
-      ticking = false;
-      // parallax: blobs 0.15x, mesh 0.4x (written as CSS vars consumed by transforms)
-      if (window.innerWidth > 768) {
-        if (blobs) blobs.style.setProperty("--blob-y", (scrollY * -0.15) + "px");
-        if (mesh) mesh.style.setProperty("--mesh-y", (scrollY * -0.4) + "px");
-      }
-      // halo lerp
-      haloX += (pointerX - haloX) * 0.12;
-      haloY += (pointerY - haloY) * 0.12;
-      if (halo) halo.style.transform = "translate3d(" + haloX + "px," + haloY + "px,0)";
-      // tilt lerp
-      tiltX += (targetTiltX - tiltX) * 0.1;
-      tiltY += (targetTiltY - tiltY) * 0.1;
-      if (terminal && !isTouch && window.innerWidth > 760) {
-        terminal.style.setProperty("--tilt-x", tiltX.toFixed(2) + "deg");
-        terminal.style.setProperty("--tilt-y", tiltY.toFixed(2) + "deg");
-      }
-      // keep lerping until settled
-      if (Math.abs(pointerX - haloX) > 0.5 || Math.abs(pointerY - haloY) > 0.5 ||
-          Math.abs(targetTiltX - tiltX) > 0.05 || Math.abs(targetTiltY - tiltY) > 0.05) {
-        requestTick();
-      }
-    }
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("pointermove", onMove, { passive: true });
-    document.addEventListener("pointerleave", function () {
-      targetTiltX = 0; targetTiltY = 0;
-      if (halo) halo.style.opacity = "0";
-      requestTick();
-    });
-    frame();
-
-    /* magnetic CTAs */
-    var magnets = document.querySelectorAll(".magnetic");
-    magnets.forEach(function (el) {
-      el.addEventListener("pointermove", function (e) {
-        if (isTouch) return;
-        var r = el.getBoundingClientRect();
-        var mx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
-        var my = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
-        var dx = Math.max(-1, Math.min(1, mx)) * 6;
-        var dy = Math.max(-1, Math.min(1, my)) * 6;
-        el.style.transform = "translate(" + dx + "px," + dy + "px) scale(1.03)";
-      });
-      el.addEventListener("pointerleave", function () {
-        el.style.transform = "";
-      });
-    });
   }
 })();

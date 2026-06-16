@@ -3,47 +3,38 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>ProductFlow — 把做落地页变成一条流水线 | Claude Code 本地 skill</title>
-<meta name="description" content="ProductFlow 是一个 Claude Code 本地 skill：把做一个产品落地页变成 7 阶段可视化流水线，从市场调研到本地上线，全程 agent 驱动、本地操作台盯关键节点。数据全在自己机器上。" />
+<title>ProductFlow — 把一句话想法，变成一条上线的流水线 | Claude Code 本地 skill</title>
+<meta name="description" content="ProductFlow 是一个 Claude Code 本地 skill：把一句话产品想法变成一条端到端流水线，从市场调研、视觉设计、ER 图/DDL/API 契约，到前后端全栈 + TDD、部署上线，盖出一个能跑的完整互联网产品。落地页只是其中最简单的一种产物。本地操作台盯关键节点，数据全在自己机器上。" />
 <link rel="canonical" href="https://pf.gjs.ink/" />
 
 <meta property="og:type" content="website" />
-<meta property="og:title" content="ProductFlow — 把做落地页变成一条流水线" />
-<meta property="og:description" content="一个 Claude Code 本地 skill。从一句话产品想法，到本地 Docker 跑起来的落地页，7 阶段流水线 + 本地操作台，全程本地运行。" />
+<meta property="og:title" content="ProductFlow — 把一句话想法，变成一条上线的流水线" />
+<meta property="og:description" content="一个 Claude Code 本地 skill。从一句话产品想法到上线的完整互联网产品：调研 → 设计 → 数据/API → 全栈 + TDD → 部署。7 阶段流水线 + 本地操作台，全程本地运行。" />
 <meta property="og:image" content="https://github.com/hongnono-wdh/productflow/raw/main/og.png" />
 <meta property="og:url" content="https://pf.gjs.ink/" />
 
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="ProductFlow — 把做落地页变成一条流水线" />
-<meta name="twitter:description" content="Claude Code 本地 skill：7 阶段流水线 + 本地操作台，从想法到本地上线，全程本地运行。" />
+<meta name="twitter:title" content="ProductFlow — 把一句话想法，变成一条上线的流水线" />
+<meta name="twitter:description" content="Claude Code 本地 skill：7 阶段流水线 + 本地操作台，从一句话想法到上线的完整互联网产品，全程本地运行。" />
 <meta name="twitter:image" content="https://github.com/hongnono-wdh/productflow/raw/main/og.png" />
 
-<meta name="theme-color" content="#07090F" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%230B0E18'/%3E%3Ctext x='50' y='50' dy='.34em' text-anchor='middle' font-family='ui-sans-serif,system-ui,sans-serif' font-weight='700' font-size='58' fill='%2322C55E'%3EP%3C/text%3E%3C/svg%3E" />
+<meta name="theme-color" content="#FCFCFD" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23FFFFFF' stroke='%23E6E7EB' stroke-width='2'/%3E%3Crect x='14' y='14' width='72' height='72' rx='18' fill='%2322C55E'/%3E%3Ctext x='50' y='52' dy='.34em' text-anchor='middle' font-family='ui-sans-serif,system-ui,sans-serif' font-weight='700' font-size='52' fill='%23FFFFFF'%3EP%3C/text%3E%3C/svg%3E" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
 <link rel="preconnect" href="https://github.com" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 <a class="skip-link" href="#install">跳到安装</a>
 
-<!-- ambient depth: far blobs -> mid mesh (set behind everything) -->
-<div class="ambient" aria-hidden="true">
-  <div class="blob blob-cyan"></div>
-  <div class="blob blob-indigo"></div>
-  <div class="blob blob-green"></div>
-  <div class="mesh"></div>
-</div>
-<div class="cursor-halo" aria-hidden="true"></div>
-
 <header class="nav" id="top">
   <div class="wrap nav-inner">
     <a class="brand" href="#top" aria-label="ProductFlow 首页">
       <span class="brand-mark" aria-hidden="true">P</span>
-      <span class="brand-name">ProductFlow<small class="mono">landing pipeline</small></span>
+      <span class="brand-name">ProductFlow<small class="mono">product pipeline</small></span>
     </a>
 
     <nav class="nav-links" aria-label="主导航">
@@ -69,70 +60,70 @@
 
 <main id="main">
 
-  <!-- HERO — the page IS the console -->
+  <!-- HERO -->
   <section class="hero" aria-labelledby="hero-title">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <p class="eyebrow mono reveal-c">Claude Code 本地 skill · v2.1</p>
-        <h1 id="hero-title" class="reveal-c">把做一个落地页，<br>变成一条流水线。</h1>
-        <p class="lede reveal-c">从一句话产品想法，到本地 Docker 跑起来的页面。7 个阶段，agent 驱动，你只在关键节点拍板。</p>
-        <div class="hero-cta reveal-c">
-          <a class="btn btn-primary magnetic" href="#install">一键安装</a>
-          <a class="btn btn-ghost magnetic" href="#how">看它怎么工作</a>
+        <p class="eyebrow mono reveal">Claude Code 本地 skill · v2.1</p>
+        <h1 id="hero-title" class="reveal">把一句话想法，<br>变成一条上线的流水线。</h1>
+        <p class="lede reveal">市场调研 → 找参考 → 视觉/页面设计 → 功能与数据（ER 图 / DDL / API 契约）→ 全栈开发 + TDD → 部署上线。一条流水线盖出一个能跑的完整互联网产品，<strong>落地页只是其中最简单的一种产物</strong>。</p>
+        <div class="hero-cta reveal">
+          <a class="btn btn-primary" href="#install">一键安装</a>
+          <a class="btn btn-ghost" href="#console">看它怎么工作</a>
         </div>
       </div>
 
-      <!-- THE CENTERPIECE: one driveable Glass Terminal -->
-      <div class="terminal-wrap reveal-c">
-        <div class="terminal glass" id="terminal">
-          <div class="term-bar">
-            <span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span>
-            <span class="term-host mono" id="termHost">127.0.0.1:7717 · stage 04/07</span>
+      <!-- THE CENTERPIECE: a clean light console the visitor drives -->
+      <div class="console-wrap reveal">
+        <div class="console-card" id="console-demo">
+          <div class="cc-bar">
+            <span class="cc-dot" aria-hidden="true"></span><span class="cc-dot" aria-hidden="true"></span><span class="cc-dot" aria-hidden="true"></span>
+            <span class="cc-host mono" id="termHost">127.0.0.1:7717 · stage 04/07</span>
           </div>
 
-          <!-- prompt / command input -->
-          <div class="term-prompt">
-            <span class="term-caret mono" aria-hidden="true">$</span>
-            <span class="term-cmd mono">做一个
+          <!-- command line -->
+          <div class="cc-cmd">
+            <span class="cc-cmd-text mono">做一个
               <span class="select-shell">
-                <label class="vh" for="presetSelect">选择落地页类型</label>
-                <select id="presetSelect" class="preset-select mono" aria-label="选择落地页类型">
+                <label class="vh" for="presetSelect">选择互联网产品类型</label>
+                <select id="presetSelect" class="preset-select mono" aria-label="选择互联网产品类型">
                   <option value="saas">极简 SaaS</option>
                   <option value="portfolio">作品集</option>
                   <option value="waitlist">waitlist</option>
                 </select>
               </span>
-              落地页
+              互联网产品
             </span>
-            <button class="run-btn mono magnetic" id="runBtn" type="button">▶ 运行流水线</button>
+            <button class="run-btn mono" id="runBtn" type="button">▶ 运行流水线</button>
           </div>
 
-          <!-- horizontal stage rail: 7 real buttons (stepper, not tabset) -->
-          <div class="stage-rail" id="stageRail" role="group" aria-label="7 阶段流水线">
-            <button class="rail-node" data-stage="1" type="button"><span class="rail-n mono">01</span><span class="rail-l">市场调研</span></button>
-            <button class="rail-node" data-stage="2" type="button"><span class="rail-n mono">02</span><span class="rail-l">找参考</span></button>
-            <button class="rail-node" data-stage="3" type="button"><span class="rail-n mono">03</span><span class="rail-l">首图设计</span></button>
-            <button class="rail-node" data-stage="4" type="button"><span class="rail-n mono">04</span><span class="rail-l">页面设计</span></button>
-            <button class="rail-node" data-stage="5" type="button"><span class="rail-n mono">05</span><span class="rail-l">功能与数据设计</span></button>
-            <button class="rail-node" data-stage="6" type="button"><span class="rail-n mono">06</span><span class="rail-l">开发实现</span></button>
-            <button class="rail-node" data-stage="7" type="button"><span class="rail-n mono">07</span><span class="rail-l">部署上线</span></button>
+          <!-- horizontal stage rail: 7 real buttons + connector sweep -->
+          <div class="rail-shell">
+            <div class="rail-line" aria-hidden="true"><span class="rail-line-fill" id="railFill"></span></div>
+            <div class="stage-rail" id="stageRail" role="group" aria-label="7 阶段流水线">
+              <button class="rail-node" data-stage="1" type="button"><span class="rail-n mono">01</span><span class="rail-l">市场调研</span></button>
+              <button class="rail-node" data-stage="2" type="button"><span class="rail-n mono">02</span><span class="rail-l">找参考</span></button>
+              <button class="rail-node" data-stage="3" type="button"><span class="rail-n mono">03</span><span class="rail-l">首图设计</span></button>
+              <button class="rail-node" data-stage="4" type="button"><span class="rail-n mono">04</span><span class="rail-l">页面设计</span></button>
+              <button class="rail-node" data-stage="5" type="button"><span class="rail-n mono">05</span><span class="rail-l">功能与数据设计</span></button>
+              <button class="rail-node" data-stage="6" type="button"><span class="rail-n mono">06</span><span class="rail-l">开发实现</span></button>
+              <button class="rail-node" data-stage="7" type="button"><span class="rail-n mono">07</span><span class="rail-l">部署上线</span></button>
+            </div>
           </div>
 
-          <div class="term-panes">
-            <!-- streaming agent log (decorative, aria-hidden) -->
-            <div class="term-log mono" id="termLog" aria-hidden="true"></div>
-
-            <!-- preview pane that swaps per stage -->
-            <div class="term-preview" id="stagePreview">
+          <!-- preview pane that swaps per stage -->
+          <div class="cc-preview" id="stagePreview">
+            <div class="prev-head">
               <span class="prev-tag mono" id="prevTag">看板</span>
               <span class="prev-stage mono" id="prevStage">阶段 04</span>
-              <strong class="prev-title" id="prevTitle">页面设计</strong>
-              <p class="prev-desc" id="prevDesc">每个页面 × 每个平台的设计稿排到画布，页面地图盯版本。</p>
             </div>
+            <strong class="prev-title" id="prevTitle">页面设计</strong>
+            <p class="prev-desc" id="prevDesc">每个页面 × 每个平台的设计稿排到画布，页面地图盯版本。</p>
+            <div class="prev-art" id="prevArt" aria-hidden="true"></div>
           </div>
         </div>
 
-        <!-- the REAL state, announced once for screen readers -->
+        <!-- the REAL state, announced for screen readers -->
         <p class="vh" id="stageStatus" aria-live="polite">阶段 04 / 页面设计 · 进行中</p>
       </div>
     </div>
@@ -141,64 +132,125 @@
   <!-- LOCAL STRIP -->
   <section class="strip" aria-label="核心事实">
     <div class="wrap strip-grid">
+      <div class="strip-item reveal"><span class="strip-k mono">完整产品</span><span class="strip-v">端到端盖出能跑的 web 应用，不只是设计页面</span></div>
       <div class="strip-item reveal"><span class="strip-k mono">本地优先</span><span class="strip-v">操作台只 bind 127.0.0.1，数据在你机器上</span></div>
-      <div class="strip-item reveal"><span class="strip-k mono">零云依赖</span><span class="strip-v">不上云、不共享，不暴露公网</span></div>
       <div class="strip-item reveal"><span class="strip-k mono">一个进程</span><span class="strip-v">纯 Python3 起服务，无第三方依赖</span></div>
     </div>
   </section>
 
-  <!-- HOW IT WORKS — scroll cards that also drive the hero terminal -->
+  <!-- HOW IT WORKS — editorial numbered pipeline -->
   <section class="how" id="how" aria-labelledby="how-title">
     <div class="wrap">
       <header class="sec-head reveal">
-        <h2 id="how-title">7 个阶段，从想法走到上线</h2>
-        <p class="sec-sub">每个阶段都有产物、有进度、有可以拍板的节点。前两步看板登记，第三第四步铺到画布上拖拽对比，最后三步交付到本地。</p>
+        <h2 id="how-title">7 个阶段，从一句话想法走到上线</h2>
+        <p class="sec-sub">端到端盖出一个能跑的 web 应用，不只是设计页面——从调研、视觉，到数据库、API、前后端全栈，再到部署上线。每个阶段都有产物、有进度、有可以拍板的节点。</p>
       </header>
 
       <ol class="pipeline" role="list">
-        <li class="stage reveal" data-scroll-stage="1">
-          <span class="stage-n mono">01</span>
-          <h3>市场调研</h3>
+        <li class="stage reveal">
+          <span class="stage-ghost" aria-hidden="true">01</span>
+          <span class="stage-rule" aria-hidden="true"></span>
+          <span class="stage-n mono">01 · 市场调研</span>
+          <h3>定清楚要解决的问题</h3>
           <p>竞品分析、核心矛盾梳理，产出产品 brief 与竞品矩阵。</p>
           <span class="stage-view mono">看板</span>
         </li>
-        <li class="stage reveal" data-scroll-stage="2">
-          <span class="stage-n mono">02</span>
-          <h3>找参考</h3>
+        <li class="stage reveal">
+          <span class="stage-ghost" aria-hidden="true">02</span>
+          <span class="stage-rule" aria-hidden="true"></span>
+          <span class="stage-n mono">02 · 找参考</span>
+          <h3>攒一份可点选的参考库</h3>
           <p>抓参考图、整页截图，登记成可点选的参考清单。</p>
           <span class="stage-view mono">看板</span>
         </li>
-        <li class="stage accent reveal" data-scroll-stage="3">
-          <span class="stage-n mono">03</span>
-          <h3>首图设计</h3>
+        <li class="stage reveal">
+          <span class="stage-ghost" aria-hidden="true">03</span>
+          <span class="stage-rule" aria-hidden="true"></span>
+          <span class="stage-n mono">03 · 首图设计</span>
+          <h3>批量出方案，画布上对比</h3>
           <p>批量出首图方案，铺到无限画布上缩放、点心、对比。</p>
           <span class="stage-view mono">画布</span>
         </li>
-        <li class="stage accent reveal" data-scroll-stage="4">
-          <span class="stage-n mono">04</span>
-          <h3>页面设计</h3>
+        <li class="stage reveal">
+          <span class="stage-ghost" aria-hidden="true">04</span>
+          <span class="stage-rule" aria-hidden="true"></span>
+          <span class="stage-n mono">04 · 页面设计</span>
+          <h3>每页 × 每平台铺到画布</h3>
           <p>每个页面 × 每个平台的设计稿排到画布，页面地图盯版本。</p>
           <span class="stage-view mono">画布</span>
         </li>
-        <li class="stage reveal" data-scroll-stage="5">
-          <span class="stage-n mono">05</span>
-          <h3>功能与数据设计</h3>
-          <p>模块清单、ER 图、表结构、API 约定，定清楚再动手。</p>
+        <li class="stage reveal">
+          <span class="stage-ghost" aria-hidden="true">05</span>
+          <span class="stage-rule" aria-hidden="true"></span>
+          <span class="stage-n mono">05 · 功能与数据设计</span>
+          <h3>ER 图 · DDL · API 契约</h3>
+          <p>模块清单、ER 图、表结构 DDL、API 契约，定清楚再动手。</p>
           <span class="stage-view mono">看板</span>
         </li>
-        <li class="stage reveal" data-scroll-stage="6">
-          <span class="stage-n mono">06</span>
-          <h3>开发实现</h3>
-          <p>脚手架、前后端、冒烟测试、接口文档，逐步登记。</p>
+        <li class="stage reveal">
+          <span class="stage-ghost" aria-hidden="true">06</span>
+          <span class="stage-rule" aria-hidden="true"></span>
+          <span class="stage-n mono">06 · 开发实现</span>
+          <h3>前后端全栈 · TDD</h3>
+          <p>脚手架、前后端全栈、TDD 测试、接口文档，逐步登记。</p>
           <span class="stage-view mono">看板</span>
         </li>
-        <li class="stage reveal" data-scroll-stage="7">
-          <span class="stage-n mono">07</span>
-          <h3>部署上线</h3>
-          <p>本地 Docker、Cloudflare Pages/Workers 或单机，上线即出交付报告。</p>
+        <li class="stage reveal">
+          <span class="stage-ghost" aria-hidden="true">07</span>
+          <span class="stage-rule" aria-hidden="true"></span>
+          <span class="stage-n mono">07 · 部署上线</span>
+          <h3>本地 Docker / CF / 单机</h3>
+          <p>部署上线：本地 Docker、Cloudflare Pages/Workers 或单机，上线即出交付报告。</p>
           <span class="stage-view mono">看板</span>
         </li>
       </ol>
+    </div>
+  </section>
+
+  <!-- CONSOLE -->
+  <section class="console-sec" id="console" aria-labelledby="console-title">
+    <div class="wrap">
+      <header class="sec-head reveal">
+        <h2 id="console-title">一个跑在本地的操作台</h2>
+        <p class="sec-sub">对话是主通道，操作台是另一只眼睛。两边共享同一份状态，你随时看进度、翻产物、给 agent 留言、在画布上拍板。</p>
+      </header>
+
+      <div class="console-bento">
+        <article class="cb cb-lg reveal">
+          <h3>无限画布对比设计</h3>
+          <p>首图和页面设计阶段，所有方案铺在一张可缩放的画布上。拖拽摆放、双击预览、点心标记，多平台多版本一眼看清。</p>
+          <div class="cb-canvas" aria-hidden="true">
+            <div class="cb-tile t1"></div>
+            <div class="cb-tile t2">
+              <span class="cb-like" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 21s-7.5-4.6-10-9.2C.4 8.6 2 5 5.5 5c2 0 3.4 1.2 4.5 2.6C11.1 6.2 12.5 5 14.5 5 18 5 19.6 8.6 22 11.8 19.5 16.4 12 21 12 21z"/></svg>
+              </span>
+            </div>
+            <div class="cb-tile t3"></div>
+            <div class="cb-tile t4"></div>
+          </div>
+        </article>
+
+        <article class="cb cb-note reveal">
+          <h3>给 agent 留言</h3>
+          <p>右侧收件箱常驻所有阶段。你写反馈，agent 回复，有未读会亮角标。</p>
+        </article>
+
+        <article class="cb reveal">
+          <h3>点选确认</h3>
+          <p>agent 不确定时，顶部浮出选择条，给你几个具体选项点一下，它再继续。</p>
+        </article>
+
+        <article class="cb cb-wide reveal">
+          <h3>圈一块发回去</h3>
+          <p>预览图上画个框、加句话，把标注过的局部发给 agent，比打字描述准得多。</p>
+        </article>
+
+        <article class="cb reveal">
+          <h3>多项目进度墙</h3>
+          <p>首页一排卡片，7 段进度条显示每个项目走到第几步。</p>
+        </article>
+      </div>
     </div>
   </section>
 
@@ -207,7 +259,7 @@
     <div class="wrap install-grid">
       <div class="install-copy reveal">
         <h2 id="install-title">第一次安装</h2>
-        <p class="sec-sub">把下面这段提示词复制，粘进 Claude Code（或 Claude 桌面端）。它会自己从克隆装到启动操作台，全程不用你手动分步。</p>
+        <p class="sec-sub">把右边这段提示词复制，粘进 Claude Code（或 Claude 桌面端）。它会自己从克隆装到启动操作台，全程不用你手动分步。</p>
 
         <ol class="steps" role="list">
           <li><span class="step-n mono">1</span><div><strong>复制</strong>右侧整段提示词</div></li>
@@ -215,20 +267,20 @@
           <li><span class="step-n mono">3</span><div>它<strong>自动装好</strong>，跟着 <code class="mono">/productflow-init</code>、<code class="mono">/productflow-start</code> 走</div></li>
         </ol>
 
-        <p class="install-note">只有 <strong>Python3</strong> 必需。Docker / Playwright / OpenAI 生图 key 都可选，缺了只降级不挡主流程；<code class="mono">/productflow-init</code> 会告诉你缺什么、怎么补。</p>
+        <p class="install-note">只需 <strong>Python3</strong>。Docker / Playwright / OpenAI 生图 key 都可选，缺了只降级不挡主流程；<code class="mono">/productflow-init</code> 会告诉你缺什么、怎么补。</p>
       </div>
 
-      <div class="install-code glass">
+      <div class="install-code">
         <div class="code-head">
           <span class="code-title mono">install-prompt</span>
-          <button class="copy-btn mono magnetic" id="copyBtn" type="button" aria-live="polite">
+          <button class="copy-btn mono" id="copyBtn" type="button" aria-live="polite">
             <span class="copy-ico" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
             </span>
             <span class="copy-label">复制提示词</span>
           </button>
         </div>
-        <pre class="code-block code-well"><code id="installPrompt">请帮我在这台电脑上安装并启动 ProductFlow（一个把"做产品落地页"变成 7 阶段流水线、配本地操作台的 Claude Code 工具）。下面每一步你来执行，做完告诉我怎么用：
+        <pre class="code-block code-well"><code id="installPrompt">请帮我在这台电脑上安装并启动 ProductFlow（一个把"做互联网产品"变成 7 阶段流水线、配本地操作台的 Claude Code 工具，从落地页到带后端和数据库的 Web 应用都能做）。下面每一步你来执行，做完告诉我怎么用：
 
 1. 克隆代码到固定位置（已存在就进目录 git pull 更新）：
    git clone https://github.com/hongnono-wdh/productflow.git ~/.local/share/productflow 2>/dev/null || (cd ~/.local/share/productflow &amp;&amp; git pull)
@@ -246,56 +298,9 @@
 
 4. 启动操作台并打开浏览器：
    sh ~/.local/share/productflow/productflow/scripts/start.sh
-   然后告诉我操作台地址 http://127.0.0.1:7717/，以及"新开会话可用 /productflow-init、/productflow-start，或直接说想做什么落地页"。
+   然后告诉我操作台地址 http://127.0.0.1:7717/，以及"新开会话可用 /productflow-init、/productflow-start，或直接说想做什么产品/网站"。
 
 只有 Python3 必需，其余可选。</code></pre>
-      </div>
-    </div>
-  </section>
-
-  <!-- CONSOLE -->
-  <section class="console" id="console" aria-labelledby="console-title">
-    <div class="wrap">
-      <header class="sec-head reveal">
-        <h2 id="console-title">一个跑在本地的操作台</h2>
-        <p class="sec-sub">对话是主通道，操作台是另一只眼睛。两边共享同一份状态，你随时看进度、翻产物、给 agent 留言、在画布上拍板。</p>
-      </header>
-
-      <div class="console-bento">
-        <article class="cb cb-lg glass reveal">
-          <h3>无限画布对比设计</h3>
-          <p>首图和页面设计阶段，所有方案铺在一张可缩放的画布上。拖拽摆放、双击预览、点心标记，多平台多版本一眼看清。</p>
-          <div class="cb-canvas" aria-hidden="true">
-            <div class="cb-tile t1"></div>
-            <div class="cb-tile t2">
-              <span class="cb-like" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 21s-7.5-4.6-10-9.2C.4 8.6 2 5 5.5 5c2 0 3.4 1.2 4.5 2.6C11.1 6.2 12.5 5 14.5 5 18 5 19.6 8.6 22 11.8 19.5 16.4 12 21 12 21z"/></svg>
-              </span>
-            </div>
-            <div class="cb-tile t3"></div>
-            <div class="cb-tile t4"></div>
-          </div>
-        </article>
-
-        <article class="cb cb-note glass reveal">
-          <h3>给 agent 留言</h3>
-          <p>右侧收件箱常驻所有阶段。你写反馈，agent 回复，有未读会亮角标。</p>
-        </article>
-
-        <article class="cb glass reveal">
-          <h3>点选确认</h3>
-          <p>agent 不确定时，顶部浮出选择条，给你几个具体选项点一下，它再继续。</p>
-        </article>
-
-        <article class="cb cb-wide glass reveal">
-          <h3>圈一块发回去</h3>
-          <p>预览图上画个框、加句话，把标注过的局部发给 agent，比打字描述准得多。</p>
-        </article>
-
-        <article class="cb glass reveal">
-          <h3>多项目进度墙</h3>
-          <p>首页一排卡片，7 段进度条显示每个项目走到第几步。</p>
-        </article>
       </div>
     </div>
   </section>
@@ -308,59 +313,59 @@
       </header>
 
       <div class="feat-list">
-        <div class="feat glass reveal">
+        <div class="feat reveal">
+          <span class="feat-k mono">完整产品</span>
+          <div>
+            <h3>不只是落地页</h3>
+            <p>从调研、视觉，到 ER 图 / DDL / API 契约、前后端全栈 + TDD、部署上线，盖出一个能跑的完整互联网产品。</p>
+          </div>
+        </div>
+        <div class="feat reveal">
           <span class="feat-k mono">本地优先</span>
           <div>
             <h3>数据都在你机器上</h3>
             <p>操作台只监听 127.0.0.1，项目、key、部署凭证全在本机，不上云、不暴露公网。</p>
           </div>
         </div>
-        <div class="feat glass reveal">
+        <div class="feat reveal">
           <span class="feat-k mono">人盯节点</span>
           <div>
             <h3>关键决策不全自动</h3>
             <p>选参考、挑首图、确认理解这些拍板动作留给你，agent 跑流程、你定方向。</p>
           </div>
         </div>
-        <div class="feat glass reveal">
-          <span class="feat-k mono">可视化</span>
+        <div class="feat reveal">
+          <span class="feat-k mono">4 个 skill</span>
           <div>
-            <h3>进度与产物看得见</h3>
-            <p>每一步实时登记产物和进度，markdown / SQL / 图片直接在台子里翻。</p>
+            <h3>装好即用的命令</h3>
+            <p><code class="mono">productflow</code> 主流程、<code class="mono">/productflow-init</code> 自检、<code class="mono">/productflow-start</code> 启动、<code class="mono">/productflow-update</code> 升级。</p>
           </div>
         </div>
-        <div class="feat glass reveal">
-          <span class="feat-k mono">本地部署</span>
-          <div>
-            <h3>一条命令上线</h3>
-            <p>静态站走 nginx:alpine 本地 Docker，也能推到 Cloudflare Pages/Workers 或单机。</p>
-          </div>
-        </div>
-        <div class="feat glass reveal">
+        <div class="feat reveal">
           <span class="feat-k mono">优雅降级</span>
           <div>
             <h3>缺依赖也跑得通</h3>
             <p>没 Playwright、没 Docker、没生图 key？相关阶段自动降级，整条流水线照样走完。</p>
           </div>
         </div>
-        <div class="feat glass reveal">
+        <div class="feat reveal">
           <span class="feat-k mono">自动更新</span>
           <div>
             <h3>一键升级，数据不丢</h3>
-            <p>操作台检测到新版会提示更新；网页一键或 <code class="mono">/productflow-update</code> 都行——git pull + 自动迁移，项目数据原样保留。</p>
+            <p>操作台检测到新版会在 7717 横幅提示；网页一键或 <code class="mono">/productflow-update</code> 都行——git pull + 自动迁移，项目数据原样保留。</p>
           </div>
         </div>
       </div>
 
-      <p class="feat-foot mono reveal">v2.1 已由 3 个用户视角端到端走完 ①调研 → ⑦部署，三个项目全部用本地 Docker 上线、E2E 全绿（8/8、12/12、6/6）。</p>
+      <p class="feat-foot mono reveal">v2.1 已由 3 个用户视角端到端走完 ①调研 → ⑦部署，三个项目全部用本地 Docker 上线、<span class="e2e-badge">E2E 全绿（8/8、12/12、6/6）</span>。</p>
     </div>
   </section>
 
   <!-- FINAL CTA -->
   <section class="final" aria-labelledby="final-title">
     <div class="wrap final-inner reveal">
-      <h2 id="final-title">说一句你想做的落地页，剩下的交给流水线。</h2>
-      <a class="btn btn-primary magnetic" href="#install">一键安装</a>
+      <h2 id="final-title">说一句你想做的互联网产品，剩下的交给流水线。</h2>
+      <a class="btn btn-primary" href="#install">一键安装</a>
     </div>
   </section>
 
