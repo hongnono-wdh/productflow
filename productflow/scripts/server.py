@@ -467,6 +467,7 @@ def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = No
                    "Python Playwright（`from playwright.sync_api import sync_playwright`，chromium headless，桌面 1440 / 移动 390 整页截图），"
                    "或 webapp-testing / playwright-cli skill；E2E 落成项目内可复跑的 @playwright/test 文件。")
     env = dict(os.environ)
+    _inject_openai_env(env)   # ④ 批量出图等会调 gen.py，需要 OPENAI_API_KEY/BASE_URL（和 ③ 一致）
     if phase == 7:
         # 部署阶段：把用户在网页凭证表单填的值注入 env，agent 直接 $PF_SSH_HOST 等使用
         creds = _load_deploy_creds(pid) if pid else {}
