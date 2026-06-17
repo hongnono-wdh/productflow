@@ -653,9 +653,16 @@ def _auto_explore(pf: str, req: dict) -> None:
                          "（APP=手机 App 界面竖屏 ~1080x2340；H5=移动 web 竖屏 ~1080x2340；PC=桌面 web 页面 1440x1080），"
                          "据此选对应 --size。\n")
             size_arg = "<按平台: APP/H5=1080x2340, PC=1440x1080>"
+        instruction = str(req.get("instruction") or "").strip()
+        base_image = str(req.get("baseImage") or "").strip()
+        instr_line = (f"\n💬 用户这次在对话框里的具体诉求（务必体现进 prompt）：{instruction}\n" if instruction else "")
+        base_line = (f"\n🎯 **改图模式**：用户点选了画布上某张已生成图 `{base_image}` 要在它基础上改——"
+                     f"用 edit.py 把 `{pf}/{base_image}` 作为 --image 输入，按上面诉求改，产出 1-2 张新版（mode=edit，不是从头生成一批）。\n"
+                     if base_image else "")
         prompt = (
             "你是 ProductFlow 首图设计 Agent（阶段③），headless 运行，必须用工具实际完成任务（不要只输出描述）。\n"
             "任务：按用户选中的参考，生成首图（hero）——即【选定平台的关键屏纯 UI 设计稿】，定整套设计的视觉基调供阶段④复用。\n"
+            + instr_line + base_line +
             f"做法见手册：{design_doc} 的「首图生成协作」节。\n"
             + _PURE_UI_RULES + plat_line +
             "重要执行约束：每个 Bash 工具调用都是独立 shell，定义的 shell 变量不会跨调用保留。"
@@ -670,15 +677,20 @@ def _auto_explore(pf: str, req: dict) -> None:
             "步骤（严格按顺序）：\n"
             "1. 查看选中参考（空则按上一行兜底），总结共同视觉风格（配色/字体气质/布局/质感），写入：\n"
             f"   python3 {pf_state} --dir {project_root} explore set-summary \"<风格一句话>\"\n"
-            f"2. 用 openai-image-gen skill（脚本在 {img_skill}/scripts/gen.py）按该风格+产品主题生成 2-4 版【选定平台的关键屏纯 UI】首图。\n"
-            f"   必须显式把图直接生到 heroes 目录、并开并发、带平台尺寸（先 mkdir -p {heroes_dir}）：\n"
-            f"   把这条 --prompt 写完整：「<产品一句话> 关键屏纯 UI 设计稿，<该平台界面描述>，<上面总结的风格>，pure UI design, fills the frame edge-to-edge, flat, no background scene, no device frame, no browser chrome, front view」\n"
-            f"   python3 {img_skill}/scripts/gen.py --prompt \"...\" --size {size_arg} --count 4 --model gpt-image-2 --out-dir {heroes_dir} --concurrency 4\n"
-            f"   （用 --prompt 不用 --subject/--category；--out-dir 用上面这个绝对路径，不要用默认的 ~/Projects/tmp，也不要用 shell 变量传目录。不要套 landing-page-case-study 这类营销场景长图模板。gen.py 输出文件名形如 01-...png，不是 1.png。）\n"
-            f"3. 生图全部完成后，先列出真实文件名：ls {heroes_dir}\n"
-            "4. 对 ls 出来的「每一个」实际文件，逐个执行完整命令登记（每条都写全，禁止 shell 变量；不要攒到最后，前端实时显示进度）：\n"
+            f"2. 生成首图，先 mkdir -p {heroes_dir}。**图生图优先**（把参考图喂给模型，成品更贴近用户选的参考）：\n"
+            f"   · 改图模式（baseImage 有值）：python3 {img_skill}/scripts/edit.py --image {pf}/<baseImage> --prompt \"<在该图基础上按用户诉求改：…>\" --size {size_arg} --count 2 --model gpt-image-2 --out-dir {heroes_dir}\n"
+            f"   · 有 selectedRefs：取它们的 refs[].file（绝对路径 {pf}/<file>）当输入图：python3 {img_skill}/scripts/edit.py --image {pf}/<参考1> [--image {pf}/<参考2>] --prompt \"<完整纯UI prompt>\" --size {size_arg} --count 4 --model gpt-image-2 --out-dir {heroes_dir}\n"
+            f"   · 完全没有参考图：才退到文生图 python3 {img_skill}/scripts/gen.py --prompt \"...\" --size {size_arg} --count 4 --model gpt-image-2 --out-dir {heroes_dir} --concurrency 4（--prompt 不用 --subject/--category）\n"
+            "   --prompt 一律写完整：「<产品一句话> 关键屏纯 UI 设计稿，<该平台界面描述>，<上面总结的风格/参考要点>"
+            + (f"，{instruction}" if instruction else "") +
+            "，pure UI design, fills the frame edge-to-edge, flat, no background scene, no device frame, no browser chrome, front view」\n"
+            f"   （--out-dir 用上面绝对路径，别用默认 ~/Projects/tmp、别用 shell 变量；不要套 landing-page-case-study 场景模板；输出文件名形如 edit-NN-... 或 01-...。）\n"
+            f"3. 生图完成后列出真实文件名：ls {heroes_dir}\n"
+            "4. 对 ls 出来的「每一个」新图，逐个执行完整命令登记（每条写全、禁 shell 变量；不要攒到最后，前端实时显示进度）：\n"
             f"   python3 {pf_state} --dir {project_root} explore add-hero artifacts/phase-3/heroes/<实际文件名> --style \"<风格标签>\"\n"
-            "5. 确认每张都 add-hero 成功后（必要时再跑一次 explore show 核对 heroes 已指向新文件），最后才执行：\n"
+            "5. 记一条生成记录（供 ③ 画布对话框显示「用了哪些参考 + 发了什么文字 + 出了哪几张」）：\n"
+            f"   python3 {pf_state} --dir {project_root} explore gen-record --mode {'edit' if base_image else 'gen'} --prompt \"<本次发给模型的完整 prompt>\" --refs <本次用的参考文件名…> --results <本次产出的文件名…>\n"
+            "6. 确认每张都 add-hero + 记录完成后，最后才执行：\n"
             f"   python3 {pf_state} --dir {project_root} explore done-request --kind gen-heroes\n"
             "只做这件事，完成即停。"
         )

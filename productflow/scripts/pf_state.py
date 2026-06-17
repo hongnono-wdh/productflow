@@ -463,7 +463,7 @@ def _load_explore(d: str) -> dict:
     # request 按 kind 分槽：{"search-refs": {...}, "gen-heroes": {...}}——
     # P2 找参考与 P3 首图是两个阶段，单槽会互相覆盖、done-request 清错槽。
     base = {"stylePrefs": [], "request": {}, "refs": [], "selectedRefs": [],
-            "styleSummary": "", "heroes": [], "selectedHero": ""}
+            "styleSummary": "", "heroes": [], "selectedHero": "", "heroGenLog": []}
     try:
         with open(_explore_path(d), encoding="utf-8") as f:
             data = json.load(f)
@@ -555,9 +555,16 @@ def cmd_explore(args) -> None:
             req.pop(args.kind, None)   # 只清这一类（如 search-refs），不动另一阶段的请求
         else:
             e["request"] = {}          # 缺省清全部
+    elif args.eaction == "gen-record":
+        # 记一条「生成首图」记录，供 ③ 画布对话框展示：用了哪些参考 + 发了什么 prompt + 出了哪几张
+        rec = {"ts": _now(), "mode": args.mode or "gen",
+               "refs": args.refs or [], "prompt": args.prompt or "", "results": args.results or []}
+        if not isinstance(e.get("heroGenLog"), list):
+            e["heroGenLog"] = []
+        e["heroGenLog"].append(rec)
     elif args.eaction == "clear":
         e = {"stylePrefs": [], "request": {}, "refs": [], "selectedRefs": [],
-             "styleSummary": "", "heroes": [], "selectedHero": ""}
+             "styleSummary": "", "heroes": [], "selectedHero": "", "heroGenLog": []}
     _save_explore(args.dir, e)
     print(f"explore {args.eaction} ok")
 
@@ -789,6 +796,11 @@ def main(argv: list[str]) -> int:
     ehm.add_argument("id")
     ed = esub.add_parser("done-request", help="标记前端请求已处理（前端轮询到即知完成）")
     ed.add_argument("--kind", help="只清这一类请求（search-refs/gen-heroes）；缺省清全部")
+    egr = esub.add_parser("gen-record", help="记一条生成首图记录（用了哪些参考+发了什么 prompt+出了哪几张），供③对话框展示")
+    egr.add_argument("--mode", choices=["gen", "edit"], help="gen=按参考生成 / edit=改某张图")
+    egr.add_argument("--prompt", help="本次发给模型的完整 prompt 文字")
+    egr.add_argument("--refs", nargs="*", help="本次引用的参考图（文件路径或 ref id），可多个")
+    egr.add_argument("--results", nargs="*", help="本次产出的图文件，可多个")
     esub.add_parser("clear", help="清空视觉探索数据重来")
     sp.set_defaults(fn=cmd_explore)
 

@@ -370,6 +370,22 @@ class TestExplore(PfStateBase):
         self.assertEqual(e["heroes"][0]["style"], "极简")
         self.assertRegex(e["heroes"][0]["id"], r"^hero-[0-9a-f]{6}$")
 
+    def test_gen_record_appends_for_dialog(self):
+        # ③ 对话框数据：每次生成记录用了哪些参考 + 发了什么 prompt + 出了哪几张
+        self.run_ok(["explore", "gen-record", "--mode", "gen", "--prompt", "P1",
+                     "--refs", "a.png", "b.png", "--results", "01.png"])
+        self.run_ok(["explore", "gen-record", "--mode", "edit", "--prompt", "P2",
+                     "--refs", "01.png", "--results", "edit-01.png", "edit-02.png"])
+        log = read_json_file(self.dir, "explore.json")["heroGenLog"]
+        self.assertEqual(len(log), 2)
+        self.assertEqual(log[0]["mode"], "gen")
+        self.assertEqual(log[0]["prompt"], "P1")
+        self.assertEqual(log[0]["refs"], ["a.png", "b.png"])
+        self.assertEqual(log[0]["results"], ["01.png"])
+        self.assertIn("ts", log[0])
+        self.assertEqual(log[1]["mode"], "edit")
+        self.assertEqual(len(log[1]["results"]), 2)
+
     def test_set_summary(self):
         self.run_ok(["explore", "set-summary", "干净留白、克制配色"])
         self.assertEqual(read_json_file(self.dir, "explore.json")["styleSummary"],
