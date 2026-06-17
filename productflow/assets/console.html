@@ -1733,10 +1733,11 @@ function stagebarHtml() {
       ? `<span class="sb-guide">建议先在 ③ 定首图基调 <button class="btn ghost sm" onclick="selectStage(3)">跳到 ③ 首图</button></span>` : '';
     const fail = st.failed ? `<span class="sb-guide" style="color:#b3403a">❌ Agent 中断，点上面重试</span>` : '';
     const dis = st.running ? 'disabled style="background:var(--dash);cursor:not-allowed"' : '';
-    // 列页面后才给「批量生成」——逐页点平台格仍可用，批量是一键把所有页面按主平台各出一版
+    // 列页面后才给「批量生成」+「整理排布」——逐页点平台格仍可用，批量是一键把所有页面按主平台各出一版
     const batchBtn = npages ? `<button class="btn ghost" ${dis} onclick="genAllPages()">✦ 批量生成全部（${npages} 页）</button>` : '';
+    const tidyBtn = npages ? `<button class="btn ghost" onclick="tidyPages()" title="按模块分组重新铺成不重叠的整齐网格">⊞ 整理排布</button>` : '';
     return `<button class="btn" ${dis} onclick="runPageMap()">✦ ${st.running ? 'Agent 设计中…' : '让 Agent 列出页面'}</button>
-      ${batchBtn}<button class="btn ghost" onclick="addPagePrompt()">＋ 手动添加</button>${guide}${fail}`;
+      ${batchBtn}${tidyBtn}<button class="btn ghost" onclick="addPagePrompt()">＋ 手动添加</button>${guide}${fail}`;
   }
   return '';
 }
@@ -1762,6 +1763,24 @@ function genAllPages() {
     body: JSON.stringify({ phase: 4, instruction: '批量**并发**出图（**别一页一页串行**——openai-image-gen 支持并发 20，要一次并发出全部）：① 先把页面地图里**每一个还没有设计稿的页面**各自的 prompt 一次性写好——每页 = 该页内容/功能 + ③ 选定首图的视觉基调（配色/字体气质/质感）+ 主平台界面描述 + 纯 UI 约束（pure UI, fills the frame edge-to-edge, no background scene, no device frame, front view）；主平台读 .productflow/wizard.json 的 primary（缺则从产品定位判断）。② 用**一条 gen.py 命令并发生成**：每页一个 `--prompt`，整条带 `--size <主平台尺寸: APP/H5=1080x2340, PC=1440x1080>` `--concurrency 20` `--model gpt-image-2 --out-dir artifacts/phase-4`。③ 生成完按 gen.py 写的 prompts.json 把每张图映射回对应页面，逐个 `page set <pg-id> --add-version <文件> --platform <主平台>` 关联（登记串行没关系，耗时的生图已并发）。前端实时显示进度。' }) })
     .then(r => { if (r.status === 409) toast('本阶段 Agent 已在进行中'); }).catch(() => {});
   toast(`已让 Agent 批量生成 ${n} 个页面（逐页完成后平台格会变亮）`);
+}
+// ④页面：一键整理排布——按模块分组重新铺成不重叠的整齐网格（解决旧坐标/竖屏高卡堆叠）
+function tidyPages() {
+  const cards = stageCards().filter(c => c.kind === 'page');
+  if (!cards.length) { toast('还没有页面，先「让 Agent 列出页面」'); return; }
+  // 先清掉已删页面遗留的孤儿坐标（否则 cvFit 边界被它们撑大）
+  const live = new Set(cards.map(c => c.id));
+  for (const k of Object.keys(cv.items)) if (k.startsWith('page:') && !live.has(k)) delete cv.items[k];
+  // 同模块(group)相邻，组内按名称；让排布有逻辑、好找
+  const sorted = cards.slice().sort((a, b) =>
+    String(a.pg.group || '').localeCompare(String(b.pg.group || '')) ||
+    String(a.pg.name || '').localeCompare(String(b.pg.name || '')));
+  sorted.forEach((c, i) => {
+    const col = i % GRID_COLS, row = Math.floor(i / GRID_COLS);
+    cv.items[c.id] = Object.assign(cv.items[c.id] || {}, { x: 40 + col * (ITEM_W + CARD_GAP), y: 40 + row * ROW_GAP });
+  });
+  cvSave(); renderCanvas(); cvFit();
+  toast(`已整理 ${sorted.length} 个页面（按模块铺成整齐网格）`);
 }
 
 function renderCanvas() {
