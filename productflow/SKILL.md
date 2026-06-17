@@ -1,12 +1,12 @@
 ---
 name: productflow
-version: 2.5.3
-description: 完整互联网产品全自动生产操作台。启动 localhost 控制台 + 7 阶段流水线：市场调研 → 找参考 → 首图设计 → 页面设计 → 功能与数据设计(ER/数据层/接口) → 开发实现(前后端全栈 / 原生 App + 测试) → 部署上线（Web：CF Pages/Workers 或单机；iOS：TestFlight）。从落地页/官网/waitlist，到带数据库与后端的功能性 Web 应用，再到原生移动 App（iOS：SwiftUI+SwiftData）都能做（落地页只是最简单的一种）。只要用户想"做一个网站/Web 产品/应用/落地页/官网/waitlist/小工具"、"做一个 iOS App / 原生移动应用"、"做一个带后端和数据库的产品"、"复刻某产品"、"从调研到上线"、提到 ProductFlow / 操作台 / landing page pipeline，或要求"启动产品项目"，就使用本 skill——即使他们没说出 skill 名字。
+version: 2.6.0
+description: 完整互联网产品全自动生产操作台。启动 localhost 控制台 + 7 阶段流水线：市场调研 → 找参考 → 首图设计 → 页面设计 → 功能与数据设计(ER/数据层/接口) → 开发实现(前后端全栈 / 原生 App + 测试) → 部署上线（Web：CF Pages/Workers 或单机；iOS：TestFlight；Android：Google Play 内部测试）。从落地页/官网/waitlist，到带数据库与后端的功能性 Web 应用，再到原生移动 App（iOS：SwiftUI+SwiftData / Android：Kotlin+Compose+Room）都能做（落地页只是最简单的一种）。只要用户想"做一个网站/Web 产品/应用/落地页/官网/waitlist/小工具"、"做一个 iOS App / Android 安卓 App / 原生移动应用"、"做一个带后端和数据库的产品"、"复刻某产品"、"从调研到上线"、提到 ProductFlow / 操作台 / landing page pipeline，或要求"启动产品项目"，就使用本 skill——即使他们没说出 skill 名字。
 ---
 
 # ProductFlow — 互联网产品生产操作台
 
-把"做一个互联网产品"变成一条可视化流水线——从落地页、官网，到带数据库与后端的功能性 Web 应用，再到原生移动 App（iOS：SwiftUI + SwiftData → TestFlight；落地页只是最简单的一种）。没有"一套模板锁死全部"那回事：按产品类型/平台选合适技术栈，下面各阶段给的是减少选择成本的**推荐预设**、不是唯一选项。你（agent）是流水线的执行者；用户通过两个入口跟进：**CLI 对话**（主通道）和 **localhost 操作台**（看进度/产物、给你留言）。两边共享 `.productflow/` 里的同一份状态。
+把"做一个互联网产品"变成一条可视化流水线——从落地页、官网，到带数据库与后端的功能性 Web 应用，再到原生移动 App（iOS：SwiftUI + SwiftData → TestFlight；Android：Kotlin + Jetpack Compose + Room → Google Play 内部测试；落地页只是最简单的一种）。没有"一套模板锁死全部"那回事：按产品类型/平台选合适技术栈，下面各阶段给的是减少选择成本的**推荐预设**、不是唯一选项。你（agent）是流水线的执行者；用户通过两个入口跟进：**CLI 对话**（主通道）和 **localhost 操作台**（看进度/产物、给你留言）。两边共享 `.productflow/` 里的同一份状态。
 
 ```
 ①市场调研 → ②找参考 → ③首图设计 → ④页面设计 → ⑤功能与数据设计 → ⑥开发实现 → ⑦部署上线
@@ -71,9 +71,9 @@ init 输出里有项目 id；告知用户项目地址 `http://127.0.0.1:7717/p/<
 | ② 找参考 | 面板 | 收集 Dribbble 等参考图、登记、用户选稿 |
 | ③ 首图设计 | **画布** | 在无限画布上批量生图、摆放、对比多张首图方案 |
 | ④ 页面设计 | **画布** | 在无限画布上按「页面 × 平台」铺开各页面各端的设计稿 |
-| ⑤ 功能与数据 | 面板 | 模块清单、ER 图、数据层（Web 表结构 / iOS SwiftData `@Model`）、接口契约（纯本地 App 无） |
+| ⑤ 功能与数据 | 面板 | 模块清单、ER 图、数据层（Web 表结构 / iOS SwiftData `@Model` / Android Room `@Entity`）、接口契约（纯本地 App 无） |
 | ⑥ 开发实现 | 面板 | 脚手架、前后端 / 原生 App、冒烟测试、接口/交付文档 |
-| ⑦ 部署上线 | 面板 | 部署/上架路径（Web 上线 / iOS 上传 TestFlight）、冒烟、交付报告 |
+| ⑦ 部署上线 | 面板 | 部署/上架路径（Web 上线 / iOS 上传 TestFlight / Android 上传 Google Play 内部测试）、冒烟、交付报告 |
 
 **两块独立画布**：③首图设计 和 ④页面设计 各是一块独立的无限画布（不是同一张）——③专放首图方案、④专放页面×平台的设计稿，互不混淆。画布上产物可拖拽摆位、滚轮缩放、双击预览，布局存 `.productflow/canvas.json`。产物登记（`artifact` 命令）后自动出现在对应阶段视图里——这就是设计稿、截图、报告要勤登记的原因：画布是用户审阅和对比方案的主要场所。
 
@@ -128,9 +128,9 @@ $PF status                           # 总览
 | ② 找参考 | `references/phase-2-refs.md` | 去 Dribbble 等收集参考截图 → 存 `artifacts/phase-2/refs/` → `explore add-ref` 逐张登记 → 用户选稿（selectedRefs） |
 | ③ 首图设计 | `references/phase-3-hero.md` | 读 selectedRefs 总结风格 → openai-image-gen 批量多风格生图 → 存 `artifacts/phase-3/heroes/` → `explore add-hero` 逐张登记，**首图画布**上对比定稿 |
 | ④ 页面设计 | `references/phase-4-pages.md` | 三入口：直接生成（design-taste-frontend）/ 参考图改风格 / 画布（canvas-design）→ **页面画布**按页面×平台铺稿 → direction.md 定稿 |
-| ⑤ 功能与数据设计 | `references/phase-5-spec.md` | 模块清单 → ER 图 → 数据层（Web：SQLite DDL / iOS：SwiftData `@Model`）→ 接口契约（纯本地 App 无）→ 按 `references/templates.md` 先看平台、再按需选推荐预设（Web T1/T2/T3 或 iOS P-iOS） |
-| ⑥ 开发实现 | `references/phase-6-implement.md` | 按所选预设脚手架 → TDD → 前后端 / 原生 App → 冒烟+截图（Web：Playwright / iOS：Simulator）→ 接口/交付文档 |
-| ⑦ 部署上线 | `references/phase-7-deploy.md` | Web：CF Pages（T1/T2 前端）/ Workers+D1（T2 API）/ 单机 Ubuntu（T3）；iOS：archive→导出 .ipa→上传 TestFlight（停在提审前）→ 线上/真机冒烟 → 交付报告 |
+| ⑤ 功能与数据设计 | `references/phase-5-spec.md` | 模块清单 → ER 图 → 数据层（Web：SQLite DDL / iOS：SwiftData `@Model` / Android：Room `@Entity`）→ 接口契约（纯本地 App 无）→ 按 `references/templates.md` 先看平台、再按需选推荐预设（Web T1/T2/T3 或 iOS P-iOS / Android P-Android） |
+| ⑥ 开发实现 | `references/phase-6-implement.md` | 按所选预设脚手架 → TDD → 前后端 / 原生 App → 冒烟+截图（Web：Playwright / iOS：Simulator / Android：Emulator）→ 接口/交付文档 |
+| ⑦ 部署上线 | `references/phase-7-deploy.md` | Web：CF Pages（T1/T2 前端）/ Workers+D1（T2 API）/ 单机 Ubuntu（T3）；iOS：archive→导出 .ipa→上传 TestFlight（停在提审前）；Android：bundleRelease→AAB→上传 Google Play 内部测试（停在生产提审前）→ 线上/真机冒烟 → 交付报告 |
 
 进入某阶段前**先读完该阶段手册再动手**——手册里有步骤 ID、产物清单和要调用的既有 skill（design-taste-frontend、openai-image-gen、database-schema-designer、webapp-testing、deploy-cf-pages 等），不要凭记忆做。
 
