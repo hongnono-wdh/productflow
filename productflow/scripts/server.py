@@ -750,6 +750,19 @@ _STAGE_RUN_LOCK = threading.Lock()        # 保护 _STAGE_RUNNING
 _STAGE_RUNNING: set = set()               # {(pid, phase)} 正在跑的阶段——防双开同阶段 agent
 
 
+def _has_open_choice(pf: str, stage: int) -> bool:
+    """该阶段是否有未回答的 choice——agent 阻塞在 choice wait 上、正等用户点选。"""
+    try:
+        with open(os.path.join(pf, "choices.json"), encoding="utf-8") as f:
+            data = json.load(f)
+        for c in (data.get("choices") or []):
+            if c.get("stage") == stage and not str(c.get("answer") or "").strip():
+                return True
+    except (OSError, ValueError):
+        pass
+    return False
+
+
 def _read_json(path: str):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
@@ -987,7 +1000,16 @@ class Handler(BaseHTTPRequestHandler):
                                     continue
                 except FileNotFoundError:
                     pass
-                self._json({"lines": lines[-50:]})
+                # run-stage 阶段(4/5/6/7)：用服务端真实运行态，别让前端靠日志末行猜
+                running = waiting = False
+                mph = re.match(r"stage-(\d+)$", phase)
+                if mph:
+                    ph_int = int(mph.group(1))
+                    with _STAGE_RUN_LOCK:
+                        running = (pid, ph_int) in _STAGE_RUNNING
+                    if running:
+                        waiting = _has_open_choice(pf, ph_int)   # agent 活着且有未答 choice = 在等你回答
+                self._json({"lines": lines[-50:], "running": running, "waiting": waiting})
             elif sub == "/api/canvas":
                 # 每阶段一块画布：canvas.json = {"3": {view,items,notes}, "4": {...}}
                 # GET ?stage=N 返回该阶段；缺省/缺失 → 空结构

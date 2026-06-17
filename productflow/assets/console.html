@@ -1428,7 +1428,7 @@ function runStageHtml(phase) {
     <div class="wz-hint2" style="margin:0 0 12px">${hints[phase]}<br>遇到要你拍板的（如选模板、部署目标），Agent 会在页面顶部弹出选项让你点选。产物出现在下方「产物 / 进展日志」。</div>
     ${(done && !st.running) ? `<input class="wz-input" id="st-stage-req" style="max-width:none;margin-bottom:10px" oninput="(pStageRun[${phase}]=pStageRun[${phase}]||{}).instr=this.value" value="${esc(st.instr || '')}" placeholder="重做要求（可选）：写一句你想调整的方向">` : ''}
     <button class="btn" ${st.running ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="doRunStage(${phase})">✦ ${done ? '重做本阶段' : '让 Agent 做本阶段'}</button>
-    ${st.running ? `<div class="wz-aibox" style="margin-top:14px">✦ Agent 进行中…${st.line ? `<br><span style="color:var(--dim);font-size:12px">${esc(st.line)}</span>` : ''}<br><span style="color:var(--dim);font-size:12px">进度见下方步骤 / 产物 / 进展日志</span></div>` : ''}
+    ${st.running ? `<div class="wz-aibox" style="margin-top:14px${st.waiting ? ';border-color:#d8c98a;background:#fcf8e8;color:#7a6a1f' : ''}">${st.waiting ? '⏳ Agent 正等你回答上面弹出的选项（回答后会自动继续，别关页面）' : '✦ Agent 进行中…'}${st.line ? `<br><span style="color:var(--dim);font-size:12px">${esc(st.line)}</span>` : ''}<br><span style="color:var(--dim);font-size:12px">进度见下方步骤 / 产物 / 进展日志</span></div>` : ''}
     ${st.failed ? `<div class="wz-aibox" style="margin-top:14px;border-color:#e0b4b4;background:#fdf4f4;color:#b3403a">❌ Agent 中断了（可能 claude 未登录 / 超时 / 中途报错）。点上面按钮重试，或在💬留言说明、或在 CLI 里接手本阶段。</div>` : ''}</div>`;
 }
 function doRunStage(phase) {
@@ -1444,13 +1444,16 @@ async function pollStageRun() {
   if (![4, 5, 6, 7].includes(phase)) return;   // ④页面(画布)也用它显示「让 Agent 列出页面」进度
   try {
     const r = await fetch(PF_BASE + '/api/agent-log?phase=stage-' + phase); if (!r.ok) return;
-    const lines = (await r.json()).lines || [];
-    if (!lines.length) return;
-    const last = lines[lines.length - 1];
+    const data = await r.json();
+    const lines = data.lines || [];
+    const last = lines.length ? lines[lines.length - 1] : null;
+    const prev = pStageRun[phase] || {};
     pStageRun[phase] = {
-      line: last.text || '',
-      running: !['done', 'error'].includes(last.kind),
-      failed: last.kind === 'error',
+      line: last ? (last.text || '') : '',
+      running: !!data.running,                 // 服务端真实运行态（不再靠日志末行猜）
+      waiting: !!data.waiting,                 // agent 阻塞在 choice，正等你回答
+      failed: !data.running && !!last && last.kind === 'error',
+      instr: prev.instr || '',                 // 保留用户正在写的重做要求
     };
     if (selectedPhase !== phase) return;
     if (phase === 4) { if (cvLoaded && cvStage === 4) renderCanvas(); }   // 画布阶段：刷 stagebar
