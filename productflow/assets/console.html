@@ -303,10 +303,13 @@
   .cv-item.base { box-shadow: 0 0 0 2px var(--ink); }
   .cv-item.base .cv-base { background: var(--ink); color: #fff; border-color: var(--ink); }
   .cv-item.sel { outline: 3px solid #5470c6; outline-offset: 2px; }
-  .cv-item.page-card { width: 240px; cursor: grab; }
-  .cv-item .pthumb { height: 130px; display: flex; align-items: center; justify-content: center; background: #fafafa; overflow: hidden; }
+  /* 页面卡按平台出真实比例：手机端竖屏(1080×2340)、PC 端横屏(1440×1080)——不再压成固定矮框 */
+  .cv-item.page-card { width: 184px; cursor: grab; }
+  .cv-item .pthumb { aspect-ratio: 1080 / 2340; display: flex; align-items: center; justify-content: center; background: #fafafa; overflow: hidden; }
+  .cv-item.page-card.plat-pc { width: 300px; }
+  .cv-item.page-card.plat-pc .pthumb { aspect-ratio: 1440 / 1080; }
   .cv-item .pthumb.ph { color: var(--faint); font-size: 13px; }
-  .cv-item .pthumb img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+  .cv-item .pthumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; pointer-events: none; }
   .cv-item .bar.col { flex-direction: column; align-items: stretch; gap: 7px; }
   .cv-item .pn { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink); }
   .cv-item .pn .pg-g { color: var(--faint); font-weight: 400; font-size: 11px; margin-left: auto; }
@@ -1585,7 +1588,7 @@ function zoomRef(id) {
   });
 })();
 /* ===== 无限画布 ===== */
-const ITEM_W = 320, CARD_GAP = 44, GRID_COLS = 4, ROW_GAP = 360;
+const ITEM_W = 320, CARD_GAP = 44, GRID_COLS = 4, ROW_GAP = 500;
 let cv = { view: { x: 60, y: 80, z: 0.7 }, items: {}, notes: [], pages: [] };
 let cvStage = null;             // 当前已加载的画布属于哪个阶段（3 首图 / 4 页面）
 let cvLoaded = false, cvSaveTimer = null, cvDirty = false;
@@ -1693,10 +1696,12 @@ function pageCardHtml2(c, pos) {
     return `<span class="cv-plat ${has ? 'on' : ''}" data-pgid="${esc(pg.id)}" data-plat="${p}" ${has ? `data-file="${esc(has.file)}"` : `title="点击让 Agent 生成 ${p} 版"`}>${p}</span>`;
   }).join('');
   const primary = versions.find(v => v && v.file);
+  // 卡片比例跟随主版本平台：PC=横屏，APP/H5(或未知)=手机竖屏
+  const platClass = (primary && primary.platform === 'PC') ? 'plat-pc' : '';
   const thumb = primary
     ? `<div class="pthumb"><img src="${artUrl(primary.file)}" loading="lazy"></div>`
     : `<div class="pthumb ph">${st === 'designing' ? '设计中…' : '待设计'}</div>`;
-  return `<div class="cv-item page-card" data-id="${esc(c.id)}" data-pgid="${esc(pg.id)}"
+  return `<div class="cv-item page-card ${platClass}" data-id="${esc(c.id)}" data-pgid="${esc(pg.id)}"
     style="left:${pos.x}px; top:${pos.y}px">
     <div class="cv-page-del" title="删除">×</div>${thumb}
     <div class="bar col"><div class="pn"><span class="pdot ${st}"></span>${esc(pg.name)} <span class="pg-g">${esc(pg.group || '')}</span></div>
