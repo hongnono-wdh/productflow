@@ -59,6 +59,8 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 4 page-map --status done
 python3 "$SKILL_DIR/scripts/pf_state.py" step 4 design-pages --status active
 ```
 
+> **操作台两种触发**：用户可以①在某页卡片上点空的平台格（PC/H5/APP）让你单独生成那一页那个平台；②点顶部「**批量生成全部（N 页）**」让你**把页面地图里所有还没设计的页面、按主平台逐页各出一版**（这会用 `run-stage` 派一个 agent 跑整批）。收到批量请求就遍历所有占位页逐个设计、每出一版立刻 `page set --add-version --platform` 关联，**别只做一页就停**。
+
 按 page-map 的清单**逐页**设计。开始设计某一页时，先把它从占位翻成"设计中"，让画布占位带亮起该页进度：
 
 ```bash
