@@ -59,7 +59,19 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 4 page-map --status done
 python3 "$SKILL_DIR/scripts/pf_state.py" step 4 design-pages --status active
 ```
 
-> **操作台两种触发**：用户可以①在某页卡片上点空的平台格（PC/H5/APP）让你单独生成那一页那个平台；②点顶部「**批量生成全部（N 页）**」让你**把页面地图里所有还没设计的页面、按主平台逐页各出一版**（这会用 `run-stage` 派一个 agent 跑整批）。收到批量请求就遍历所有占位页逐个设计、每出一版立刻 `page set --add-version --platform` 关联，**别只做一页就停**。
+> **操作台两种触发**：①在某页卡片上点空的平台格（PC/H5/APP）→ 单独生成那一页那个平台；②点顶部「**批量生成全部（N 页）**」→ 把所有还没设计的页面**按主平台并发各出一版**（`run-stage` 派一个 agent 跑整批）。
+>
+> **批量必须并发、不要逐页串行**——openai-image-gen 的 `gen.py` 支持 `--concurrency 20`，且 `--prompt` 可重复。所以批量请求的正确做法是：先把每个占位页的 prompt 一次性写好（每页 = 该页内容 + ③ 视觉基调 + 主平台界面描述 + 纯 UI 约束），然后用**一条 gen.py 命令**把它们一起并发出图：
+>
+> ```bash
+> python3 "$GEN" \
+>   --prompt "<页1内容> <主平台界面描述> 纯UI, <③基调>, pure UI, no background scene, no device frame, front view" \
+>   --prompt "<页2内容> …" \
+>   --prompt "<页N内容> …" \
+>   --size <主平台: APP/H5=1080x2340, PC=1440x1080> --concurrency 20 --model gpt-image-2 --out-dir artifacts/phase-4
+> ```
+>
+> 出图完按 `prompts.json` 把每张映射回对应页面，逐个 `page set <pg-id> --add-version <文件> --platform <主平台>` 关联（登记串行无妨，耗时的生图已并发）。**别一页一页 gen.py 串行调用**。
 
 按 page-map 的清单**逐页**设计。开始设计某一页时，先把它从占位翻成"设计中"，让画布占位带亮起该页进度：
 

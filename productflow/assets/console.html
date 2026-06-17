@@ -1754,7 +1754,7 @@ function genAllPages() {
   pStageRun[4] = { running: true, line: '', failed: false };
   if (cvStage === 4) renderCanvas();
   fetch(PF_BASE + '/api/run-stage', { method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ phase: 4, instruction: '批量出图：为页面地图里**每一个还没有设计稿的页面**，按当前主平台（读 .productflow/wizard.json 的 primary，缺则从产品定位判断）逐个生成【选定平台的纯 UI 设计稿】，沿用 ③ 选定首图的视觉基调（配色/字体气质/质感）；用图生图(edit.py，喂③选中参考或首图基调)优先。每出一版立刻 `page set <id> --add-version <产物路径> --platform <主平台>` 关联，占位卡即变已设计。**逐页做完整批、不要只做一页**，前端实时显示进度。' }) })
+    body: JSON.stringify({ phase: 4, instruction: '批量**并发**出图（**别一页一页串行**——openai-image-gen 支持并发 20，要一次并发出全部）：① 先把页面地图里**每一个还没有设计稿的页面**各自的 prompt 一次性写好——每页 = 该页内容/功能 + ③ 选定首图的视觉基调（配色/字体气质/质感）+ 主平台界面描述 + 纯 UI 约束（pure UI, fills the frame edge-to-edge, no background scene, no device frame, front view）；主平台读 .productflow/wizard.json 的 primary（缺则从产品定位判断）。② 用**一条 gen.py 命令并发生成**：每页一个 `--prompt`，整条带 `--size <主平台尺寸: APP/H5=1080x2340, PC=1440x1080>` `--concurrency 20` `--model gpt-image-2 --out-dir artifacts/phase-4`。③ 生成完按 gen.py 写的 prompts.json 把每张图映射回对应页面，逐个 `page set <pg-id> --add-version <文件> --platform <主平台>` 关联（登记串行没关系，耗时的生图已并发）。前端实时显示进度。' }) })
     .then(r => { if (r.status === 409) toast('本阶段 Agent 已在进行中'); }).catch(() => {});
   toast(`已让 Agent 批量生成 ${n} 个页面（逐页完成后平台格会变亮）`);
 }
