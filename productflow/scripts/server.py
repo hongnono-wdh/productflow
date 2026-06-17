@@ -341,6 +341,7 @@ def _auto_research(pf: str, instruction: str = "") -> None:
     instruction：用户对本次（重）做的额外要求，注入 prompt——避免重做还是无脑跑一样的东西。"""
     project_root = os.path.dirname(pf)
     ps = os.path.join(SKILL_DIR, "scripts", "pf_state.py")
+    appstore = os.path.join(SKILL_DIR, "scripts", "appstore_shots.py")
     doc = os.path.join(SKILL_DIR, "references", "phase-1-research.md")
     prompt = (
         "你是 ProductFlow 市场调研 Agent（阶段①），headless 运行，必须用工具实际完成任务（不要只输出描述）。\n"
@@ -350,6 +351,10 @@ def _auto_research(pf: str, instruction: str = "") -> None:
         "按下面步骤做，完成一步就登记一步（不要攒到最后，前端实时显示进度）：\n"
         "1. WebSearch 找 3-6 个同品类竞品的落地页 URL。\n"
         "2. 用 playwright 对每个竞品落地页整页截图，存 artifacts/phase-1/screenshots/<域名>.png（先 mkdir -p）。\n"
+        "2b. 【仅当主平台=APP】先读 .productflow/wizard.json 的 primary；若是 APP，再补抓商店官方特色截图（真实 App 界面，比官网直观）：\n"
+        f"    python3 {appstore} --platform both --term \"<品类英文词>\" --out artifacts/phase-1/appstore --limit 3 --max-shots 6\n"
+        f"    然后按生成的 manifest.json 逐张登记：python3 {ps} --dir {project_root} artifact 1 artifacts/phase-1/appstore/<子目录>/<n>.png --title \"<App名> 商店截图\"\n"
+        "    （iOS 稳；Android best-effort，抓不到就跳过、别卡住。非 APP 项目跳过本步。）\n"
         "3. 逐个分析竞品风格/卖点，写 artifacts/phase-1/analysis/<域名>.md。\n"
         "4. 做核心矛盾分析，写 artifacts/phase-1/core-analysis.mm.md（markmap 导图源）。\n"
         "5. 汇总 artifacts/phase-1/competitors.md（竞品矩阵）+ artifacts/phase-1/replicate-notes.md（复刻要点，供后续设计阶段用）。\n"
