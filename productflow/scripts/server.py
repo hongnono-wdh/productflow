@@ -583,23 +583,27 @@ def _auto_explore(pf: str, req: dict) -> None:
         )
         timeout = 900
     elif kind == "collect-ref":
-        # 用户贴的参考链接：打开截图、登记为一张参考
+        # 用户贴的参考链接：优先抠出页面里那张设计图下载（不是截网页图）；普通网站才整页截图兜底
         design_doc = os.path.join(SKILL_DIR, "references", "phase-2-refs.md")
         refs_dir = os.path.join(pf, "artifacts", "phase-2", "refs")
         url = str(req.get("url") or "").strip()
         prompt = (
             "你是 ProductFlow 找参考 Agent（阶段②），headless 运行，必须用工具实际完成任务（不要只输出描述）。\n"
-            f"任务：采集用户提供的这个参考链接：{url}\n"
+            f"任务：采集用户贴的这个参考链接：{url}\n"
+            "🎯 目标是拿到**链接里那张设计图本身**（高清原图），**不是网页截图**。\n"
             f"做法可参考手册：{design_doc} 的「找参考协作」节。\n"
-            "⚠️ 浏览器工具：你在 headless 后台运行，**没有浏览器 MCP**（playwright MCP / claude-in-chrome 都没有）——"
-            "不要去 ToolSearch 找 MCP，直接用本机已装的 **Python Playwright（chromium headless）** 写脚本截图（或 `playwright-cli` skill）。\n"
-            "重要：每个 Bash 调用是独立 shell，登记命令必须写完整 `python3 <绝对路径> --dir <绝对路径> ...`，禁止用 $PF 缩写。\n"
-            "步骤：\n"
-            f"1. 用 Python Playwright 打开 {url}，等页面加载，整页截图存 {refs_dir}/<简短英文名>.png（先 mkdir -p）。"
-            "若该链接本身就是一张图片，直接下载即可。"
-            "**若链接访问失败/打不开，不要存空白图、不要 done-request，直接结束并明确说「访问失败」让用户重试。**\n"
-            f"2. 登记：python3 {pf_state} --dir {project_root} explore add-ref artifacts/phase-2/refs/<文件名> --title \"<一句话风格描述>\" --source \"{url}\"\n"
-            f"3. 完成：python3 {pf_state} --dir {project_root} explore done-request --kind collect-ref\n"
+            "⚠️ 浏览器工具：headless 后台，**没有浏览器 MCP**——直接用本机 **Python Playwright（chromium headless）** 写脚本，"
+            "别去 ToolSearch 找 MCP。重要：每个 Bash 调用是独立 shell，登记命令写完整 `python3 <绝对路径> --dir <绝对路径> ...`，禁止 $PF 缩写。\n"
+            "按优先级采集（先试 ①②，都拿不到才退到 ③）：\n"
+            "① 链接本身就是图片（URL 以 .png/.jpg/.jpeg/.webp/.gif 结尾，或响应 content-type 是 image/*）：直接 urllib 下载。\n"
+            "② 作品/设计页（Dribbble、Behance、Mobbin、Pinterest 等，或任何有主视觉图的页面）：用 Playwright 打开后，"
+            "读 `<meta property=\"og:image\">` 的 content（取不到再试 `<meta name=\"twitter:image\">`，再不行取正文里尺寸最大的那张 `<img>` 的 src/currentSrc），"
+            "**那才是高清原图 URL**（Dribbble 一般是 `cdn.dribbble.com/...`），用 urllib 下载这张图——**绝不要截网页图**。\n"
+            "③ 仅当是普通网站、确实抠不到主视觉图（例如用户想参考整页排版的落地页）：才用 Playwright 整页截图兜底。\n"
+            f"存到 {refs_dir}/<简短英文名>.<原图扩展名，抠图时用图片真实后缀；截图用 png>（先 mkdir -p）。"
+            "**链接访问失败/打不开就直接结束并明确说「访问失败」、不要 done-request、不存空白图，让用户重试。**\n"
+            f"登记：python3 {pf_state} --dir {project_root} explore add-ref artifacts/phase-2/refs/<文件名> --title \"<一句话风格描述>\" --source \"{url}\"\n"
+            f"完成：python3 {pf_state} --dir {project_root} explore done-request --kind collect-ref\n"
             "只采集这一个链接，完成即停。版权红线：只供风格判断，不抄文案、不盗图。"
         )
         timeout = 300

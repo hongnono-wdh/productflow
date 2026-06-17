@@ -1454,7 +1454,7 @@ function refsPanelHtml() {
     <button class="btn" style="margin-top:14px" ${searching ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="searchRefs()">🔍 ${pExplore.refs.length ? '再找一批（累积）' : '让 Agent 找参考'}</button>
     ${pExplore.refs.length ? `<span class="hint" style="margin-left:10px">已选 ${pExplore.selectedRefs.length}</span>` : ''}
     <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
-      <input class="wz-input" id="st-ref-url" style="flex:1;max-width:none" placeholder="或贴一个参考链接（任意作品页/网站），Agent 截图采集进来">
+      <input class="wz-input" id="st-ref-url" style="flex:1;max-width:none" placeholder="或贴一个参考链接（Dribbble/作品页/图片），Agent 抠出里面的设计图采集进来（普通网站则整页截图）">
       <button class="btn ghost" style="white-space:nowrap" ${collecting ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="collectRef()">＋ 采集链接</button></div>
     ${collecting ? `<div class="wz-aibox" style="margin-top:10px">✦ Agent 正在打开并采集你贴的链接…</div>` : ''}
     ${(pExplore.searchFailed && !searching) ? `<div class="wz-aibox" style="margin-top:12px;border-color:#e0b4b4;background:#fdf4f4;color:#b3403a">❌ 访问失败 / 没拿到参考（可能 Dribbble 打不开或被拦截）。点上面「找参考」重试即可。</div>` : ''}

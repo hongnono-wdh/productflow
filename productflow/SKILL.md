@@ -1,6 +1,6 @@
 ---
 name: productflow
-version: 2.2.1
+version: 2.2.2
 description: 完整互联网产品全自动生产操作台。启动 localhost 控制台 + 7 阶段流水线：市场调研 → 找参考 → 首图设计 → 页面设计 → 功能与数据设计(ER/DDL/API) → 开发实现(前后端全栈+测试) → 部署上线（CF Pages/Workers 或单机）。从落地页/官网/waitlist，到带数据库与后端的功能性 Web 应用都能做（落地页只是最简单的一种）。只要用户想"做一个网站/Web 产品/应用/落地页/官网/waitlist/小工具"、"做一个带后端和数据库的产品"、"复刻某产品"、"从调研到上线"、提到 ProductFlow / 操作台 / landing page pipeline，或要求"启动产品项目"，就使用本 skill——即使他们没说出 skill 名字。
 ---
 

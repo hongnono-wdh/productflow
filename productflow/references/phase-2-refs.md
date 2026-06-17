@@ -103,6 +103,8 @@ $PF explore add-ref artifacts/phase-2/refs/1.png --title "<一句话描述这张
 $PF explore done-request --kind search-refs    # 网页轮询到该槽清空即知完成，参考自动出现在向导里供用户多选
 ```
 
+**请求 `collect-ref`（用户贴了一个参考链接）**：目标是拿到**链接里那张设计图本身**，不是网页截图。按优先级：① 链接本身是图片（扩展名/content-type 为 image）→ 直接下载；② 作品/设计页（Dribbble、Behance、Mobbin、Pinterest 等）→ Playwright 打开后读 `<meta property="og:image">`（取不到再试 `twitter:image` 或正文最大 `<img>`），那是高清原图 URL（Dribbble 多为 `cdn.dribbble.com/...`），下载这张图，**别截网页**；③ 仅当是普通网站、抠不到主视觉图（如想参考整页排版的落地页）才整页截图兜底。下完 `explore add-ref ... --source "<原链接>"`，再 `done-request --kind collect-ref`。
+
 版权红线同 Phase 1：参考只供风格判断、给用户挑感觉用，**不抄袭、不盗图、不进最终产品**。
 
 ## 检查点
