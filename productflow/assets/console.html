@@ -243,14 +243,40 @@
   .wz-ref:hover .wz-del { opacity: 1; }
   .wz-del:hover { border-color: #c0392b; color: #c0392b; }
   .badge { flex: none; font-size: 11px; padding: 2px 8px; border-radius: 999px; color: #fff; background: var(--ink); font-weight: 700; }
-  .cv-note { position: absolute; width: 200px; min-height: 90px; background: var(--note); color: var(--note-ink);
-    border: 1px solid var(--note-line); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; line-height: 1.5;
-    box-shadow: 0 4px 16px rgba(0,0,0,.06); cursor: default; user-select: none; white-space: pre-wrap; word-break: break-word; }
-  .cv-note.dragging { box-shadow: 0 12px 30px rgba(0,0,0,.12); }
-  .cv-note .nx { position: absolute; top: 3px; right: 8px; cursor: pointer; color: #a99c4a; display: none; font-size: 15px; line-height: 1.3; }
-  .cv-note:hover .nx { display: block; }
-  .cv-note .ph-empty { color: #b3a85e; }
-  .cv-note textarea { width: 100%; min-height: 80px; background: transparent; border: 0; resize: none; font: inherit; color: inherit; outline: none; padding: 0; }
+  /* ③ 首图画布右侧「生成首图对话框」 */
+  #hero-dialog { position: absolute; top: 12px; right: 12px; bottom: 12px; width: 320px; z-index: 14;
+    background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 10px 34px rgba(0,0,0,.10);
+    display: none; flex-direction: column; overflow: hidden; }
+  #hero-dialog.on { display: flex; }
+  #hero-dialog.collapsed { bottom: auto; }
+  #hero-dialog.collapsed .hd-body, #hero-dialog.collapsed .hd-input { display: none; }
+  .hd-head { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border-bottom: 1px solid var(--line);
+    font-weight: 800; font-size: 13.5px; cursor: pointer; }
+  .hd-head .hd-x { border: 0; background: none; font-size: 16px; cursor: pointer; color: var(--dim); }
+  .hd-body { flex: 1; overflow-y: auto; padding: 12px 14px; }
+  .hd-sec-t { font-size: 11px; font-weight: 700; color: var(--dim); margin: 4px 0 7px; letter-spacing: .04em; }
+  .hd-refs { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
+  .hd-refs img, .hd-sel img { width: 46px; height: 46px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+  .hd-refs .none { font-size: 12px; color: var(--dim); }
+  .hd-sel { display: flex; align-items: center; gap: 9px; padding: 8px 10px; margin-bottom: 12px; border-radius: 10px;
+    background: #eef3ff; border: 1px solid #cdd9f7; font-size: 12px; }
+  .hd-sel .x { margin-left: auto; cursor: pointer; color: #5470c6; font-weight: 700; }
+  .hd-log { display: flex; flex-direction: column; gap: 10px; }
+  .hd-entry { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font-size: 12px; }
+  .hd-entry .hd-meta { display: flex; align-items: center; gap: 7px; color: var(--dim); font-size: 11px; margin-bottom: 6px; }
+  .hd-entry .hd-mode { padding: 1px 7px; border-radius: 999px; background: var(--ink); color: #fff; font-weight: 700; font-size: 10px; }
+  .hd-entry .hd-mode.edit { background: #5470c6; }
+  .hd-entry .hd-thumbs { display: flex; gap: 5px; flex-wrap: wrap; margin: 5px 0; }
+  .hd-entry .hd-thumbs img { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
+  .hd-entry .hd-prompt { color: var(--dim); line-height: 1.5; max-height: 4.5em; overflow: hidden; }
+  .hd-gen { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 10px; background: var(--note);
+    color: var(--note-ink); font-size: 12px; font-weight: 600; }
+  .hd-empty { font-size: 12px; color: var(--dim); line-height: 1.6; }
+  .hd-input { border-top: 1px solid var(--line); padding: 10px 12px; }
+  .hd-input textarea { width: 100%; min-height: 52px; max-height: 120px; resize: vertical; border: 1px solid var(--line);
+    border-radius: 9px; padding: 8px 10px; font: inherit; font-size: 12.5px; outline: none; box-sizing: border-box; }
+  .hd-input textarea:focus { border-color: var(--ink); }
+  .hd-input .hd-go { width: 100%; margin-top: 8px; }
   .cv-lane-label { position: absolute; font-size: 13px; font-weight: 800; color: var(--ink); pointer-events: none; white-space: nowrap; display: flex; align-items: center; gap: 7px; }
   .cv-lane-label .ln { color: var(--dim); font-weight: 500; }
   .cv-toolbar { position: absolute; left: 20px; top: 16px; display: flex; gap: 8px; z-index: 5; }
@@ -276,6 +302,7 @@
   .cv-base:hover { border-color: var(--ink); }
   .cv-item.base { box-shadow: 0 0 0 2px var(--ink); }
   .cv-item.base .cv-base { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .cv-item.sel { outline: 3px solid #5470c6; outline-offset: 2px; }
   .cv-item.page-card { width: 240px; cursor: grab; }
   .cv-item .pthumb { height: 130px; display: flex; align-items: center; justify-content: center; background: #fafafa; overflow: hidden; }
   .cv-item .pthumb.ph { color: var(--faint); font-size: 13px; }
@@ -572,11 +599,19 @@
     <div id="cv-world"></div>
     <div id="cv-stagebar"></div>
     <div id="cv-empty" style="display:none">画布还是空的 — 产物登记后会自动出现在这里</div>
+    <!-- ③ 首图：右侧生成对话框（只在 cvStage===3 显示，renderHeroDialog 填充） -->
+    <div id="hero-dialog">
+      <div class="hd-head" onclick="toggleHeroDialog()">✦ 生成首图 <button class="hd-x" title="折叠/展开">—</button></div>
+      <div class="hd-body" id="hd-body"></div>
+      <div class="hd-input">
+        <textarea id="hd-text" placeholder="描述想要的首图；点中某张图后在这里说怎么改…"></textarea>
+        <button class="btn hd-go" id="hd-go" onclick="dialogGenerate()">✦ 生成首图</button>
+      </div>
+    </div>
     <div class="cv-toolbar">
-      <button onclick="addNote()">＋ 便签</button>
       <button class="primary" id="cv-send" onclick="sendCanvasFeedback()">发给 Agent ♡0</button>
     </div>
-    <div class="cv-hint">拖拽空白处平移 · 滚轮缩放 · 拖动卡片摆位 · 双击预览 · 选中喜欢的产物</div>
+    <div class="cv-hint">拖拽空白处平移 · 滚轮缩放 · 拖动卡片摆位 · 双击预览 · 点图选中改图</div>
     <div class="cv-controls">
       <button onclick="cvZoomBy(1.25)">＋</button>
       <button onclick="cvZoomBy(0.8)">－</button>
@@ -1049,8 +1084,8 @@ async function pollInbox() {
           const side = m.from === 'agent' ? 'agent' : 'me';
           let body;
           if (m.type === 'canvas-feedback') {
-            const nl = (m.liked || []).length, nn = (m.notes || []).length, nc = (m.comments || []).length;
-            body = `<div class="fb">📌 画布反馈：❤${nl} 张 · ${nn} 条便签 · ${nc} 条针对意见</div>${esc(m.text).replace(/\n/g, '<br>')}`;
+            const nl = (m.liked || []).length, nc = (m.comments || []).length;
+            body = `<div class="fb">📌 画布反馈：❤${nl} 张 · ${nc} 条针对意见</div>${esc(m.text).replace(/\n/g, '<br>')}`;
           } else if (m.type === 'preview-feedback') {
             body = `<div class="fb">🖼 成品预览圈选：${(m.regions || []).length} 处意见</div>${esc(m.text).replace(/\n/g, '<br>')}`;
           } else {
@@ -1125,7 +1160,7 @@ function renderBoard() {
 
 /* ===== 阶段内嵌：P1 产品需求 / P2 找参考（取代向导，阶段内做） ===== */
 let pBrief = { description: '', summary: { goal: '', users: '', need: '', scope: '' }, ready: false, generating: false, request: {}, clarify: '', questions: [], answers: {}, confirmed: false };
-let pExplore = { stylePrefs: [], request: {}, refs: [], selectedRefs: [], styleSummary: '', heroes: [], selectedHero: '', searchFailed: false, heroGenFailed: false };
+let pExplore = { stylePrefs: [], request: {}, refs: [], selectedRefs: [], styleSummary: '', heroes: [], selectedHero: '', searchFailed: false, heroGenFailed: false, heroGenLog: [] };
 
 async function pollBrief() {
   try {
@@ -1155,6 +1190,7 @@ async function pollExplore() {
     pExplore.selectedRefs = e.selectedRefs || []; pExplore.selectedHero = e.selectedHero || '';
     pExplore.styleSummary = e.styleSummary || '';
     pExplore.heroGenFailed = !!e.heroGenFailed;
+    pExplore.heroGenLog = e.heroGenLog || [];
     let req = e.request || {};
     if (req.kind) req = { [req.kind]: req };  // 兼容 server 过渡期单槽（M5 后是 per-kind）
     pExplore.request = req;
@@ -1634,7 +1670,7 @@ function cvAutoPlaceCards(cards) {
 }
 
 function heroCardHtml(c, pos) {
-  return `<div class="cv-item ${pos.liked ? 'liked' : ''} ${c.base ? 'base' : ''}" data-id="${esc(c.id)}" data-title="${esc(c.title)}" data-img="${esc(c.img)}"
+  return `<div class="cv-item ${pos.liked ? 'liked' : ''} ${c.base ? 'base' : ''} ${c.file === heroSel ? 'sel' : ''}" data-id="${esc(c.id)}" data-title="${esc(c.title)}" data-img="${esc(c.img)}"
     style="left:${pos.x}px; top:${pos.y}px"><img src="${c.img}" loading="lazy">
     <div class="cv-heart" title="选中喜欢的">${pos.liked ? '❤' : '♡'}</div>
     <div class="cv-del" title="删除这张首图">✕</div>
@@ -1712,7 +1748,7 @@ function renderCanvas() {
   const cards = stageCards();
   cvAutoPlaceCards(cards);
   $('cv-stagebar').innerHTML = stagebarHtml();
-  $('cv-empty').style.display = (cards.length || cv.notes.length) ? 'none' : 'flex';
+  $('cv-empty').style.display = cards.length ? 'none' : 'flex';
   const n = likedCount();
   $('cv-send').textContent = `发给 Agent ${n ? '❤' : '♡'}${n}`;
   let html = '';
@@ -1720,12 +1756,9 @@ function renderCanvas() {
     const pos = cv.items[c.id]; if (!pos) continue;
     html += c.kind === 'hero' ? heroCardHtml(c, pos) : pageCardHtml2(c, pos);
   }
-  for (const note of cv.notes) {
-    html += `<div class="cv-note" data-id="${esc(note.id)}" style="left:${note.x}px; top:${note.y}px">
-      <div class="nx" title="删除">×</div><div class="nt">${note.text ? esc(note.text) : '<span class="ph-empty">双击编辑…</span>'}</div></div>`;
-  }
   $('cv-world').innerHTML = html;
   cvApply();
+  renderHeroDialog();   // ③ 右侧生成对话框（仅 cvStage===3 显示）
 }
 
 // P3 生成首图（累积，不清旧的，用 ② 选中的参考）
@@ -1737,6 +1770,66 @@ function genHeroes() {
   fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ selectedRefs: pExplore.selectedRefs, request: { kind: 'gen-heroes', selectedRefs: pExplore.selectedRefs } }) }).catch(() => {});
   toast((pExplore.selectedRefs || []).length ? '已请 Agent 按选中参考生成首图（累积）' : '已请 Agent 按产品需求生成首图（累积）');
+}
+
+/* ===== ③ 生成首图对话框 ===== */
+let heroSel = null;        // 点选要「改」的那张首图 file
+let hdCollapsed = false;
+function refImgUrl(file) { return PF_BASE + '/artifacts/' + String(file).replace(/^artifacts\//, ''); }
+function selectedRefCards() {
+  const ids = pExplore.selectedRefs || [];
+  return (pExplore.refs || []).filter(r => ids.includes(r.id));
+}
+function renderHeroDialog() {
+  const el = $('hero-dialog'); if (!el) return;
+  if (cvStage !== 3) { el.classList.remove('on'); return; }
+  el.classList.add('on'); el.classList.toggle('collapsed', hdCollapsed);
+  const gen = !!(pExplore.request && pExplore.request['gen-heroes']);
+  const refs = selectedRefCards();
+  const log = pExplore.heroGenLog || [];
+  const refsHtml = refs.length
+    ? refs.map(r => `<img src="${refImgUrl(r.file)}" title="${esc(r.title || '参考')}">`).join('')
+    : `<span class="none">还没选参考——可去 ② 选几张，或直接生成（按产品需求）</span>`;
+  const selHtml = heroSel
+    ? `<div class="hd-sel"><img src="${refImgUrl(heroSel)}"><span>正在改这张</span><span class="x" onclick="clearHeroSel()">取消 ✕</span></div>` : '';
+  let logHtml = '';
+  if (gen) logHtml += `<div class="hd-gen">✦ Agent 正在生成…（约 1–2 分钟，期间别重启操作台）</div>`;
+  if (!log.length && !gen) logHtml += `<div class="hd-empty">${pExplore.heroGenFailed ? '上次生成未完成，可重试。' : '还没有生成记录。'}<br>在下面写想要的首图、点「生成」；每次生成会在这里记下<b>用了哪些参考 + 发了什么文字</b>。</div>`;
+  for (let i = log.length - 1; i >= 0; i--) {
+    const e = log[i];
+    const thumbs = (e.results || []).slice(0, 6).map(f =>
+      `<img src="${refImgUrl('artifacts/phase-3/heroes/' + String(f).replace(/^.*\//, ''))}">`).join('');
+    logHtml += `<div class="hd-entry"><div class="hd-meta"><span class="hd-mode ${e.mode === 'edit' ? 'edit' : ''}">${e.mode === 'edit' ? '改图' : '生成'}</span><span>${esc(String(e.ts || '').slice(5, 16))}</span><span>· ${(e.refs || []).length} 参考 → ${(e.results || []).length} 张</span></div>
+      <div class="hd-thumbs">${thumbs}</div><div class="hd-prompt">${esc(e.prompt || '')}</div></div>`;
+  }
+  $('hd-body').innerHTML = `<div class="hd-sec-t">本次参考</div><div class="hd-refs">${refsHtml}</div>${selHtml}<div class="hd-sec-t">生成记录</div><div class="hd-log">${logHtml}</div>`;
+  const go = $('hd-go');
+  go.textContent = gen ? 'Agent 生成中…' : (heroSel ? '✦ 按指令改这张' : '✦ 生成首图');
+  go.disabled = gen;
+  go.style.cssText = gen ? 'background:var(--dash);cursor:not-allowed' : '';
+}
+function toggleHeroDialog() { hdCollapsed = !hdCollapsed; renderHeroDialog(); }
+function clearHeroSel() { heroSel = null; renderHeroDialog(); renderCanvas(); }
+function selectHeroForEdit(file) {   // 点图选中＝准备改这张
+  heroSel = (heroSel === file) ? null : file;
+  renderHeroDialog(); renderCanvas();
+  if (heroSel) { const ta = $('hd-text'); if (ta) ta.focus(); }
+}
+function dialogGenerate() {
+  if (pExplore.request && pExplore.request['gen-heroes']) { toast('正在生成，稍等'); return; }
+  const ta = $('hd-text'); const instruction = (ta ? ta.value : '').trim();
+  if (heroSel && !instruction) { toast('说一句这张要怎么改'); return; }
+  const req = { kind: 'gen-heroes', selectedRefs: pExplore.selectedRefs };
+  if (instruction) req.instruction = instruction;
+  if (heroSel) req.baseImage = heroSel;
+  pExplore.request = Object.assign({}, pExplore.request, { 'gen-heroes': req });
+  pExplore.heroGenFailed = false;
+  if (ta) ta.value = '';
+  const wasEdit = !!heroSel; heroSel = null;
+  renderHeroDialog();
+  fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ selectedRefs: pExplore.selectedRefs, request: req }) }).catch(() => {});
+  toast(wasEdit ? '已请 Agent 按指令改这张' : '已请 Agent 生成首图');
 }
 function removeHero(hid) {
   if (!hid) return;
@@ -1790,15 +1883,11 @@ function cvZoomBy(f) {
 }
 function cvFit() {
   const pts = Object.values(cv.items).filter(p => p && typeof p.x === 'number');
-  if (!pts.length && !cv.notes.length) return;
+  if (!pts.length) return;
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const p of pts) {
     x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y - 40);
     x1 = Math.max(x1, p.x + ITEM_W); y1 = Math.max(y1, p.y + 320);
-  }
-  for (const note of cv.notes) {
-    x0 = Math.min(x0, note.x); y0 = Math.min(y0, note.y - 40);
-    x1 = Math.max(x1, note.x + 200); y1 = Math.max(y1, note.y + 160);
   }
   const vp = $('view-canvas').getBoundingClientRect();
   const z = Math.min(2, Math.max(0.08, Math.min(vp.width / (x1 - x0 + 120), vp.height / (y1 - y0 + 120))));
@@ -1806,38 +1895,8 @@ function cvFit() {
   cvApply(); cvSave();
 }
 
-/* 便签 */
-function addNote() {
-  const vp = $('view-canvas').getBoundingClientRect();
-  const wx = (vp.width / 2 - cv.view.x) / cv.view.z - 100;
-  const wy = (vp.height / 2 - cv.view.y) / cv.view.z - 50;
-  const id = 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  cv.notes.push({ id, x: wx, y: wy, text: '' });
-  renderCanvas();
-  cvSave();
-}
-
-function startNoteEdit(el) {
-  const n = cv.notes.find(n => n.id === el.dataset.id);
-  if (!n) return;
-  cvEditing = true;
-  el.classList.add('editing');
-  el.innerHTML = '<textarea></textarea>';
-  const ta = el.querySelector('textarea');
-  ta.value = n.text || '';
-  ta.focus();
-  ta.addEventListener('blur', () => {
-    n.text = ta.value;
-    cvEditing = false;
-    el.classList.remove('editing');
-    cvSave();
-    renderCanvas();
-  });
-}
-
 function sendCanvasFeedback() {
   const liked = Object.entries(cv.items).filter(([, v]) => v && v.liked).map(([id]) => id);
-  const notes = cv.notes.map(n => n.text).filter(t => t && t.trim());
   // 把每张卡片上的针对意见收集成 {ref(标题), file, text}，让 Agent 知道是「哪张图的什么问题」
   const cards = stageCards();
   const labelOf = {}, fileOf = {};
@@ -1846,14 +1905,13 @@ function sendCanvasFeedback() {
     .filter(([, v]) => v && v.comment && v.comment.trim())
     .map(([id, v]) => ({ ref: labelOf[id] || id, file: fileOf[id] || '', text: v.comment.trim() }));
   const sname = { 3: '首图设计', 4: '页面设计' }[cvStage] || '';
-  let text = `【${sname}】画布反馈：❤${liked.length} 张、${notes.length} 条便签、${comments.length} 条针对意见`;
+  let text = `【${sname}】画布反馈：❤${liked.length} 张、${comments.length} 条针对意见`;
   if (comments.length) text += '\n针对性意见（按卡片）：\n' + comments.map(c => `· 「${c.ref}」：${c.text}`).join('\n');
-  if (notes.length) text += '\n便签：\n' + notes.map(n => `· ${n}`).join('\n');
-  if (!liked.length && !notes.length && !comments.length) { toast('先❤选中、贴便签、或给某张卡片写一句意见'); return; }
+  if (!liked.length && !comments.length) { toast('先❤选中喜欢的，或给某张卡片写一句意见'); return; }
   fetch(PF_BASE + '/api/inbox', { method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ text, type: 'canvas-feedback', stage: cvStage, liked, notes, comments }) })
+    body: JSON.stringify({ text, type: 'canvas-feedback', stage: cvStage, liked, comments }) })
     .then(() => {
-      toast(`已发给 Agent：❤${liked.length} + 便签${notes.length} + 意见${comments.length}`);
+      toast(`已发给 Agent：❤${liked.length} + 意见${comments.length}`);
       pollInbox();
     }).catch(() => {});
 }
@@ -1947,20 +2005,12 @@ function sendPreviewFeedback() {
 
   vp.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
-    if (e.target.closest('.cv-heart') || e.target.closest('.nx') || e.target.closest('textarea')
+    if (e.target.closest('.cv-heart') || e.target.closest('textarea')
         || e.target.closest('.cv-base') || e.target.closest('.cv-page-del') || e.target.closest('.cv-del') || e.target.closest('.cv-plat') || e.target.closest('.cv-cmt')
-        || e.target.closest('.cv-toolbar') || e.target.closest('.cv-controls') || e.target.closest('#cv-stagebar')) return;
-    const note = e.target.closest('.cv-note');
+        || e.target.closest('.cv-toolbar') || e.target.closest('.cv-controls') || e.target.closest('#cv-stagebar') || e.target.closest('#hero-dialog')) return;
     const item = e.target.closest('.cv-item');
     sx = e.clientX; sy = e.clientY; moved = false;
-    if (note) {
-      if (note.classList.contains('editing')) return;
-      dragNote = cv.notes.find(n => n.id === note.dataset.id);
-      if (!dragNote) return;
-      mode = 'note'; dragEl = note; ox = dragNote.x; oy = dragNote.y;
-      note.classList.add('dragging');
-      cvDragging = true;
-    } else if (item) {
+    if (item) {
       mode = 'item'; dragEl = item; dragId = item.dataset.id;
       const p = cv.items[dragId]; if (!p) { mode = null; return; }
       ox = p.x; oy = p.y;
@@ -1977,8 +2027,6 @@ function sendPreviewFeedback() {
     if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
     if (moved && !captured) { vp.setPointerCapture(e.pointerId); captured = true; }
     if (mode === 'pan') { cv.view.x = ox + dx; cv.view.y = oy + dy; cvApply(); }
-    else if (mode === 'note') { dragNote.x = ox + dx / cv.view.z; dragNote.y = oy + dy / cv.view.z;
-           dragEl.style.left = dragNote.x + 'px'; dragEl.style.top = dragNote.y + 'px'; }
     else { const p = cv.items[dragId]; p.x = ox + dx / cv.view.z; p.y = oy + dy / cv.view.z;
            dragEl.style.left = p.x + 'px'; dragEl.style.top = p.y + 'px'; }
   });
@@ -1996,8 +2044,6 @@ function sendPreviewFeedback() {
     } else { cv.view.x -= e.deltaX; cvApply(); cvSave(); }
   }, { passive: false });
   vp.addEventListener('dblclick', e => {
-    const note = e.target.closest('.cv-note');
-    if (note) { if (!note.classList.contains('editing')) startNoteEdit(note); return; }
     const item = e.target.closest('.cv-item');
     if (!item) return;
     if (item.dataset.img) openArtifact(item.dataset.img, item.dataset.title || '', 'image');
@@ -2008,13 +2054,6 @@ function sendPreviewFeedback() {
     }
   });
   vp.addEventListener('click', e => {
-    const x = e.target.closest('.nx');
-    if (x) {
-      const id = x.closest('.cv-note').dataset.id;
-      cv.notes = cv.notes.filter(n => n.id !== id);
-      renderCanvas(); cvSave();
-      return;
-    }
     const h = e.target.closest('.cv-heart');
     if (h) {
       const id = h.closest('.cv-item').dataset.id;
@@ -2073,6 +2112,12 @@ function sendPreviewFeedback() {
         toast(`已让 Agent 生成「${pname}」的 ${platform} 版（完成后版本徽章会变亮）`);
       }
       return;
+    }
+    // ③ 点首图卡片（非按钮、非拖拽）= 选中这张准备在对话框里改图
+    const heroItem = e.target.closest('.cv-item');
+    if (heroItem && cvStage === 3 && !moved && heroItem.dataset.img) {
+      const c = stageCards().find(cc => cc.id === heroItem.dataset.id);
+      if (c && c.file) selectHeroForEdit(c.file);
     }
   });
 })();
