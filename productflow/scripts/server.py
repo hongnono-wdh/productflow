@@ -504,11 +504,29 @@ def _auto_explore(pf: str, req: dict) -> None:
                          f"（标题：{seed.get('title', '')}，源：{seed.get('source', '')}）。\n"
                          "先用 Read 打开这张种子图，看清它的视觉风格（配色/版式/字体气质/质感/品类），"
                          "再据此 + 产品定位去搜「更多同一风格」的参考，不要再找跑偏的方向。\n")
+        # 去重/翻新：第二、三轮找参考最常见的坑是又抓回前批同样的热门结果。把已登记参考的来源喂给
+        # agent，要求本轮翻页/换词并跳过已有来源——只找新的（add-ref 那边也有同源去重兜底）。
+        try:
+            with open(os.path.join(pf, "explore.json"), encoding="utf-8") as _ef:
+                _existing = [(r.get("source") or r.get("file") or "")
+                             for r in (json.load(_ef).get("refs") or [])]
+        except (OSError, ValueError):
+            _existing = []
+        _existing = [s for s in _existing if s]
+        dedup_line = ""
+        if _existing:
+            _shown = "\n".join("   - " + s for s in _existing[:30])
+            dedup_line = (
+                f"♻️ **去重（本项目已登记 {len(_existing)} 张参考——这是第二/N 轮找）**：下面是已有参考的来源，"
+                "**绝对不要再下载或登记这些**，本轮只找和它们不同的新参考：\n" + _shown + "\n"
+                "拿新结果的做法：① Dribbble 搜索**翻页**（URL 加 `?page=2`、`?page=3`…）或**换/扩关键词**；"
+                "② 一次多收集 15-20 个候选作品详情页，**先比对、过滤掉上面已有的来源 URL（及明显同图）**，"
+                "再从剩下的新结果里取 6-9 张下载。**别只取第 1 页前几个**——那正是上几轮抓过的。\n")
         prompt = (
             "你是 ProductFlow 找参考 Agent（阶段②），headless 运行，必须用工具实际完成任务（不要只输出描述）。\n"
             "任务：去 Dribbble 找落地页/UI 设计参考，**下载高清原图**（不是缩略图截图，要让用户能放大看细节）。\n"
             f"做法见手册：{design_doc} 的「找参考协作」节。\n"
-            + kw_line + seed_line +
+            + kw_line + seed_line + dedup_line +
             f"产品：{req.get('product')}\n"
             "📱 **必须区分设备**：先读 `.productflow/wizard.json` 看 `platforms` 与主平台 `primary`——"
             "PC=桌面 web 落地页、H5=移动 web、APP=App UI。按**主平台**调整搜索词和筛选，"

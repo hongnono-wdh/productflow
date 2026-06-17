@@ -342,6 +342,26 @@ class TestExplore(PfStateBase):
         self.assertEqual(ref["source"], "http://x")
         self.assertRegex(ref["id"], r"^ref-[0-9a-f]{6}$")
 
+    def test_add_ref_dedup_same_source_or_file(self):
+        # 第二/三轮找参考常抓回同样的热门结果——同来源 URL 或同文件路径都不重复登记
+        self.run_ok(["explore", "add-ref", "artifacts/phase-2/refs/1.png",
+                     "--title", "A", "--source", "https://dribbble.com/shots/111"])
+        self.run_ok(["explore", "add-ref", "artifacts/phase-2/refs/2.png",   # 同来源·不同文件 → 跳过
+                     "--title", "A again", "--source", "https://dribbble.com/shots/111"])
+        self.run_ok(["explore", "add-ref", "artifacts/phase-2/refs/1.png", "--title", "dup file"])  # 同文件 → 跳过
+        self.run_ok(["explore", "add-ref", "artifacts/phase-2/refs/3.png",   # 新来源 → 登记
+                     "--title", "B", "--source", "https://dribbble.com/shots/222"])
+        e = read_json_file(self.dir, "explore.json")
+        self.assertEqual(len(e["refs"]), 2)
+        self.assertCountEqual([r["source"] for r in e["refs"]],
+                              ["https://dribbble.com/shots/111", "https://dribbble.com/shots/222"])
+
+    def test_add_ref_empty_source_not_deduped(self):
+        # 空来源不能被当成"重复"（否则所有无来源参考只能存一张）
+        self.run_ok(["explore", "add-ref", "artifacts/phase-2/refs/a.png", "--title", "A"])
+        self.run_ok(["explore", "add-ref", "artifacts/phase-2/refs/b.png", "--title", "B"])
+        self.assertEqual(len(read_json_file(self.dir, "explore.json")["refs"]), 2)
+
     def test_add_hero(self):
         self.run_ok(["explore", "add-hero", "artifacts/phase-2/hero.png", "--style", "极简"])
         e = read_json_file(self.dir, "explore.json")

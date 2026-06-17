@@ -506,6 +506,14 @@ def cmd_explore(args) -> None:
     if args.eaction == "add-ref":
         if os.path.splitext(args.file)[1].lower() not in (".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"):
             print(f"warning: {args.file} 不是图片扩展名，画廊按图片渲染会显示破图（仍照常登记）", file=sys.stderr)
+        # 去重：第二/三轮找参考常抓到与前批相同的热门结果。同来源 URL（非空）或同文件路径
+        # 一律跳过、不重复登记——保证画廊里参考不重复（exit 0，不打断 agent 流程）。
+        src = (args.source or "").strip()
+        dup = (src and any((r.get("source") or "").strip() == src for r in e["refs"])) \
+            or any(r.get("file") == args.file for r in e["refs"])
+        if dup:
+            print(f"explore add-ref skipped（重复，未登记）: file={args.file} source={src or '-'}")
+            return
         e["refs"].append({"id": "ref-" + os.urandom(3).hex(), "file": args.file,
                           "title": args.title or "", "source": args.source or ""})
     elif args.eaction == "add-hero":
