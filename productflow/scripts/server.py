@@ -270,6 +270,24 @@ def _inject_openai_env(env: dict) -> None:
         pass
 
 
+def _reveal_in_file_manager(path: str):
+    """在系统文件管理器里打开目录（macOS Finder / Linux 文件管理器 / Windows 资源管理器）。
+    本地工具用：让用户从操作台一键看项目代码。fire-and-forget，返回 (ok, err)。"""
+    if not os.path.exists(path):
+        return False, "path_not_found"
+    try:
+        if sys.platform == "darwin":
+            cmd = ["open", path]
+        elif sys.platform.startswith("win"):
+            cmd = ["explorer", path]
+        else:
+            cmd = ["xdg-open", path]
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True, ""
+    except Exception as e:  # noqa: BLE001
+        return False, str(e)
+
+
 # 纯 UI 生图：平台 → (中文名, 该平台界面描述, gen.py --size 尺寸)。
 # 不论哪个平台，统一要求"纯 UI 设计稿本身"：界面铺满画面、正视、edge-to-edge，
 # 禁止背景环境/使用场景/lifestyle/设备外框（手机在手、笔记本在桌）/营销 case-study 长页场景模板。
@@ -1246,11 +1264,22 @@ class Handler(BaseHTTPRequestHandler):
             return
         pid, sub = m.group(1), m.group(2) or ""
         root = _resolve(pid)
-        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/deploy-creds"):
+        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/deploy-creds", "/api/reveal"):
             self._send(404, b"not found", "text/plain")
             return
         pf = os.path.join(root, ".productflow")
         os.makedirs(pf, exist_ok=True)
+        if sub == "/api/reveal":
+            # 在系统文件管理器打开项目代码目录（默认项目根；可选 path 子路径，防穿越）
+            target = os.path.realpath(root)
+            rel = str(data.get("path") or "").strip()
+            if rel:
+                cand = os.path.realpath(os.path.join(root, rel))
+                if cand == target or cand.startswith(target + os.sep):
+                    target = cand
+            ok, err = _reveal_in_file_manager(target)
+            self._json({"ok": ok, "path": target} if ok else {"ok": False, "error": err}, 200 if ok else 500)
+            return
         if sub == "/api/canvas":
             # per-stage 命名空间：只更新本 stage 的格子，read-modify-write 保留其他 stage。
             # canvas 由两块画布(P3/P4)各自的 save 定时器并发 POST，必须持锁避免丢更新。
