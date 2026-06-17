@@ -105,13 +105,25 @@ $PF page set <pg-id> --add-version artifacts/phase-4/pages/home/home-app.html --
 - 不分平台的通用版本可省略 `--platform`（该版本 `platform` 记为 null），但本阶段目标是平台齐全，**优先按平台登记**。
 - 登记任一 version 后，若该页仍是 `placeholder` 会**自动转 `done`**；如需保持设计中可显式再 `--status designing`。三个平台都出齐后按需 `--status done` 收口。
 
-PC / H5 / APP 适配差异（每平台单独成版本，不是一份图凑数）：
+PC / H5 / APP 适配差异（每平台单独成版本，不是一份图凑数；每个版本都是该平台的**纯 UI 设计稿**）：
 
-- **PC**：宽屏多列、悬停态、信息密度高；落地页长图横向留白。
-- **H5**：竖屏单列、点击区域大、首屏聚焦核心 CTA；导航折叠为汉堡或底部栏。
-- **APP**：原生壳内页面，状态栏/安全区、底部 Tab、手势返回；卡片化、列表化更彻底。
+- **PC**：桌面 web 界面（首屏/关键屏），横向（1440 宽基准），宽屏多列、悬停态、信息密度高；无浏览器窗口框。`--size 1440x1080`。
+- **H5**：移动 web 界面，竖屏（~9:19.5），单列、点击区域大、首屏聚焦核心 CTA，导航折叠为汉堡/底部栏；无浏览器地址栏。`--size 1080x2340`。
+- **APP**：手机 App 原生界面，竖屏（~9:19.5），状态栏/安全区、底部 Tab、手势返回，卡片化/列表化更彻底；状态栏作为 UI 一部分，不是设备外框。`--size 1080x2340`。
 
-平台版本可用 design-taste-frontend / frontend-design 直接出响应式多档，也可用 openai-image-gen 的 UI 样机模板按平台分别成图后落地。
+⛔ **纯 UI 硬约束（与 Phase ③ 一致）**：每个平台版本都是**该平台的纯 UI 设计稿本身**——界面铺满画面、正视、edge-to-edge；**禁止**背景环境/使用场景/lifestyle 摄影/设备外框（手机在手、笔记本在桌）/浏览器窗口框/营销 case-study 长页场景模板（**不要**用 `ui-mockups/landing-page-case-study.md` 这类场景模板）。
+
+平台版本可用 design-taste-frontend / frontend-design 直接出响应式多档；用 openai-image-gen 出图时，按上表平台对应的 `--size` 直接生成纯 UI 设计稿，**不要套 UI 样机/场景模板**。
+
+⚠️ **必须用 `--prompt` 模式，不要 `--subject ... --category web-design`**——`--subject`+`--category` 会被 `styles.json` 里 web-design 风格自动追加「browser window / desktop frame / background / mockup」等措辞，把背景和设备框塞回来、与纯 UI 矛盾。把该页功能 + 平台界面描述 + ③ 基调风格 + 所有纯 UI 约束揉成**一条完整 prompt**：
+
+```bash
+GEN=<openai-image-gen 的 scripts/gen.py 实际路径>
+python3 "$GEN" \
+  --prompt "<该页一句话功能> <平台界面描述> 纯 UI 设计稿, <③ 基调风格>, pure UI design, fills the frame edge-to-edge, flat, no background scene, no device frame, no browser chrome, front view" \
+  --size <PC=1440x1080 / H5=1080x2340 / APP=1080x2340> \
+  --count 1 --model gpt-image-2 --out-dir artifacts/phase-4
+```
 
 ```bash
 $PF page list   # 复核每页 versions 数，确认平台覆盖

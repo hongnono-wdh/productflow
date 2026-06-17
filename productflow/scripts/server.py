@@ -270,6 +270,50 @@ def _inject_openai_env(env: dict) -> None:
         pass
 
 
+# 纯 UI 生图：平台 → (中文名, 该平台界面描述, gen.py --size 尺寸)。
+# 不论哪个平台，统一要求"纯 UI 设计稿本身"：界面铺满画面、正视、edge-to-edge，
+# 禁止背景环境/使用场景/lifestyle/设备外框（手机在手、笔记本在桌）/营销 case-study 长页场景模板。
+_PLATFORM_UI = {
+    "APP": ("APP 端（手机 App 界面）",
+            "手机 App 原生界面，竖屏（~9:19.5），界面从顶到底铺满，"
+            "状态栏/导航栏/底部 Tab 都作为 UI 元素一部分（不是设备的物理外框）",
+            "1080x2340"),
+    "H5":  ("移动 web（H5）",
+            "移动端网页界面，竖屏（~9:19.5），界面铺满画面，网页式导航/页脚，无 App 原生 Tab Bar、无浏览器地址栏",
+            "1080x2340"),
+    "PC":  ("PC 端（桌面 web）",
+            "桌面 web 界面（首屏/关键屏），横向（1440 宽基准），界面铺满画面、无浏览器窗口框",
+            "1440x1080"),
+}
+
+
+def _platform_ui_spec(platform: str) -> tuple[str, str, str]:
+    """取某平台的纯 UI 生图规格 (中文名, 界面描述, --size)。未知平台兜底按 PC。"""
+    return _PLATFORM_UI.get((platform or "").upper(), _PLATFORM_UI["PC"])
+
+
+def _read_primary(pf: str) -> str | None:
+    """读 wizard.json 的 primary（PC/H5/APP，大写）；缺失返回 None（由 agent 从 brief/定位推断）。"""
+    try:
+        with open(os.path.join(pf, "wizard.json"), encoding="utf-8") as f:
+            p = (json.load(f).get("primary") or "").strip().upper()
+            return p if p in _PLATFORM_UI else None
+    except (OSError, ValueError):
+        return None
+
+
+_PURE_UI_RULES = (
+    "⛔ 纯 UI 硬约束（首图/页面都必须满足，否则作废重画）：输出物是【选定平台的纯 UI 设计稿本身】——\n"
+    "① 不要背景/环境/渐变纹理装饰当画面底（UI 元素本身带色就够）；\n"
+    "② 不要使用场景/人物/lifestyle 摄影（不是'有人在用'的宣传图）；\n"
+    "③ 不要设备外框/手机拿在手里/笔记本放桌上那种 mockup，不要浏览器窗口框/地址栏；\n"
+    "④ 不要营销 case-study 长页场景模板（禁用 ui-mockups/landing-page-case-study.md 这类模板）；\n"
+    "⑤ 界面正视、edge-to-edge 铺满整张画面，凸显 UI 本身（像 Figma 导出的设计稿，不是照片）。\n"
+    "⚠️ 生图必须用 gen.py 的 `--prompt \"<完整 prompt>\"` 模式（把基调风格、产品、平台界面、上面所有约束揉进这一条 prompt）。"
+    "**绝不要用 `--subject ... --category web-design`**——那会被 styles.json 里 web-design 风格自动追加「browser window / desktop browser frame / background / mockup / isometric」等措辞，正好和纯 UI 约束矛盾、把背景和设备框塞回来。\n"
+)
+
+
 def _secrets_path(pid: str) -> str:
     return os.path.join(SECRETS_DIR, pid + ".env")
 
@@ -453,20 +497,24 @@ def _auto_page_version(pf: str, page_id: str, platform: str) -> None:
     ps = os.path.join(SKILL_DIR, "scripts", "pf_state.py")
     doc = os.path.join(SKILL_DIR, "references", "phase-4-pages.md")
     img_skill = os.path.expanduser("~/.claude/skills/openai-image-gen")
-    plat_name = {"PC": "PC 端（桌面 web）", "H5": "移动 web（H5）", "APP": "APP 端"}.get(platform, platform)
+    plat_name, ui_desc, size = _platform_ui_spec(platform)
     out_dir = os.path.join(pf, "artifacts", "phase-4")
     prompt = (
         "你是 ProductFlow 页面设计 Agent（阶段④），headless 运行，必须用工具实际完成任务（不要只输出描述）。\n"
-        f"任务：为某个页面设计 {plat_name} 版的设计稿（只做这一页、这一个平台）。\n"
+        f"任务：为某个页面出 {plat_name} 版的【纯 UI 设计稿】（只做这一页、这一个平台）。\n"
         f"做法见手册：{doc}。\n"
+        + _PURE_UI_RULES +
+        f"本次平台 = {platform}（{plat_name}）：{ui_desc}。生图尺寸用 --size {size}。\n"
         f"项目目录：{project_root}。先读状态拿到该页面与③定的视觉基调：python3 {ps} --dir {project_root} status\n"
         f"再读 explore（selectedHero=③定的首图基调、styleSummary=风格）：python3 {ps} --dir {project_root} explore show\n"
         f"目标页面 id：{page_id}，目标平台：{platform}。\n"
         "重要：每个 Bash 调用都是独立 shell，命令必须每次写完整 `python3 <绝对路径> --dir <绝对路径> ...`，禁止用 $PF 等 shell 变量缩写。\n"
         f"务必沿用 ③ 选定首图的视觉基调（配色/字体气质/质感）保持整套设计一致；按 {platform} 的尺寸与交互习惯排版。\n"
         f"步骤：\n1. 先标记设计中：python3 {ps} --dir {project_root} page set {page_id} --status designing\n"
-        f"2. 用 openai-image-gen（脚本 {img_skill}/scripts/gen.py）按基调+该页内容生成设计稿，显式输出到 {out_dir}（先 mkdir -p）：\n"
-        f"   python3 {img_skill}/scripts/gen.py ... --out-dir {out_dir}\n"
+        f"2. 用 openai-image-gen（脚本 {img_skill}/scripts/gen.py）按基调+该页内容生成【纯 UI 设计稿】，显式输出到 {out_dir}（先 mkdir -p）。\n"
+        f"   把这条 --prompt 写完整：「<该页一句话功能> {plat_name} 纯 UI 设计稿，{ui_desc}，<沿用③基调的风格描述>，pure UI design, interface fills the frame edge-to-edge, flat, no background scene, no device frame, no browser chrome, front view」，命令：\n"
+        f"   python3 {img_skill}/scripts/gen.py --prompt \"...\" --size {size} --count 1 --model gpt-image-2 --out-dir {out_dir}\n"
+        f"   （用 --prompt 不用 --subject/--category；--size 用 {size}；不要套 landing-page-case-study 这类营销场景长图模板。）\n"
         f"3. ls {out_dir} 确认真实文件名后，挂版本：\n"
         f"   python3 {ps} --dir {project_root} page set {page_id} --add-version artifacts/phase-4/<实际文件名> --platform {platform}\n"
         f"4. 登记产物：python3 {ps} --dir {project_root} artifact 4 artifacts/phase-4/<实际文件名> --title \"<页面名> {platform} 版\"\n"
@@ -554,10 +602,21 @@ def _auto_explore(pf: str, req: dict) -> None:
         design_doc = os.path.join(SKILL_DIR, "references", "phase-3-hero.md")
         heroes_dir = os.path.join(pf, "artifacts", "phase-3", "heroes")
         img_skill = os.path.expanduser("~/.claude/skills/openai-image-gen")
+        primary = _read_primary(pf)
+        if primary:
+            plat_name, ui_desc, size = _platform_ui_spec(primary)
+            plat_line = (f"主平台 = {primary}（{plat_name}）：{ui_desc}。生图尺寸用 --size {size}。\n")
+            size_arg = size
+        else:
+            plat_line = ("wizard.json 没记主平台——先读 .productflow/wizard.json 的 primary；仍缺则从 brief.json/产品定位推断平台"
+                         "（APP=手机 App 界面竖屏 ~1080x2340；H5=移动 web 竖屏 ~1080x2340；PC=桌面 web 页面 1440x1080），"
+                         "据此选对应 --size。\n")
+            size_arg = "<按平台: APP/H5=1080x2340, PC=1440x1080>"
         prompt = (
             "你是 ProductFlow 首图设计 Agent（阶段③），headless 运行，必须用工具实际完成任务（不要只输出描述）。\n"
-            "任务：按用户选中的参考，生成落地页首图（hero）。\n"
+            "任务：按用户选中的参考，生成首图（hero）——即【选定平台的关键屏纯 UI 设计稿】，定整套设计的视觉基调供阶段④复用。\n"
             f"做法见手册：{design_doc} 的「首图生成协作」节。\n"
+            + _PURE_UI_RULES + plat_line +
             "重要执行约束：每个 Bash 工具调用都是独立 shell，定义的 shell 变量不会跨调用保留。"
             "所有命令（gen.py、pf_state、add-hero、done-request）每次都必须写完整的绝对路径，"
             "禁止用 $PF / $GEN 之类 shell 变量缩写命令——上一轮就因为用了 `$PF=...` 然后 `$PF add-hero`，"
@@ -570,10 +629,11 @@ def _auto_explore(pf: str, req: dict) -> None:
             "步骤（严格按顺序）：\n"
             "1. 查看选中参考（空则按上一行兜底），总结共同视觉风格（配色/字体气质/布局/质感），写入：\n"
             f"   python3 {pf_state} --dir {project_root} explore set-summary \"<风格一句话>\"\n"
-            f"2. 用 openai-image-gen skill（脚本在 {img_skill}/scripts/gen.py）按该风格+产品主题生成 2-4 版落地页首图。\n"
-            f"   必须显式把图直接生到 heroes 目录、并开并发（先 mkdir -p {heroes_dir}）：\n"
-            f"   python3 {img_skill}/scripts/gen.py ... --out-dir {heroes_dir} --concurrency 4\n"
-            f"   （--out-dir 用上面这个绝对路径，不要用默认的 ~/Projects/tmp，也不要用 shell 变量传目录。gen.py 输出文件名形如 01-<风格>.png，不是 1.png。）\n"
+            f"2. 用 openai-image-gen skill（脚本在 {img_skill}/scripts/gen.py）按该风格+产品主题生成 2-4 版【选定平台的关键屏纯 UI】首图。\n"
+            f"   必须显式把图直接生到 heroes 目录、并开并发、带平台尺寸（先 mkdir -p {heroes_dir}）：\n"
+            f"   把这条 --prompt 写完整：「<产品一句话> 关键屏纯 UI 设计稿，<该平台界面描述>，<上面总结的风格>，pure UI design, fills the frame edge-to-edge, flat, no background scene, no device frame, no browser chrome, front view」\n"
+            f"   python3 {img_skill}/scripts/gen.py --prompt \"...\" --size {size_arg} --count 4 --model gpt-image-2 --out-dir {heroes_dir} --concurrency 4\n"
+            f"   （用 --prompt 不用 --subject/--category；--out-dir 用上面这个绝对路径，不要用默认的 ~/Projects/tmp，也不要用 shell 变量传目录。不要套 landing-page-case-study 这类营销场景长图模板。gen.py 输出文件名形如 01-...png，不是 1.png。）\n"
             f"3. 生图全部完成后，先列出真实文件名：ls {heroes_dir}\n"
             "4. 对 ls 出来的「每一个」实际文件，逐个执行完整命令登记（每条都写全，禁止 shell 变量；不要攒到最后，前端实时显示进度）：\n"
             f"   python3 {pf_state} --dir {project_root} explore add-hero artifacts/phase-3/heroes/<实际文件名> --style \"<风格标签>\"\n"

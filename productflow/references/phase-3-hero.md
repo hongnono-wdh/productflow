@@ -1,8 +1,8 @@
 # Phase 3 — 首图设计
 
-进入 Phase 3（首图设计）时读本文件：本阶段的目标是**按 Phase 2 选定的参考（`selectedRefs`）生成落地页首图候选，让用户定下一张作为整站的视觉基调**。
+进入 Phase 3（首图设计）时读本文件：本阶段的目标是**按 Phase 2 选定的参考（`selectedRefs`）生成首图候选——即「选定平台的关键屏纯 UI 设计稿」，让用户定下一张作为整套设计的视觉基调**。
 
-这里定下的首图不只是 hero 区的一张图——它**确立了整个落地页的视觉基调（色板 / 字体气质 / 留白 / 质感 / 构图语言），供 Phase 4 页面设计直接复用**。Phase 4 不再重新探索风格，而是以本阶段定稿的视觉基调为输入展开。所以首图选得准，下游页面设计才连贯统一。
+这里定下的首图不只是 hero 区的一张图——它**确立了整套设计的视觉基调（色板 / 字体气质 / 留白 / 质感 / 构图语言），供 Phase 4 页面设计直接复用**。它必须是**选定平台的纯 UI 设计稿本身**（界面铺满画面、正视、无背景/无场景/无设备外框），平台由 `wizard.json` 的 `primary` 决定（缺失则从 `brief.json`/产品定位推断）。Phase 4 不再重新探索风格，而是以本阶段定稿的视觉基调为输入展开。所以首图选得准，下游页面设计才连贯统一。
 
 本阶段只负责"生首图 + 定基调"，不找参考（那是 Phase 2，已完成），不做完整页面设计（那是 Phase 4）。产物全部落在 `artifacts/phase-3/heroes/`。
 
@@ -71,15 +71,27 @@ $PF explore show      # 看 request（含 gen-heroes 槽）、用户选中的参
 $PF explore set-summary "极简 + 冷色玻璃拟态 + 大留白 + 无衬线粗标题"
 ```
 
-3. 用 openai-image-gen 按这个风格 + 产品主题生成 2-4 版首图，存 `artifacts/phase-3/heroes/<n>.png`（先 `mkdir -p`）。subject 写清产品本质与主标题，风格描述取自上面的 summary。要"完整落地页长图"等具体场景成图时，用该工具的场景模板库（其 `templates/UI-FOCUS.md` 速查表，落地页长图用 `ui-mockups/landing-page-case-study.md`），填槽位后 `python3 "$GEN" --prompt "..."` 渲染：
+3. 用 openai-image-gen 按这个风格 + 产品主题生成 2-4 版首图，存 `artifacts/phase-3/heroes/<n>.png`（先 `mkdir -p`）。
+
+   **首图 = 选定平台的关键屏纯 UI 设计稿**（不是营销长图、不是 lifestyle mockup）。先读 `.productflow/wizard.json` 的 `primary` 确定平台（缺失则从 `brief.json`/产品定位推断），按平台出对应纯 UI：
+
+   | 主平台 | 出什么 | `--size` |
+   |--------|--------|----------|
+   | **APP** | 手机 App 原生界面，竖屏 ~9:19.5，状态栏/导航/底部 Tab 作为 UI 一部分 | `1080x2340` |
+   | **H5**  | 移动 web 界面，竖屏 ~9:19.5，网页式导航/页脚，无浏览器地址栏 | `1080x2340` |
+   | **PC**  | 桌面 web 界面（首屏/关键屏），横向，1440 宽基准，无浏览器窗口框 | `1440x1080` |
+
+   ⛔ **纯 UI 硬约束**：界面铺满画面、正视、edge-to-edge；**禁止**背景环境/使用场景/lifestyle 摄影/设备外框（手机在手、笔记本在桌）/浏览器窗口框/营销 case-study 长页场景模板（**不要**用 `ui-mockups/landing-page-case-study.md` 这类场景模板）。
+
+   ⚠️ **必须用 `--prompt` 模式，不要 `--subject ... --category web-design`**——`--subject`+`--category` 会被 `styles.json` 里 web-design 风格自动追加「browser window / desktop frame / background / mockup / isometric」等措辞，正好把背景和设备框塞回来、与纯 UI 矛盾。把产品本质 + 平台界面描述 + 风格 + 上面所有约束揉成**一条完整 prompt** 传给 `--prompt`：
 
 ```bash
 GEN=<openai-image-gen 的 scripts/gen.py 实际路径>
 mkdir -p artifacts/phase-3/heroes
 python3 "$GEN" \
-  --subject "landing page hero for <产品一句话>, headline '<主标题>', <上面总结的风格描述>" \
-  --count 4 --category web-design --model gpt-image-2
-# 把输出 png 移到 artifacts/phase-3/heroes/
+  --prompt "<产品一句话> 关键屏纯 UI 设计稿, <平台界面描述>, <上面总结的风格描述>, pure UI design, fills the frame edge-to-edge, flat, no background scene, no device frame, no browser chrome, front view" \
+  --size <按平台: APP/H5=1080x2340, PC=1440x1080> \
+  --count 4 --model gpt-image-2 --out-dir artifacts/phase-3/heroes
 ```
 
 4. 逐张登记，每张标注风格：
