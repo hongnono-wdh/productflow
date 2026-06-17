@@ -528,6 +528,47 @@ def _auto_page_version(pf: str, page_id: str, platform: str) -> None:
     print(f"[page-version] {page_id}/{platform} 结束", file=sys.stderr)
 
 
+def _clear_explore_slot(exj: dict, kind=None) -> bool:
+    """清掉 explore 的 request 槽（kind=None 清全部，用于启动时清孤儿槽）。
+    若清掉的含 gen-heroes，标记 heroGenFailed=True，让前端 ③ 显示「上次生成未完成，可重试」。返回是否有改动。"""
+    req = exj.get("request")
+    if not isinstance(req, dict) or not req:
+        return False
+    kinds = [kind] if kind else list(req.keys())
+    changed = False
+    for k in kinds:
+        if k in req:
+            del req[k]
+            changed = True
+            if k == "gen-heroes":
+                exj["heroGenFailed"] = True
+    return changed
+
+
+def _sweep_stale_explore_slots() -> None:
+    """启动时清理上一个 server 进程遗留的 explore request 槽——那些后台 agent 已随旧进程一起死了，
+    槽却还留着，会让操作台卡在「生成中」永不复位（重启操作台杀掉在跑的生图就是这种情况）。
+    清掉孤儿槽；gen-heroes 标记 heroGenFailed，前端提示「上次生成未完成，可重试」。"""
+    try:
+        reg_dir = os.path.join(PF_HOME, "projects")
+        for fn in os.listdir(reg_dir):
+            if not fn.endswith(".json"):
+                continue
+            try:
+                reg = _read_json(os.path.join(reg_dir, fn))
+                exp = os.path.join(reg.get("path", ""), ".productflow", "explore.json")
+                if not os.path.isfile(exp):
+                    continue
+                exj = _read_json(exp)
+                if _clear_explore_slot(exj, None):
+                    _atomic_write_json(exp, exj)
+                    print(f"[sweep] 清理遗留 explore 槽 → {exp}", file=sys.stderr)
+            except Exception:  # noqa: BLE001  单个项目坏了不影响其它
+                continue
+    except OSError:
+        pass
+
+
 def _auto_explore(pf: str, req: dict) -> None:
     """后台 spawn claude -p 当完整 agent，按手册跑 search-refs / gen-heroes，结果写进 explore.json。
     claude 不在/超时/未完成则 request 残留，inbox 里的 explore-request 仍在，可由真人 agent 接单降级。"""
@@ -681,8 +722,7 @@ def _auto_explore(pf: str, req: dict) -> None:
     try:
         exp = os.path.join(pf, "explore.json")
         exj = _read_json(exp)
-        if isinstance(exj.get("request"), dict) and kind in exj["request"]:
-            del exj["request"][kind]
+        if _clear_explore_slot(exj, kind):
             _atomic_write_json(exp, exj)
             _log_line(pf, phase, "error", "❌ 未完成请求，已自动清除（可重试）")
     except Exception:  # noqa: BLE001  清理失败不该让线程崩
@@ -1282,6 +1322,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(ex.get("request"), dict):
                     ex["request"] = {}
                 ex["request"][kind] = req
+                if kind == "gen-heroes":
+                    ex.pop("heroGenFailed", None)   # 新一轮生成：清掉上次失败标记
                 # 同时往 inbox 投一条提示，agent 检查点能看到这次视觉探索请求
                 with open(os.path.join(pf, "inbox.jsonl"), "a", encoding="utf-8") as f:
                     f.write(json.dumps({"ts": _now(), "from": "web", "type": "explore-request",
@@ -1524,6 +1566,7 @@ def main(argv: list[str]) -> int:
               file=sys.stderr)
         return 1
 
+    _sweep_stale_explore_slots()   # 清掉上个进程遗留的生图/找参考槽，避免重启后卡在「生成中」
     threading.Thread(target=_health_loop, daemon=True).start()
     threading.Thread(target=_refresh_latest, daemon=True).start()   # 启动即后台拉一次远端版本（不阻塞启动）
     print(f"ProductFlow console: {url}  (home: {PF_HOME})  v{VERSION}")

@@ -1125,7 +1125,7 @@ function renderBoard() {
 
 /* ===== 阶段内嵌：P1 产品需求 / P2 找参考（取代向导，阶段内做） ===== */
 let pBrief = { description: '', summary: { goal: '', users: '', need: '', scope: '' }, ready: false, generating: false, request: {}, clarify: '', questions: [], answers: {}, confirmed: false };
-let pExplore = { stylePrefs: [], request: {}, refs: [], selectedRefs: [], styleSummary: '', heroes: [], selectedHero: '', searchFailed: false };
+let pExplore = { stylePrefs: [], request: {}, refs: [], selectedRefs: [], styleSummary: '', heroes: [], selectedHero: '', searchFailed: false, heroGenFailed: false };
 
 async function pollBrief() {
   try {
@@ -1154,6 +1154,7 @@ async function pollExplore() {
     pExplore.refs = e.refs || []; pExplore.heroes = e.heroes || [];
     pExplore.selectedRefs = e.selectedRefs || []; pExplore.selectedHero = e.selectedHero || '';
     pExplore.styleSummary = e.styleSummary || '';
+    pExplore.heroGenFailed = !!e.heroGenFailed;
     let req = e.request || {};
     if (req.kind) req = { [req.kind]: req };  // 兼容 server 过渡期单槽（M5 后是 per-kind）
     pExplore.request = req;
@@ -1670,11 +1671,19 @@ function stagebarHtml() {
   if (cvStage === 3) {
     const gen = !!(pExplore.request && pExplore.request['gen-heroes']);
     const n = (pExplore.selectedRefs || []).length;
+    const nh = (pExplore.heroes || []).length;
     // 始终给生成按钮——没选参考也能生成（零输入：Agent 按产品需求来），选了更贴合
     const basis = n
       ? `<span class="sb-sum">依据 ${n} 张选中参考${pExplore.styleSummary ? '　·　风格：' + esc(pExplore.styleSummary) : ''}</span>`
       : `<span class="sb-guide">没选参考也能生成（Agent 按产品需求来）；想更贴合就去 ② 选几张 <button class="btn ghost sm" onclick="selectStage(2)">去 ② 找参考</button></span>`;
-    return `<button class="btn" ${gen ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="genHeroes()">✦ ${(pExplore.heroes || []).length ? '再生成一批首图（累积）' : '生成首图'}</button>${basis}`;
+    // 三态提示：生成中 / 上次中断失败可重试 / 正常依据说明（对齐 ④ 的运行态+失败态）
+    const note = gen
+      ? `<span class="sb-guide">✦ Agent 正在生成首图，约 1–2 分钟（期间别重启操作台，会中断生成）…</span>`
+      : (pExplore.heroGenFailed && !nh
+          ? `<span class="sb-guide" style="color:#b3403a">❌ 上次生成未完成（被中断或失败），点上面「生成首图」重试</span>`
+          : basis);
+    const label = gen ? 'Agent 正在生成首图…' : (nh ? '再生成一批首图（累积）' : '生成首图');
+    return `<button class="btn" ${gen ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="genHeroes()">✦ ${label}</button>${note}`;
   }
   if (cvStage === 4) {
     const st = pStageRun[4] || {};
@@ -1723,6 +1732,7 @@ function renderCanvas() {
 function genHeroes() {
   // 没选参考也能生成（零输入：Agent 按产品需求来），不再硬挡
   pExplore.request = Object.assign({}, pExplore.request, { 'gen-heroes': { kind: 'gen-heroes' } });
+  pExplore.heroGenFailed = false;   // 新一轮：清掉上次失败标记
   renderCanvas();
   fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ selectedRefs: pExplore.selectedRefs, request: { kind: 'gen-heroes', selectedRefs: pExplore.selectedRefs } }) }).catch(() => {});
