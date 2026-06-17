@@ -524,7 +524,7 @@
   </nav>
   <div class="sb-acct">
     <span class="av">P</span>
-    <span class="meta"><b>ProductFlow</b><br><small>本地工作站</small></span>
+    <span class="meta"><b>ProductFlow</b><br><small>本地工作站 · <span id="sb-ver" onclick="checkUpdate()" title="点击检查更新" style="cursor:pointer;text-decoration:underline dotted">v…</span></small></span>
   </div>
 </aside>
 
@@ -2295,6 +2295,32 @@ $('chat-input').addEventListener('keydown', e => {
 });
 
 /* ===== 版本 / 自动更新 ===== */
+// 侧栏常驻显示当前版本（点一下检查更新）——不再只有"检测到新版"时才有更新入口
+let _curVer = '';
+async function loadVersion() {
+  try {
+    const r = await fetch('/api/version'); if (!r.ok) return;
+    _curVer = (await r.json()).version || '';
+    const el = $('sb-ver'); if (el) el.textContent = 'v' + _curVer;
+  } catch (e) { /* 静默 */ }
+}
+async function checkUpdate() {
+  const el = $('sb-ver'); if (el) el.textContent = '检查中…';
+  try {
+    const u = await (await fetch('/api/update-check?refresh=1')).json();
+    if (u.update_available) {
+      if (el) el.textContent = `v${u.current} · 🆕 v${u.latest}`;
+      if (u.git) {
+        if (confirm(`有新版本 v${u.latest}（当前 v${u.current}）。现在更新？\n（git pull + 数据迁移；更新后需重启操作台生效。你的项目数据在 skill 之外、不受影响。）`)) doUpdate();
+      } else {
+        alert(`有新版本 v${u.latest}（当前 v${u.current}）。\n当前不是 git 安装，不支持一键更新——请重装最新包，或在 CLI 跑 /productflow-update。`);
+      }
+    } else {
+      if (el) el.textContent = `v${u.current} · 已是最新`;
+      setTimeout(() => { const e = $('sb-ver'); if (e) e.textContent = 'v' + (u.current || _curVer); }, 2600);
+    }
+  } catch (e) { if (el) el.textContent = 'v' + _curVer + ' · 检查失败'; }
+}
 // /api/update-check 是全局路由（不带 /p/<id>），故用绝对路径 '/api/...'，首页和项目页都能命中
 async function pollUpdate() {
   const bar = $('update-bar'); if (!bar) return;
@@ -2335,7 +2361,7 @@ if (IS_PROJECT) {
   pollHealth();
   pollPages();
   pollChoices();
-  pollUpdate();
+  pollUpdate(); loadVersion();
   setInterval(poll, 2000);
   setInterval(pollUpdate, 60000);   // 版本检测走 server 端缓存，开销极小
   setInterval(pollInbox, 4000);
@@ -2354,7 +2380,7 @@ if (IS_PROJECT) {
   $('page-home').classList.add('on');
   $('nav-proj').classList.add('on');
   pollProjects();
-  pollUpdate();
+  pollUpdate(); loadVersion();
   setInterval(pollProjects, 3000);
   setInterval(pollUpdate, 60000);
 }
