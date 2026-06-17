@@ -562,6 +562,7 @@ def cmd_explore(args) -> None:
         if not isinstance(e.get("heroGenLog"), list):
             e["heroGenLog"] = []
         e["heroGenLog"].append(rec)
+        e["heroGenLog"] = e["heroGenLog"][-40:]   # 防无界增长：只留最近 40 条生成记录
     elif args.eaction == "clear":
         e = {"stylePrefs": [], "request": {}, "refs": [], "selectedRefs": [],
              "styleSummary": "", "heroes": [], "selectedHero": "", "heroGenLog": []}

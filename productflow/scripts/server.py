@@ -546,9 +546,9 @@ def _clear_explore_slot(exj: dict, kind=None) -> bool:
 
 
 def _sweep_stale_explore_slots() -> None:
-    """启动时清理上一个 server 进程遗留的 explore request 槽——那些后台 agent 已随旧进程一起死了，
-    槽却还留着，会让操作台卡在「生成中」永不复位（重启操作台杀掉在跑的生图就是这种情况）。
-    清掉孤儿槽；gen-heroes 标记 heroGenFailed，前端提示「上次生成未完成，可重试」。"""
+    """启动时清理上一个 server 进程遗留的孤儿 request 槽——那些后台 agent 已随旧进程一起死了，
+    槽却还留着，会让操作台卡在「生成中」永不复位（重启操作台杀掉在跑的生图/摘要就是这种情况）。
+    清掉孤儿 explore 槽（gen-heroes 标记 heroGenFailed 提示可重试）+ 卡住的 brief「生成摘要」槽。"""
     try:
         reg_dir = os.path.join(PF_HOME, "projects")
         for fn in os.listdir(reg_dir):
@@ -556,13 +556,15 @@ def _sweep_stale_explore_slots() -> None:
                 continue
             try:
                 reg = _read_json(os.path.join(reg_dir, fn))
-                exp = os.path.join(reg.get("path", ""), ".productflow", "explore.json")
-                if not os.path.isfile(exp):
-                    continue
-                exj = _read_json(exp)
-                if _clear_explore_slot(exj, None):
-                    _atomic_write_json(exp, exj)
-                    print(f"[sweep] 清理遗留 explore 槽 → {exp}", file=sys.stderr)
+                pf = os.path.join(reg.get("path", ""), ".productflow")
+                exp = os.path.join(pf, "explore.json")
+                if os.path.isfile(exp):
+                    exj = _read_json(exp)
+                    if _clear_explore_slot(exj, None):
+                        _atomic_write_json(exp, exj)
+                        print(f"[sweep] 清理遗留 explore 槽 → {exp}", file=sys.stderr)
+                if os.path.isfile(os.path.join(pf, "brief.json")):
+                    _clear_brief_request(pf)   # 重启后别把 brief 卡在「生成摘要中」
             except Exception:  # noqa: BLE001  单个项目坏了不影响其它
                 continue
     except OSError:
