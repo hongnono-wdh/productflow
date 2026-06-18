@@ -547,6 +547,100 @@ def _auto_page_version(pf: str, page_id: str, platform: str) -> None:
     print(f"[page-version] {page_id}/{platform} 结束", file=sys.stderr)
 
 
+def _build_inpaint_mask(src_path: str, regions: list, out_path: str) -> tuple[int, int]:
+    """从框选区域（分数坐标 0~1）生成 inpaint 蒙版：选中矩形 alpha=0（让模型重画），其余 alpha=255（原样保留）。
+    返回 (W, H)。Pillow 缺失则抛 ImportError 由调用方提示。"""
+    from PIL import Image, ImageDraw
+    with Image.open(src_path) as im:
+        w, h = im.size
+    mask = Image.new("RGBA", (w, h), (255, 255, 255, 255))
+    draw = ImageDraw.Draw(mask)
+    for r in regions or []:
+        try:
+            x0 = int(round(max(0.0, min(1.0, float(r.get("x", 0)))) * w))
+            y0 = int(round(max(0.0, min(1.0, float(r.get("y", 0)))) * h))
+            x1 = int(round(max(0.0, min(1.0, float(r.get("x", 0)) + float(r.get("w", 0)))) * w))
+            y1 = int(round(max(0.0, min(1.0, float(r.get("y", 0)) + float(r.get("h", 0)))) * h))
+        except (TypeError, ValueError):
+            continue
+        if x1 - x0 < 1 or y1 - y0 < 1:   # 退化/太小的框跳过
+            continue
+        draw.rectangle([x0, y0, x1 - 1, y1 - 1], fill=(255, 255, 255, 0))
+    mask.save(out_path, "PNG")
+    return w, h
+
+
+def _auto_redraw(pf: str, payload: dict) -> None:
+    """③首图/④页面：框选局部 inpaint 重绘。用框选区域生成蒙版 → edit.py --mask 走 gpt-image-2 只重画选中区域，
+    其余像素保留 → 结果作为新版本并存（③ add-hero / ④ page add-version），原图不动，可对比/回退。"""
+    stage = payload.get("stage")
+    rel = str(payload.get("file") or "").lstrip("/")
+    regions = payload.get("regions") or []
+    user_req = str(payload.get("prompt") or "").strip()
+    platform = (str(payload.get("platform") or "").strip().upper() or _read_primary(pf) or "")
+    page_id = payload.get("pageId")
+    phase_key = f"stage-{stage}"
+    project_root = os.path.dirname(pf)
+    ps = os.path.join(SKILL_DIR, "scripts", "pf_state.py")
+    img_skill = os.path.expanduser("~/.claude/skills/openai-image-gen")
+    src = os.path.join(pf, rel)
+    out_dir = os.path.join(pf, "artifacts", f"phase-{stage}")
+    _log_reset(pf, phase_key, "局部重绘选中区域")
+    mask_path = os.path.join(out_dir, f".redraw-mask-{os.urandom(3).hex()}.png")
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+        try:
+            dims = _build_inpaint_mask(src, regions, mask_path)
+        except ImportError:
+            _log_line(pf, phase_key, "error", "❌ 缺 Pillow，无法生成蒙版（pip install pillow 后重试）")
+            return
+        except Exception as e:  # noqa: BLE001
+            _log_line(pf, phase_key, "error", "❌ 生成蒙版失败：" + _clip(e, 80))
+            return
+        # 用源图自身尺寸做 --size：输入图/蒙版/输出三者对齐，避免网关 resize 把未框区域也挪动；拿不到才退平台规格
+        size = f"{dims[0]}x{dims[1]}" if dims and dims[0] and dims[1] else _platform_ui_spec(platform)[2]
+        prompt = (
+            "在这张 UI 设计稿上做局部修改：只在蒙版透明区域内重绘，"
+            "严格保持与画面其余部分一致的配色/字体/字号/间距/圆角/风格，让改动无缝融入、看不出拼接痕迹。\n"
+            f"本次诉求：{user_req}\n" + _PURE_UI_RULES
+        )
+        cmd = ["python3", os.path.join(img_skill, "scripts", "edit.py"),
+               "--image", src, "--mask", mask_path, "--prompt", prompt,
+               "--size", size, "--count", "1", "--model", "gpt-image-2", "--out-dir", out_dir]
+        env = dict(os.environ)
+        env["PF_PROJECT"] = project_root
+        _inject_openai_env(env)
+        _log_line(pf, phase_key, "tool", f"🎨 调用 gpt-image-2 局部重绘（{len(regions)} 处框选）…")
+        try:
+            proc = subprocess.run(cmd, cwd=project_root, env=env, capture_output=True,
+                                  text=True, timeout=300)
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            _log_line(pf, phase_key, "error", "❌ 重绘调用失败：" + _clip(e, 80))
+            return
+        wrote = re.findall(r"wrote (\S+\.png)", proc.stdout or "")
+        if proc.returncode != 0 or not wrote:
+            tail = (proc.stderr or proc.stdout or "")[-200:]
+            _log_line(pf, phase_key, "error", "❌ 重绘失败：" + _clip(tail, 140))
+            return
+        new_rel = f"artifacts/phase-{stage}/{wrote[-1]}"
+        if stage == 3:
+            subprocess.run(["python3", ps, "--dir", project_root, "explore", "add-hero", new_rel,
+                            "--style", "局部重绘"], capture_output=True, text=True, timeout=30)
+        elif page_id:
+            subprocess.run(["python3", ps, "--dir", project_root, "page", "set", str(page_id),
+                            "--add-version", new_rel, "--platform", platform or "APP"],
+                           capture_output=True, text=True, timeout=30)
+        else:
+            subprocess.run(["python3", ps, "--dir", project_root, "artifact", "4", new_rel,
+                            "--title", "局部重绘"], capture_output=True, text=True, timeout=30)
+        _log_line(pf, phase_key, "done", f"✅ 局部重绘完成，已作新版本并存：{wrote[-1]}")
+    finally:
+        try:
+            os.remove(mask_path)
+        except OSError:
+            pass
+
+
 def _clear_explore_slot(exj: dict, kind=None) -> bool:
     """清掉 explore 的 request 槽（kind=None 清全部，用于启动时清孤儿槽）。
     若清掉的含 gen-heroes，标记 heroGenFailed=True，让前端 ③ 显示「上次生成未完成，可重试」。返回是否有改动。"""
@@ -1264,7 +1358,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         pid, sub = m.group(1), m.group(2) or ""
         root = _resolve(pid)
-        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/deploy-creds", "/api/reveal"):
+        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/deploy-creds", "/api/reveal", "/api/redraw"):
             self._send(404, b"not found", "text/plain")
             return
         pf = os.path.join(root, ".productflow")
@@ -1279,6 +1373,29 @@ class Handler(BaseHTTPRequestHandler):
                     target = cand
             ok, err = _reveal_in_file_manager(target)
             self._json({"ok": ok, "path": target} if ok else {"ok": False, "error": err}, 200 if ok else 500)
+            return
+        if sub == "/api/redraw":
+            # ③首图/④页面：框选区域 + 描述 → gpt-image-2 局部 inpaint 重绘 → 新版本并存
+            try:
+                stage = int(data.get("stage"))
+            except (TypeError, ValueError):
+                stage = 0
+            rel = str(data.get("file") or "").strip().lstrip("/")
+            regions = data.get("regions")
+            req_text = str(data.get("prompt") or "").strip()
+            if stage not in (3, 4) or not rel or not isinstance(regions, list) or not regions or not req_text:
+                self._json({"error": "bad_redraw_req"}, 400)
+                return
+            # 防穿越：file 必须落在本项目 artifacts/ 下且确实存在
+            art_base = os.path.realpath(os.path.join(pf, "artifacts"))
+            cand = os.path.realpath(os.path.join(pf, rel))
+            if not cand.startswith(art_base + os.sep) or not os.path.isfile(cand):
+                self._json({"error": "bad_file"}, 400)
+                return
+            payload = {"stage": stage, "file": rel, "regions": regions, "prompt": req_text,
+                       "platform": data.get("platform"), "pageId": data.get("pageId")}
+            threading.Thread(target=_auto_redraw, args=(pf, payload), daemon=True).start()
+            self._json({"ok": True})
             return
         if sub == "/api/canvas":
             # per-stage 命名空间：只更新本 stage 的格子，read-modify-write 保留其他 stage。

@@ -300,6 +300,9 @@
   .cv-base { position: absolute; left: 10px; top: 10px; background: rgba(255,255,255,.92); border: 1px solid var(--line); border-radius: 8px;
     padding: 3px 9px; font-size: 11.5px; font-weight: 600; color: var(--ink); cursor: pointer; z-index: 2; }
   .cv-base:hover { border-color: var(--ink); }
+  .cv-redraw { position: absolute; right: 10px; top: 10px; background: rgba(255,255,255,.92); border: 1px solid var(--line); border-radius: 8px;
+    padding: 3px 8px; font-size: 12px; cursor: pointer; z-index: 2; opacity: .85; }
+  .cv-redraw:hover { border-color: var(--ink); opacity: 1; }
   .cv-item.base { box-shadow: 0 0 0 2px var(--ink); }
   .cv-item.base .cv-base { background: var(--ink); color: #fff; border-color: var(--ink); }
   .cv-item.sel { outline: 3px solid #5470c6; outline-offset: 2px; }
@@ -636,7 +639,7 @@
 <!-- ⑥成品预览圈选批注遮罩 -->
 <div id="pv-overlay">
   <div class="pv-head"><span id="pv-title"></span>
-    <span><button class="btn sm" onclick="sendPreviewFeedback()">发送给 Agent</button>
+    <span><button class="btn sm" id="pv-action-btn" onclick="pvSend()">发送给 Agent</button>
       <span class="x" onclick="closePreview()">✕ 关闭</span></span>
   </div>
   <div class="pv-wrap"><div class="pv-stage" id="pv-stage">
@@ -1688,6 +1691,7 @@ function heroCardHtml(c, pos) {
     style="left:${pos.x}px; top:${pos.y}px"><img src="${c.img}" loading="lazy">
     <div class="cv-heart" title="选中喜欢的">${pos.liked ? '❤' : '♡'}</div>
     <div class="cv-del" title="删除这张首图">✕</div>
+    <div class="cv-redraw" data-file="${esc(c.file)}" title="框选局部重绘">✏️</div>
     <div class="cv-base" data-file="${esc(c.file)}" title="设为视觉基调">${c.base ? '★ 基调' : '设为基调'}</div>
     <div class="bar"><span class="ti">${esc(c.title)}</span>${cmtIconHtml(pos)}</div></div>`;
 }
@@ -1712,9 +1716,12 @@ function pageCardHtml2(c, pos) {
   const thumb = primary
     ? `<div class="pthumb"><img src="${artUrl(primary.file)}" loading="lazy"></div>`
     : `<div class="pthumb ph">${st === 'designing' ? '设计中…' : '待设计'}</div>`;
+  const redrawBtn = primary
+    ? `<div class="cv-redraw" data-pgid="${esc(pg.id)}" data-file="${esc(primary.file)}" data-plat="${esc(primary.platform || '')}" title="框选局部重绘">✏️</div>`
+    : '';
   return `<div class="cv-item page-card ${platClass}" data-id="${esc(c.id)}" data-pgid="${esc(pg.id)}"
     style="left:${pos.x}px; top:${pos.y}px">
-    <div class="cv-page-del" title="删除">×</div>${thumb}
+    <div class="cv-page-del" title="删除">×</div>${redrawBtn}${thumb}
     <div class="bar col"><div class="pn"><span class="pdot ${st}"></span>${esc(pg.name)} <span class="pg-g">${esc(pg.group || '')}</span></div>
       <div class="cv-platrow">${matrix}${cmtIconHtml(pos)}</div></div></div>`;
 }
@@ -1980,13 +1987,39 @@ function previewSectionHtml() {
     <div class="wz-hint2" style="margin:0 0 12px">点开成品截图，拖拽框选有问题的区域并写一句，发给 Agent——它会知道「哪张图、哪块区域、什么问题」，比纯文字描述精准。</div>
     <div class="pv-thumbs">${thumbs}</div></div>`;
 }
-let pvState = { file: '', title: '', boxes: [] };
+let pvState = { mode: 'feedback', file: '', title: '', boxes: [], stage: null, pageId: null, platform: '' };
 function openPreview(file, title) {
-  pvState = { file, title: title || '成品预览', boxes: [] };
+  pvState = { mode: 'feedback', file, title: title || '成品预览', boxes: [], stage: null, pageId: null, platform: '' };
   $('pv-title').textContent = '圈选反馈 · ' + pvState.title;
+  $('pv-action-btn').textContent = '发送给 Agent';
   $('pv-img').src = artUrl(file);
   renderPvBoxes();
   $('pv-overlay').classList.add('show');
+}
+// ③首图/④页面：框选区域 + 描述 → gpt-image-2 局部重绘（只改框选块，其余保留）。file 是相对 .productflow/ 的产物路径。
+function openRedraw(file, title, stage, pageId, platform) {
+  pvState = { mode: 'redraw', file, title: title || '设计稿', boxes: [], stage, pageId: pageId || null, platform: platform || '' };
+  $('pv-title').textContent = '框选局部重绘 · ' + pvState.title;
+  $('pv-action-btn').textContent = '🎨 重绘选中区域';
+  $('pv-img').src = artUrl(file);
+  renderPvBoxes();
+  $('pv-overlay').classList.add('show');
+}
+function pvSend() { return pvState.mode === 'redraw' ? doRedraw() : sendPreviewFeedback(); }
+function doRedraw() {
+  if (!pvState.boxes.length) { toast('先在图上框选要改的区域并写一句怎么改'); return; }
+  const regions = pvState.boxes.map(b => ({ x: +b.x.toFixed(4), y: +b.y.toFixed(4), w: +b.w.toFixed(4), h: +b.h.toFixed(4) }));
+  const reqText = pvState.boxes.map((b, i) => `区域${i + 1}：${b.text}`).join('；');
+  const stage = pvState.stage, pageId = pvState.pageId, platform = pvState.platform, file = pvState.file;
+  fetch(PF_BASE + '/api/redraw', { method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ stage, file, regions, prompt: reqText, platform, pageId }) })
+    .then(r => r.json()).then(j => {
+      if (!j || !j.ok) { toast('重绘请求被拒：' + ((j && j.error) || '未知')); return; }
+      closePreview();
+      toast('🎨 正在局部重绘选中区域…完成后会作为新版本出现在画布上（原图保留）');
+      // 给后台留点时间，再刷新画布数据源拿到新版本
+      setTimeout(() => { if (stage === 3) pollExplore(); else pollPages(); }, 4000);
+    }).catch(() => toast('重绘请求发送失败，请重试'));
 }
 function closePreview() { $('pv-overlay').classList.remove('show'); }
 function renderPvBoxes() {
@@ -2073,7 +2106,7 @@ function sendPreviewFeedback() {
   vp.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
     if (e.target.closest('.cv-heart') || e.target.closest('textarea')
-        || e.target.closest('.cv-base') || e.target.closest('.cv-page-del') || e.target.closest('.cv-del') || e.target.closest('.cv-plat') || e.target.closest('.cv-cmt')
+        || e.target.closest('.cv-base') || e.target.closest('.cv-redraw') || e.target.closest('.cv-page-del') || e.target.closest('.cv-del') || e.target.closest('.cv-plat') || e.target.closest('.cv-cmt')
         || e.target.closest('.cv-toolbar') || e.target.closest('.cv-controls') || e.target.closest('#cv-stagebar') || e.target.closest('#hero-dialog')) return;
     const item = e.target.closest('.cv-item');
     sx = e.clientX; sy = e.clientY; moved = false;
@@ -2140,6 +2173,14 @@ function sendPreviewFeedback() {
       if (val === null) return;
       if (val.trim()) it.comment = val.trim(); else delete it.comment;
       renderCanvas(); cvSave();
+      return;
+    }
+    // 框选局部重绘（③首图 / ④页面）→ 打开圈选层，框选区域+描述 → gpt-image-2 只重画选中块
+    const rd = e.target.closest('.cv-redraw');
+    if (rd) {
+      const item = rd.closest('.cv-item');
+      const title = item ? (item.dataset.title || (item.dataset.pgid ? '页面' : '设计稿')) : '设计稿';
+      openRedraw(rd.dataset.file, title, cvStage, rd.dataset.pgid || null, rd.dataset.plat || '');
       return;
     }
     // 设为视觉基调（P3 首图）

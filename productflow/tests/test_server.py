@@ -603,6 +603,77 @@ class ServerTest(unittest.TestCase):
                            body={"action": "gen-version", "id": "pg-zzz", "platform": "PC"})
         self.assertEqual(status, 400)
 
+    # ---- ③④ 框选局部重绘 (/api/redraw) ----------------------------------
+
+    def _fake_edit_py(self):
+        """在沙箱 HOME 放一个假 edit.py 替代真实网络生图：把收到的 --mask 拷一份到
+        out-dir/_mask_seen.png（供测试核对蒙版），再写出图 + 打印 'wrote ...'。"""
+        d = os.path.join(self.home, ".claude", "skills", "openai-image-gen", "scripts")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "edit.py"), "w") as f:
+            f.write(
+                "import argparse, os, shutil\n"
+                "p=argparse.ArgumentParser()\n"
+                "for a in ('--image','--mask','--prompt','--size','--count','--quality',"
+                "'--model','--out-dir','--timeout','--api-key'):\n"
+                "    p.add_argument(a, action='append' if a=='--image' else 'store')\n"
+                "a=p.parse_args()\n"
+                "od=getattr(a,'out_dir'); os.makedirs(od, exist_ok=True)\n"
+                "if a.mask: shutil.copy(a.mask, os.path.join(od,'_mask_seen.png'))\n"
+                "open(os.path.join(od,'edit-01-redraw.png'),'wb').write(b'PNGDUMMY')\n"
+                "print('wrote edit-01-redraw.png')\n"
+            )
+
+    def test_redraw_inpaint_registers_new_hero_and_mask_is_correct(self):
+        from PIL import Image
+        self._fake_edit_py()
+        cp = h.create_project(self.port, "Redraw Hero", slug="redraw-hero")
+        pid, d = cp["id"], cp["dir"]
+        src_rel = "artifacts/phase-3/heroes/src.png"
+        src = os.path.join(d, ".productflow", src_rel)
+        os.makedirs(os.path.dirname(src), exist_ok=True)
+        Image.new("RGB", (100, 200), (10, 20, 30)).save(src)
+        status, body = h.http(self.port, f"/p/{pid}/api/redraw", method="POST",
+            body={"stage": 3, "file": src_rel, "prompt": "把这块配色换浅",
+                  "regions": [{"x": 0.25, "y": 0.25, "w": 0.5, "h": 0.5}], "platform": "APP"})
+        self.assertEqual(status, 200)
+        self.assertTrue(body["ok"])
+        # 后台线程把重绘结果作为「新首图」并存进 explore.json（原图不动）
+        exp = os.path.join(d, ".productflow", "explore.json")
+        def _added():
+            try:
+                with open(exp) as fh:
+                    hs = json.load(fh).get("heroes", [])
+            except (OSError, ValueError):
+                return False
+            return any(x.get("file") == "artifacts/phase-3/edit-01-redraw.png" for x in hs)
+        self.assertTrue(self._wait_until(_added), "局部重绘结果应作为新版本并存")
+        # 蒙版正确：框选区 alpha=0（重绘），框外 alpha=255（保留），尺寸=原图
+        seen = os.path.join(d, ".productflow", "artifacts", "phase-3", "_mask_seen.png")
+        self.assertTrue(os.path.isfile(seen))
+        m = Image.open(seen).convert("RGBA")
+        self.assertEqual(m.size, (100, 200))
+        self.assertEqual(m.getpixel((50, 100))[3], 0)    # 区域中心：透明=重绘
+        self.assertEqual(m.getpixel((2, 2))[3], 255)     # 角落：不透明=保留
+
+    def test_redraw_rejects_bad_requests(self):
+        from PIL import Image
+        cp = h.create_project(self.port, "Redraw Bad", slug="redraw-bad")
+        pid, d = cp["id"], cp["dir"]
+        src_rel = "artifacts/phase-4/p.png"
+        src = os.path.join(d, ".productflow", src_rel)
+        os.makedirs(os.path.dirname(src), exist_ok=True)
+        Image.new("RGB", (40, 40), (0, 0, 0)).save(src)
+        good = {"stage": 4, "file": src_rel, "prompt": "改这块",
+                "regions": [{"x": 0, "y": 0, "w": 0.3, "h": 0.3}]}
+        for bad in ({**good, "stage": 5},                       # 非法阶段
+                    {**good, "file": "artifacts/phase-4/nope.png"},  # 文件不存在
+                    {**good, "regions": []},                   # 空框选
+                    {**good, "prompt": "   "},                 # 空描述
+                    {**good, "file": "../../etc/passwd"}):     # 穿越
+            status, _ = h.http(self.port, f"/p/{pid}/api/redraw", method="POST", body=bad)
+            self.assertEqual(status, 400)
+
     def _wait_until(self, fn, tries=40, gap=0.1):
         for _ in range(tries):
             if fn():
