@@ -2146,6 +2146,14 @@ function sendPreviewFeedback() {
   vp.addEventListener('dblclick', e => {
     const item = e.target.closest('.cv-item');
     if (!item) return;
+    // 双击设计稿 = 打开框选局部重绘（和 ⑥ 成品预览圈选同一套交互：放大看图 + 框选 + 描述 → 重绘）。
+    // 占位/无设计稿的卡片没有重绘入口，退回查看大图。
+    const rd = item.querySelector('.cv-redraw');
+    if (rd) {
+      const title = item.dataset.title || (item.dataset.pgid ? '页面' : '设计稿');
+      openRedraw(rd.dataset.file, title, cvStage, rd.dataset.pgid || null, rd.dataset.plat || '');
+      return;
+    }
     if (item.dataset.img) openArtifact(item.dataset.img, item.dataset.title || '', 'image');
     else if (item.dataset.pgid) {
       const pg = (cv.pages || []).find(p => p.id === item.dataset.pgid);
