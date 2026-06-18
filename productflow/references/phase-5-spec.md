@@ -13,6 +13,7 @@ Phase 4 的设计方向（artifacts/phase-4/direction.md）确认后、动手写
 - **Web 项目（primary = PC / H5）**：走完整 ER 图 → DDL → API 契约流程，产出 modules.md / er.md / schema.sql / api.md / template-choice.md 五份。
 - **iOS App 项目（primary = APP，预设 P-iOS）**：纯本地持久化、无后端——数据层产物是 SwiftData `@Model`（不是 ER 图/DDL/SQL），schema-ddl 与 api-contract 两步标 skipped；ER 思考仍可保留作为推导中间物，但**封板产物是 `@Model`**。详见 templates.md 的 P-iOS 小节。
 - **Android App 项目（primary = APP，预设 P-Android）**：纯本地持久化、无后端——数据层产物是 Room `@Entity`/`@Dao` 类（不是 ER 图/DDL/SQL），schema-ddl 与 api-contract 两步标 skipped；ER 思考仍可保留作为推导中间物，但**封板产物是 Room `@Entity`/`@Dao`**。详见 templates.md 的 P-Android 小节。
+- **PC 桌面应用项目（primary = PC，预设 P-Desktop）**：数据层 = 嵌入式 SQLite——**出 `schema.sql` DDL（和 Web 同口径，schema-ddl 步骤正常产出，NOT skipped）**；Tauri 用 `tauri-plugin-sql`/rusqlite 运行这套 DDL，Electron 用 better-sqlite3。纯本地桌面应用无 HTTP 后端，api-contract 标 skipped；若带云后端则按 Web 出 API 契约。注意：P-Desktop 是原生预设中的例外——它**出 DDL**（和 iOS/Android 的"不出 DDL"相反），数据层口径与 Web 相同。详见 templates.md 的 P-Desktop 小节。
 
 下面各 Step 中凡涉及 DDL/API 的，都按此分叉；选栈细节以 templates.md 为准。
 
@@ -50,7 +51,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/modules.md
 
 用 database-schema-designer skill 的方法论设计实体：从 modules.md 的数据实体出发，定字段、主键、外键、唯一约束、索引。落地页规模通常 3–6 张表，超过 8 张说明范围失控，回头砍模块。
 
-> **原生 App（iOS/Android，primary = APP）也做这一步**：实体/字段/关系的思考对 SwiftData `@Model`（P-iOS）和 Room `@Entity`（P-Android）同样适用——把它当推导中间物。下一步（schema-ddl）才分叉：Web 落成 SQL DDL，iOS 落成 `@Model`，Android 落成 Room `@Entity`/`@Dao`。
+> **原生 App（iOS/Android，primary = APP）也做这一步**：实体/字段/关系的思考对 SwiftData `@Model`（P-iOS）和 Room `@Entity`（P-Android）同样适用——把它当推导中间物。下一步（schema-ddl）才分叉：Web 落成 SQL DDL，iOS 落成 `@Model`，Android 落成 Room `@Entity`/`@Dao`。**PC 桌面应用（P-Desktop）同样做这一步**，且和 Web 完全一样——ER 图直接推导 SQL DDL，不分叉，schema-ddl 步骤正常产出 `schema.sql`。
 
 设计要点（为什么）：
 - 邮箱类字段加 UNIQUE——去重在数据库层做，比应用层可靠
@@ -83,7 +84,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 5 er-diagram --status done
 python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/er.md --title "ER 图"
 ```
 
-## Step 3: schema-ddl — 数据层（Web → DDL / iOS → SwiftData @Model / Android → Room @Entity）
+## Step 3: schema-ddl — 数据层（Web → DDL / iOS → SwiftData @Model / Android → Room @Entity / PC 桌面应用 → SQLite DDL（同 Web））
 
 数据层产物按平台分叉。
 
@@ -153,11 +154,31 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 5 schema-ddl --status skipped
 python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/entities.kt --title "Room @Entity/@Dao 数据层"
 ```
 
+### PC 桌面应用项目（primary = PC，P-Desktop）→ SQLite DDL（同 Web）
+
+P-Desktop 是原生预设中数据层口径与 Web 相同的**唯一例外**——数据层用嵌入式 SQLite，**schema-ddl 步骤正常产出 `artifacts/phase-5/schema.sql`，不标 skipped**。按 Web 项目同样的 SQLite DDL 约定写即可（见上方 Web 小节）；Tauri 用 `tauri-plugin-sql`/rusqlite 在运行时执行这套 DDL，Electron 用 better-sqlite3。
+
+> 区别于 iOS（`@Model`，schema-ddl skipped）和 Android（Room `@Entity`，schema-ddl skipped）——P-Desktop 出 DDL，**不出** ORM 注解产物。
+
+写完同样跑验证：
+
+```bash
+sqlite3 /tmp/pf_schema_check.db < .productflow/artifacts/phase-5/schema.sql && rm /tmp/pf_schema_check.db
+```
+
+P-Desktop 项目登记产物并标完成：
+
+```bash
+python3 "$SKILL_DIR/scripts/pf_state.py" step 5 schema-ddl --status done
+python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/schema.sql --title "数据库 DDL (SQLite, 嵌入式)"
+```
+
 ## Step 4: api-contract — API 契约
 
 > **原生 App（primary = APP，纯本地持久化）跳过本步**：无网络后端就无 HTTP 契约，api-contract step 标 skipped。
 > - **iOS（P-iOS）**：若需要本地服务抽象（导出、通知调度等），用 `Services/` 下的 Swift `protocol` 定义边界、写进 artifacts/phase-5/，不是 HTTP 端点。
 > - **Android（P-Android）**：若需要本地服务抽象，用 Kotlin `interface` 定义边界、写进 artifacts/phase-5/，不是 HTTP 端点。
+> - **PC 桌面应用（P-Desktop）纯本地**：嵌入式 SQLite、无 HTTP 后端——api-contract step 同样标 skipped。若 P-Desktop 项目带云后端，则按 Web 流程出 API 契约、标 done。
 > ```bash
 > python3 "$SKILL_DIR/scripts/pf_state.py" step 5 api-contract --status skipped
 > ```
@@ -195,6 +216,11 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/api.md --t
 ├─ APP（原生移动）→ 原生 App 栈
 │   ├─ iOS → P-iOS（SwiftUI + SwiftData，本期实现）
 │   └─ Android → P-Android（Kotlin + Jetpack Compose + Room，本期实现）
+├─ PC（桌面）→ 先确认形态：
+│   ├─ 桌面 Web 站点（跑在浏览器里）→ 走 Web 预设（见下方 PC / H5 分支）
+│   └─ 桌面应用（安装到本机）→ P-Desktop（Tauri，本期实现；备选 Electron）
+│       数据层 = 嵌入式 SQLite，出 schema.sql（schema-ddl NOT skipped）
+│       api-contract：纯本地 → skipped；带云后端 → 出 API 契约
 └─ PC / H5（Web）→ Web 预设，按数据需求选：
     ├─ 需要 admin 后台 / 登录 / 自有服务器？
     │   └─ 是 → T3 landing-fullstack
@@ -206,7 +232,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/api.md --t
 为什么 Phase 5 就定栈：Phase 6 的 scaffold 步骤直接从所选预设起步，现在不定，前面的数据层/接口设计可能与运行时不匹配（比如选了 T1 却设计了一堆接口，或 APP 项目却出了 SQLite DDL）。
 
 把以下内容写进 `artifacts/phase-5/template-choice.md`：**打包了哪些资料 → 分析依据 → 选了什么 / 为什么**（平台、命中预设则走了哪条分支、若另选栈/换库写明为什么默认预设不满足这个产品）。
-若选型影响成本或方向（Web 部署目标的域名/服务器；APP 目标 OS 的确认——iOS（P-iOS）、Android（P-Android）还是两端都做、是否需要联网后端、是否需要复杂云同步），在 CLI 向用户确认后再定稿。
+若选型影响成本或方向（Web 部署目标的域名/服务器；APP 目标 OS 的确认——iOS（P-iOS）、Android（P-Android）还是两端都做、是否需要联网后端、是否需要复杂云同步；**PC 选型确认——桌面 Web 站点 vs 桌面应用（P-Desktop）、是否带云后端**），在 CLI 向用户确认后再定稿。
 
 step id 仍是 `pick-template`（脚本注册名不变），逐字执行：
 
@@ -232,14 +258,15 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/template-c
    - **Web（PC / H5）**：modules.md ↔ er.md ↔ schema.sql ↔ api.md ↔ template-choice.md 五份；T1 时 er-diagram、schema-ddl 标 skipped，api-contract 视有无表单端点（无端点则也 skipped），口径以 templates.md 的 T1 节为准。
    - **iOS（APP，P-iOS）**：modules.md ↔ er.md ↔ models.swift ↔ template-choice.md；`@Model` 覆盖 er.md 里每个实体与关系，schema-ddl / api-contract 两步已标 skipped。
    - **Android（APP，P-Android）**：modules.md ↔ er.md ↔ entities.kt ↔ template-choice.md；Room `@Entity`/`@Dao` 覆盖 er.md 里每个实体与关系，schema-ddl / api-contract 两步已标 skipped。
+   - **PC 桌面应用（PC，P-Desktop）**：modules.md ↔ er.md ↔ schema.sql（SQLite DDL，嵌入式）↔ template-choice.md；schema-ddl **已标 done**（不是 skipped）；纯本地时 api-contract 标 skipped，带云后端时出 api.md 并标 done。
 
 3. 标记阶段完成：
 
    ```bash
    python3 "$SKILL_DIR/scripts/pf_state.py" phase 5 --status done
-   python3 "$SKILL_DIR/scripts/pf_state.py" log "Phase 5 完成：平台 <PC/H5/APP>，N 个模块 / 数据层(M 张表 或 M 个 @Model/Room @Entity) / K 个接口(原生 App 无)，选定预设 <T1/T2/T3/P-iOS/P-Android>"
+   python3 "$SKILL_DIR/scripts/pf_state.py" log "Phase 5 完成：平台 <PC/H5/APP>，N 个模块 / 数据层(M 张表 或 M 个 @Model/Room @Entity 或 M 张 SQLite 表(P-Desktop)) / K 个接口(原生 App/纯本地桌面无)，选定预设 <T1/T2/T3/P-iOS/P-Android/P-Desktop>"
    ```
 
-4. 在 CLI 向用户汇报：模块清单（P0/P1）、数据层规模（表数 / `@Model` 数 / Room `@Entity` 数）、接口数量（原生 App 项目说明无网络后端）、平台与所选预设（T1/T2/T3/P-iOS/P-Android）及理由，并明确说"这套设计将作为 Phase 6 的固定开发输入，确认后开始实现"。请用户在网页或 CLI 确认后进入 Phase 6；用户此前明确说过"全自动"则不停留。
+4. 在 CLI 向用户汇报：模块清单（P0/P1）、数据层规模（表数 / `@Model` 数 / Room `@Entity` 数 / SQLite 表数(P-Desktop)）、接口数量（原生 App / 纯本地桌面应用说明无网络后端）、平台与所选预设（T1/T2/T3/P-iOS/P-Android/P-Desktop）及理由，并明确说"这套设计将作为 Phase 6 的固定开发输入，确认后开始实现"。请用户在网页或 CLI 确认后进入 Phase 6；用户此前明确说过"全自动"则不停留。
 
 下一阶段见 phase-6-implement.md。

@@ -16,7 +16,7 @@ ProductFlow 做大部分互联网产品——web 站点 / web 应用（落地页
    - `direction.md`（Phase 4 的设计方向）；
    - Phase 5 已产出的功能/数据需求清单（modules.md / er.md / api.md）。
 2. **基于这份打包资料分析判断**：这个产品到底是哪种形态、哪套栈最合适——而不是机械往预设里塞。
-3. 用户需求多样：除下面列出的预设（P-iOS 原生 iOS / P-Android 原生 Android / T1·T2·T3 Web），还可能是 **桌面应用（Electron / Tauri / 原生）、浏览器扩展、CLI 工具、小程序、混合形态**等。**预设是常见情况的起点/参考，不是穷举、更不是锁死**——遇到不在预设里的需求，按分析结果选/适配合适的栈，不要硬塞进最接近的预设。
+3. 用户需求多样：除下面列出的预设（P-iOS 原生 iOS / P-Android 原生 Android / P-Desktop 桌面应用 / T1·T2·T3 Web），还可能是 **浏览器扩展、CLI 工具、小程序、跨平台（Flutter/React Native）、混合形态**等。**预设是常见情况的起点/参考，不是穷举、更不是锁死**——遇到不在预设里的需求，按分析结果选/适配合适的栈，不要硬塞进最接近的预设。
 4. 无论命中预设还是另选栈，都在 `artifacts/phase-5/template-choice.md` 写明：**打包了哪些资料 → 分析依据 → 选了什么 / 为什么**（见文末"偏离协议"）。
 
 下面的"选型决策树"是**命中常见情况时的快捷判断**——它接在"打包→分析"之后用，是捷径不是边界。分析后落在它枚举的平台/数据形态里，就照它快速定档；落在它之外，就按上面第 3 条另选。
@@ -30,7 +30,15 @@ ProductFlow 做大部分互联网产品——web 站点 / web 应用（落地页
 ├─ APP（原生移动）→ 原生 App 栈
 │   ├─ iOS → P-iOS（SwiftUI + SwiftData）
 │   └─ Android → P-Android（Kotlin + Jetpack Compose + Room）
-└─ PC / H5（Web）→ Web 预设，按数据需求选：
+├─ PC（桌面）→ 先问：是装到电脑上的桌面应用程序，还是桌面浏览器访问的 Web 站点？
+│   ├─ 桌面浏览器访问的 Web 站点 → Web 预设（横屏稿），按数据需求选：
+│   │   ├─ 需要 admin 后台 / 登录 / 自有服务器上跑长期服务？
+│   │   │   └─ 是 → T3 landing-fullstack
+│   │   └─ 否 → 需要持久化数据（waitlist / 订阅 / 计数 / 留言）？
+│   │       ├─ 是 → T2 landing-worker
+│   │       └─ 否 → T1 static-landing（纯展示，表单走第三方或 Pages Functions）
+│   └─ 装到电脑上的桌面应用程序 → P-Desktop（Tauri，可选 Electron）
+└─ H5（移动 Web）→ Web 预设，按数据需求选（同上 PC→Web 分支）：
     ├─ 需要 admin 后台 / 登录 / 自有服务器上跑长期服务？
     │   └─ 是 → T3 landing-fullstack
     └─ 否 → 需要持久化数据（waitlist / 订阅 / 计数 / 留言）？
@@ -171,9 +179,9 @@ my-product/
 
 ---
 
-## 原生 App 预设（primary = APP）
+## 原生 App 与桌面应用预设（primary = APP / PC 桌面应用）
 
-移动 App 不是 Web 站点——它有自己的工程文件、数据持久化方式、测试器和上架渠道。本节含 **P-iOS**（SwiftUI + SwiftData）与 **P-Android**（Kotlin + Jetpack Compose + Room）两个原生预设。
+移动 App 与桌面应用不是 Web 站点——它们有各自的工程文件、数据持久化方式、测试器和发布渠道。本节含 **P-iOS**（SwiftUI + SwiftData）、**P-Android**（Kotlin + Jetpack Compose + Room）、**P-Desktop**（Tauri，可选 Electron）三个预设。
 
 ### P-iOS（SwiftUI + SwiftData，本期实现）
 
@@ -286,6 +294,57 @@ MyApp/
 
 **不做什么**：不用旧 XML Layout / View 系统（Compose 全声明式），不引多余库，不为纯本地 App 提前架云后端，不手写 SQLite DDL（Room 自动推导 schema），本期不替用户点"提交生产审核"。
 
+### P-Desktop（Tauri，桌面应用）
+
+**适用**：装到电脑上的桌面程序（Windows/macOS/Linux），离线/本地工具/需文件系统·系统托盘·原生菜单的产品；不是桌面浏览器访问的 Web 站点。
+
+**推荐栈 Tauri**：Rust 核心 + 系统 WebView，**直接复用 ④ 设计的 Web 前端（HTML/CSS/JS）当界面**，Rust 只写少量壳。
+理由：产物小（~3–10 MB vs Electron ~100 MB+），原生窗口，内置跨平台打包；构建命令 `cargo tauri build`（或 `npm run tauri build`）。
+
+**备选栈 Electron**（无 Rust 工具链 / 只想用 Node 时）：Chromium + Node，`electron-builder` 打包。决策口径：有 Rust + 要小体积原生 → Tauri；只有 Node / 要最大生态最无惊喜 → Electron。本手册以 Tauri 为主写命令，关键处标注「无 Rust 用 Electron 等价」。
+
+```
+my-app/
+├── src/                    # 前端界面（复用 ④ 设计的 HTML/CSS/JS，或 Vite+框架）
+├── src-tauri/
+│   ├── src/                # Rust 壳（main.rs、命令、tauri-plugin-sql 接 SQLite）
+│   ├── tauri.conf.json     # 窗口/打包/签名配置
+│   ├── Cargo.toml
+│   └── migrations/         # SQLite schema.sql（来自 Phase 5）
+├── package.json
+└── （Electron 备选：main.js + electron-builder 配置，复用同一前端）
+```
+
+**与 Phase 5 的衔接（数据层是 SQLite DDL，和 Web 一样）**：
+- Phase 5 的 module-list / er-diagram 照常做——产出模块清单与实体关系。
+- schema-ddl 步骤**出 SQLite DDL `schema.sql`**（同 Web 预设，不同于 iOS/Android 的 ORM 注解）——DDL 放入 `src-tauri/migrations/schema.sql`，Phase 6 由 Tauri `tauri-plugin-sql`/rusqlite 在启动时执行（CREATE TABLE IF NOT EXISTS 风格）。纯前端无持久化则 schema-ddl 标 skipped。
+- api-contract：嵌入式 SQLite 非 HTTP 故 api-contract 标 skipped；若带云后端则按 Web 全栈出 DDL + API 契约：
+  ```
+  python3 "$SKILL_DIR/scripts/pf_state.py" step 5 api-contract --status skipped
+  ```
+
+**与 Phase 6 的衔接（实现 + 测试）**：
+- 前置检测（缺了提示装，别硬跑）：`rustc --version`、`cargo --version`、`cargo tauri --version`；macOS 还需 Xcode CLT（`xcode-select --install`），Windows 需 MSVC build tools。Electron 备选：`node --version`、`npx electron --version`。
+- 脚手架：`cargo tauri init`（或 `npm create tauri-app`）建工程，把 `src/` 里 ④ 的 Web 前端接入；Rust 侧在 `src-tauri/src/main.rs` 写 Tauri 命令暴露系统能力（文件读写、托盘、原生菜单等）。
+- 调试：`cargo tauri dev` 弹原生窗口，热重载前端；修改 Rust 侧后重编译。
+- **test-report 四类映射到 P-Desktop**（phase-6 的四类门禁，逐一表态、不允许静默跳过）：
+  ① **单元 = Vitest/Jest（前端逻辑）+ Rust `cargo test`（Rust 命令/服务）**——分别在各自生态跑，无需弹窗口。
+  ② **集成 = 本地 SQLite 持久化往返**——写一条 → 重启 Tauri app → 读回，确认真落盘（凡有持久化必做）。
+  ③ **E2E = `tauri-driver` + WebDriver（或退化为前端 Playwright）旅程**——core-analysis.mm.md 的傻瓜式路径在桌面窗口里点通（新建→保存→重开 App 仍在→编辑→删除）。
+  ④ **回归 = 修过的 bug 加 E2E 锁**——每个修过的 bug 补一条测试（注释写明历史事故）。
+- 界面：PC 横屏稿（1440×1080）对桌面窗口同样适用，无需新增 UI 规格；截图用 `tauri-driver` 截图 API 或 Playwright 截图做视觉还原比对。
+
+**与 Phase 7 的衔接（构建 + 分发安装包，可选上架商店）**：
+- 构建：`cargo tauri build` 出平台安装包——macOS `.dmg`/`.app`（可 codesign + notarize），Windows `.msi`/`.exe`（可签名），Linux `.AppImage`/`.deb`。
+- 分发：① 直接给安装包下载（如 GitHub Releases）；② 可选上架 Mac App Store / Microsoft Store——留用户手动，**停在提交商店前**。在交接报告里写清需用户手动做的事（Apple App Store Connect 建记录/填元数据、Microsoft Partner Center 提交等）。
+- 凭证：Apple Developer ID codesign 证书 + ASC notarize key（`.p8`）、Windows code-signing cert，走 `~/.productflow/secrets/<项目id>.env` 仓库外机制注入，直接引用。**绝不入库（公开仓库）/ 打印进 agent-log / 产物 / 留言**。
+- Electron 备选：`electron-builder` 出对应平台包，签名同理。
+
+**Phase 6 scaffold 完成标准**：目录树与本节一致、`src-tauri/migrations/schema.sql` 就位并能被 Tauri 执行建表（有持久化时）、`cargo tauri build` 能通过，然后
+  `python3 "$SKILL_DIR/scripts/pf_state.py" step 6 scaffold --status done`。
+
+**不做什么**：简单工具优先 Tauri 轻量，不无脑上 Electron；没要求不架自动更新服务器；不为纯本地桌面应用提前加云后端；本期不替用户点"提交商店审核"。
+
 ---
 
 ## 偏离协议
@@ -302,10 +361,10 @@ MyApp/
 ```
 python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/template-choice.md --title "技术栈选择与理由"
 python3 "$SKILL_DIR/scripts/pf_state.py" step 5 pick-template --status done
-python3 "$SKILL_DIR/scripts/pf_state.py" log "平台 <PC/H5/APP>，选定预设 <T1/T2/T3/P-iOS/P-Android>（按实际替换）"
+python3 "$SKILL_DIR/scripts/pf_state.py" log "平台 <PC/H5/APP>，选定预设 <T1/T2/T3/P-iOS/P-Android/P-Desktop>（按实际替换）"
 ```
-- Phase 6 scaffold 完成时：目录树与本文件该预设一致、数据层就位（Web 是 schema.sql 复制进项目并能建表；iOS 是 `@Model` 类 + `.modelContainer` 挂载、能跑空 App；Android 是 Room `@Entity`/`@Dao`/`@Database` 类就位、能编译），然后
+- Phase 6 scaffold 完成时：目录树与本文件该预设一致、数据层就位（Web 是 schema.sql 复制进项目并能建表；iOS 是 `@Model` 类 + `.modelContainer` 挂载、能跑空 App；Android 是 Room `@Entity`/`@Dao`/`@Database` 类就位、能编译；P-Desktop 是 `src-tauri/migrations/schema.sql` 就位并能被 Tauri 执行建表且 `cargo tauri build` 通过），然后
   `python3 "$SKILL_DIR/scripts/pf_state.py" step 6 scaffold --status done`。
-- Phase 7 开始时：发布路径由所选预设决定（Web → CF Pages/Worker/单机；iOS → archive/export/上传 TestFlight；Android → bundleRelease/AAB/上传 Google Play 内部测试），不再询问用户选哪条；确认后
+- Phase 7 开始时：发布路径由所选预设决定（Web → CF Pages/Worker/单机；iOS → archive/export/上传 TestFlight；Android → bundleRelease/AAB/上传 Google Play 内部测试；桌面应用 P-Desktop → `cargo tauri build` 出安装包（macOS `.dmg`/`.app`、Windows `.msi`/`.exe`、Linux `.AppImage`/`.deb`）/ 可选上架 Mac App Store/Microsoft Store），不再询问用户选哪条；确认后
   `python3 "$SKILL_DIR/scripts/pf_state.py" step 7 pick-target --status done`。
 - 每阶段收尾前照例先跑 `python3 "$SKILL_DIR/scripts/pf_state.py" inbox` 读网页端消息，并逐条 `python3 "$SKILL_DIR/scripts/pf_state.py" reply "<回应>"` 后再继续。

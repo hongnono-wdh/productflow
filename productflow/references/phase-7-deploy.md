@@ -1,6 +1,6 @@
 # Phase 7 — 部署上线
 
-进入第七阶段（Phase 6 已 done、用户确认开始部署）时读本文件。本阶段目标：把产品发布出去（Web 上线到可访问 URL；iOS 构建上传到 TestFlight，停在提审前；Android 构建上传 Google Play 内部测试，停在生产提审前）、验证可用、交付运维交接报告，并完成全流程收尾。发布路径先看平台（`primary` = PC/H5 走 Web，APP 走原生移动——按预设走 iOS 或 Android），详见下方 pick-target。
+进入第七阶段（Phase 6 已 done、用户确认开始部署）时读本文件。本阶段目标：把产品发布出去（Web 上线到可访问 URL；iOS 构建上传到 TestFlight，停在提审前；Android 构建上传 Google Play 内部测试，停在生产提审前；桌面应用打包成安装包，可选上架商店，停在提交商店前）、验证可用、交付运维交接报告，并完成全流程收尾。发布路径先看平台（`primary` = PC/H5 走 Web，APP 走原生移动——按预设走 iOS 或 Android），详见下方 pick-target。
 
 ## 阶段启动
 
@@ -14,7 +14,8 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 pick-target --status active
 
 发布路径由 Phase 5 选定的预设决定（预设定义见 templates.md），不要临场发明别的形态。**先看平台**——读 `.productflow/wizard.json` 的 `primary`（`PC` / `H5` / `APP`，大写，与 server.py 的 `_read_primary` 一致；缺失则从 brief.json / 产品定位推断）：
 
-- **primary = PC / H5（Web）** → 走 Web 路径 A/B/C（按所选预设 T1/T2/T3 对应）。
+- **primary = PC（桌面）** → 按预设走 **Web 路径（A/B/C，桌面 Web 站点）** 或 **路径 d（P-Desktop，桌面应用，预设在 Phase 5 `template-choice.md` 已记录）**。
+- **primary = H5（移动 Web）** → 走 Web 路径 A/B/C（按所选预设 T1/T2/T3 对应）。
 - **primary = APP（原生移动）** → 按所选预设走 **路径 i（P-iOS → TestFlight）** 或 **路径 a（P-Android → Google Play 内部测试）**（预设在 Phase 5 `template-choice.md` 已记录）。
 
 | 路径 | 适用预设 | 形态 | 手段 |
@@ -24,6 +25,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 pick-target --status active
 | C | T3 | 全栈带后端进程 | 单机服务器或本地：①裸机 rsync+systemd+caddy 或 ②Docker compose |
 | i | P-iOS | 原生 iOS App | `xcodebuild archive` → distribution 签名导出 `.ipa` → 上传 TestFlight（fastlane `pilot` / `xcrun altool` / Transporter），停在提审前（见下方 iOS 小节） |
 | a | P-Android | 原生 Android App | `./gradlew bundleRelease` → AAB 签名（upload keystore） → 上传 Google Play 内部测试（停在生产提审前，见下方 Android 小节） |
+| d | P-Desktop | PC 桌面应用 | `cargo tauri build`（或 `electron-builder`）→ 平台安装包（`.dmg`/`.msi`/`.AppImage`）→ 签名/公证 → 直接分发或可选上架商店（停在提交商店前，见下方桌面小节） |
 
 路径与预设一一对应，不再询问用户选哪条；Web 内部选目标形态（本机/CF/服务器、Docker/systemd）有歧义时用 `choice ask` 抛到网页让用户点选（见 SKILL.md）。
 
@@ -38,7 +40,9 @@ iOS 路径同理：App Store Connect API key（`.p8` 文件路径 + key id + iss
 
 Android 路径同理：Google Play **service account JSON**（`$PLAY_SERVICE_ACCOUNT_JSON`）+ **upload keystore 及其密码/别名**（`$ANDROID_KEYSTORE` / `$ANDROID_KEYSTORE_PASSWORD` / `$ANDROID_KEY_ALIAS` / `$ANDROID_KEY_PASSWORD`）也走这套凭证机制注入（用户在⑦「部署凭证」表单填，存项目仓库外 `~/.productflow/secrets/<项目id>.env`），本阶段已作为环境变量注入，直接引用即可。
 
-安全：**不要把这些值打印进 agent-log / 产物 / 留言**（ASC key 的 .p8 内容、key id、issuer id；Android keystore 密码/别名、service account JSON 内容一律不打印、不入库）。命令里只引用凭证文件路径（如 `$PLAY_SERVICE_ACCOUNT_JSON`、`$ANDROID_KEYSTORE`），**绝不贴密钥内容**（仓库是公开的）。若 `$PF_SSH_HOST` / ASC 凭证 / Android 凭证等为空（用户还没填），用 `choice ask` 或在 CLI 让用户去⑦表单补，别瞎填占位值。涉及自定义域名时先与用户确认 DNS 归属。
+桌面路径同理：桌面签名凭证——Apple **Developer ID** 证书 + 公证用 **ASC API key**（`$ASC_KEY_PATH` / `$ASC_KEY_ID` / `$ASC_ISSUER_ID`）、Windows **code-signing 证书及密码**（`$WIN_CODESIGN_CERT` / `$WIN_CODESIGN_PASSWORD`）——也走这套凭证机制注入（用户在⑦「部署凭证」表单填，存项目仓库外 `~/.productflow/secrets/<项目id>.env`），本阶段已作为环境变量注入，直接引用即可。
+
+安全：**不要把这些值打印进 agent-log / 产物 / 留言**（ASC key 的 .p8 内容、key id、issuer id；Android keystore 密码/别名、service account JSON 内容；桌面签名的 Developer ID 证书/ASC API key/Windows 证书密码一律不打印、不入库）。命令里只引用凭证文件路径（如 `$PLAY_SERVICE_ACCOUNT_JSON`、`$ANDROID_KEYSTORE`、`$ASC_KEY_PATH`、`$WIN_CODESIGN_CERT`），**绝不贴密钥内容**（仓库是公开的）。若 `$PF_SSH_HOST` / ASC 凭证 / Android 凭证 / 桌面签名凭证等为空（用户还没填），用 `choice ask` 或在 CLI 让用户去⑦表单补，别瞎填占位值。涉及自定义域名时先与用户确认 DNS 归属。
 
 ### 部署前 checklist（任何路径都先过一遍）
 
@@ -51,6 +55,7 @@ Android 路径同理：Google Play **service account JSON**（`$PLAY_SERVICE_ACC
    - Web：按选定路径 `command -v wrangler`（CF）/ `command -v docker`（Docker）/ `command -v caddy`（自定义域名）检测，缺失就提示用户安装或改 `npx wrangler`，不要硬跑报 command not found。
    - iOS（路径 i）：`xcodebuild -version`、`xcrun simctl list devices`，上传若用 fastlane 则 `command -v fastlane`；缺了提示用户装 **Xcode / 命令行工具 / fastlane**，别硬跑报 command not found。
    - Android（路径 a）：`./gradlew --version`、`adb --version`、`emulator -list-avds`，上传若用 fastlane 则 `fastlane --version`；缺了提示用户装 **Android Studio / Android SDK / 命令行工具**，别硬跑报 command not found。
+   - 桌面（路径 d，Tauri）：`rustc --version`、`cargo --version`、`cargo tauri --version`（macOS 还需 Xcode CLT：`xcode-select -p`；Windows 需 MSVC toolchain）；Electron 备选则 `node --version`、`npx electron --version`；缺了提示用户安装对应工具链，别硬跑报 command not found。
 5. **inbox 检查**：`python3 "$SKILL_DIR/scripts/pf_state.py" inbox`，网页端若有部署相关指示先响应。
 
 ```bash
@@ -279,6 +284,78 @@ fastlane supply \
 
 Android 路径无线上 URL / 端口，下方 deploy done 的 log 写「Google Play 内部测试 build 已上传：versionCode <n> / versionName <x>」即可。
 
+### 路径 d：桌面应用打包 + 分发（P-Desktop）—— 停在提交商店前
+
+只用于 `primary = PC` 且预设为 P-Desktop 的桌面应用。这条不部署到服务器/CF，而是构建平台安装包并签名/公证，**到产出已签名安装包为止**（直接分发给用户下载，或可选上架 Mac App Store / Microsoft Store，**停在提交商店前**——上架审核涉及内容合规与发布决策，不替用户拍板）。前置工具检测见上方 checklist 第 4 项（路径 d）。
+
+桌面应用一般无云后端，无线上 URL/端口；若带云后端则后端按 Web 路径另外部署。
+
+凭证全程走环境变量，**绝不打印、不入库**（Apple Developer ID 证书/ASC API key .p8 内容/key id/issuer id；Windows 证书及密码一律不进 agent-log / 产物 / 留言）。命令里只引用凭证文件路径，**绝不贴密钥内容**（仓库是公开的）。
+
+```bash
+# 1. 构建（Tauri，推荐）
+cargo tauri build
+# 产物目录：src-tauri/target/release/bundle/
+#   macOS: src-tauri/target/release/bundle/dmg/*.dmg  或  bundle/macos/*.app
+#   Windows: src-tauri/target/release/bundle/msi/*.msi  或  bundle/nsis/*.exe
+#   Linux: src-tauri/target/release/bundle/appimage/*.AppImage  或  bundle/deb/*.deb
+
+# Electron 备选（无 Rust 时）
+npx electron-builder --mac --win --linux
+# 产物目录：dist/ 下各平台子目录
+```
+
+签名与公证（macOS）：
+
+```bash
+# macOS — Developer ID 证书 codesign（路径 d 用 Developer ID，不是 App Store Distribution）
+# codesign 由 cargo tauri build 在 APPLE_SIGNING_IDENTITY 环境变量就位时自动执行；
+# 手动触发示例（Tauri 构建后对 .app 补签）：
+codesign --deep --force --verify --verbose \
+  --sign "Developer ID Application: <Team Name> ($APPLE_TEAM_ID)" \
+  src-tauri/target/release/bundle/macos/MyApp.app
+
+# macOS — notarytool 公证（凭证从环境变量读，绝不明文）
+xcrun notarytool submit src-tauri/target/release/bundle/dmg/MyApp.dmg \
+  --key "$ASC_KEY_PATH" \
+  --key-id "$ASC_KEY_ID" \
+  --issuer "$ASC_ISSUER_ID" \
+  --wait
+# 公证通过后 staple
+xcrun stapler staple src-tauri/target/release/bundle/dmg/MyApp.dmg
+```
+
+签名（Windows）：
+
+```bash
+# Windows — code-signing 证书签名（证书路径/密码从环境变量读）
+signtool sign /fd SHA256 /a \
+  /f "$WIN_CODESIGN_CERT" \
+  /p "$WIN_CODESIGN_PASSWORD" \
+  dist\MyApp-Setup.exe
+# Tauri 可在 tauri.conf.json windows.certificateThumbprint + beforeBuildCommand 自动签名
+```
+
+Linux 一般免签，`.AppImage` / `.deb` 直接分发。
+
+分发：
+
+```bash
+# 分发方式 ① 直接提供安装包下载链接（如 GitHub Releases）
+# 到此为止——把安装包上传到 Release / 商店留用户手动
+
+# 分发方式 ② 可选上架 Mac App Store / Microsoft Store
+# 本流水线到产出已签名安装包为止，上架提交留用户手动（见下方人工清单）
+```
+
+上架前，下列步骤是正式提交商店前的人工动作，**留给用户手动做**，本阶段不替用户提交商店，只在交接报告里列清单：
+
+- **GitHub Releases**：在 GitHub 仓库 Releases 页面新建 Release，上传 `.dmg` / `.msi` / `.AppImage` 安装包，填写版本说明。
+- **Mac App Store（可选）**：在 App Store Connect 建 macOS App 记录 / 注册 Bundle ID，改用 App Store Distribution 证书重新构建（`APPLE_SIGNING_IDENTITY` 换成 App Store 分发证书），上传到 Transporter 或 `xcrun altool`，填 App 元数据/截图/隐私清单，确认后由用户点「提交审核」。
+- **Microsoft Store（可选）**：在 Partner Center 建应用记录，打包为 `.msix`（可用 `electron-builder` 或 MSIX Packaging Tool），填商店信息/截图，确认后由用户提交认证。
+
+桌面应用路径无线上 URL / 端口，**不写 `.productflow/deploy.json`**（无 url 可健康监测，与 iOS/Android 一致）。deploy done 的 log 写「桌面安装包已构建：<版本> / <平台>(dmg/msi/AppImage)，待用户上传 Release/商店」。
+
 部署完成后：
 
 ```bash
@@ -361,22 +438,45 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 smoke-test --status done
 python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status active
 ```
 
+**路径 d（P-Desktop）**：没有线上 URL、没有 curl/E2E 打线上——验证对象是「构建出的安装包能在本机正常安装并运行」：
+
+1. 在本机安装/运行产出的安装包，验证主要功能（macOS：打开 `.dmg` 拖入 Applications 再运行 `.app`，或直接运行 `src-tauri/target/release/bundle/macos/MyApp.app`；Windows：运行 `.msi`/`.exe` 安装后启动；Linux：`chmod +x MyApp.AppImage && ./MyApp.AppImage`）。
+2. 跑一遍冒烟旅程（关键用户流程），截图存为 `artifacts/phase-7/live.png` 作为线上截图等价物。
+
+```bash
+# 安装包产物位置（Tauri 构建后）：
+# macOS: src-tauri/target/release/bundle/dmg/*.dmg 或 bundle/macos/*.app
+# Windows: src-tauri/target/release/bundle/msi/*.msi 或 bundle/nsis/*.exe
+# Linux: src-tauri/target/release/bundle/appimage/*.AppImage 或 bundle/deb/*.deb
+
+python3 "$SKILL_DIR/scripts/pf_state.py" artifact 7 artifacts/phase-7/live.png --title "桌面安装包冒烟截图"
+```
+
+桌面路径 d **不写** `.productflow/deploy.json`（无 url 可健康监测——桌面应用无线上服务，与 iOS/Android 一致），直接收尾：
+
+```bash
+python3 "$SKILL_DIR/scripts/pf_state.py" step 7 smoke-test --status done
+python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status active
+```
+
 ## Step 4: handoff-report — 交接报告
 
 写 `artifacts/phase-7/report.md`，这是用户日后运维的唯一入口文档，必含四节：
 
-1. **线上地址**：Web 给所有可访问地址（默认域 + 自定义域 + API base）；iOS 给 TestFlight 构建版本号 + App Store Connect App 链接（无 web URL）；Android 给 Google Play 内部测试链接 + versionCode / versionName（无 web URL）。
-2. **部署/发布方式**：走了哪条路径、关键资源名（CF 项目名 / D1 库名 / 服务器路径与 unit 名；iOS 为 scheme / Bundle ID / 上传方式 fastlane|altool；Android 为 applicationId / 签名 keystore 别名 / 内部测试轨道上传方式 fastlane supply|gradle play publisher|手动）、重新部署或重新出包上传的完整命令。
+1. **线上地址**：Web 给所有可访问地址（默认域 + 自定义域 + API base）；iOS 给 TestFlight 构建版本号 + App Store Connect App 链接（无 web URL）；Android 给 Google Play 内部测试链接 + versionCode / versionName（无 web URL）；桌面应用给安装包/Release 下载链接 + 版本号 + 平台列表（macOS/Windows/Linux，说明哪些已构建）（无 web URL）。
+2. **部署/发布方式**：走了哪条路径、关键资源名（CF 项目名 / D1 库名 / 服务器路径与 unit 名；iOS 为 scheme / Bundle ID / 上传方式 fastlane|altool；Android 为 applicationId / 签名 keystore 别名 / 内部测试轨道上传方式 fastlane supply|gradle play publisher|手动；桌面为 Tauri 或 Electron / 签名证书类型（Developer ID / code-signing 证书）/ 分发渠道（GitHub Releases / Mac App Store / Microsoft Store））、重新部署或重新出包上传的完整命令。
 3. **回滚步骤**：
    - A：`wrangler pages deployment list` 找上一版，在 CF dashboard 一键回滚，或重发上一 commit 构建产物。
    - B：`wrangler rollback`；D1 schema 变更不可自动回滚，需反向 SQL。
    - C：`ssh <user>@SERVER "rm -rf /opt/<product> && mv /opt/<product>.bak /opt/<product> && systemctl restart <product>"`。
    - i（iOS）：TestFlight 无「回滚」概念——出新 build 提升 build number 重新 archive→export→上传即可；旧 build 仍可在 TestFlight 选用。
    - a（Android）：Google Play 内部测试无传统「回滚」——出新版提升 versionCode 重新 `bundleRelease`→签名→上传；可在 Play Console 停用某版本或回退到前一个已发布版本。
-4. **后续运维注意**：日志查看命令、secrets 轮换方式、域名/证书到期事项、已知限制；iOS 额外标注证书 / provisioning profile / ASC API key 的到期与轮换；Android 额外标注 keystore 备份位置与密码安全存储 / service account JSON 权限最小化 / 目标 API level 年度升级要求 / Google Play 政策合规事项。
-5. **【仅原生 App】提审前待办清单（用户手动）**：
+   - d（桌面）：桌面应用无服务器「回滚」——出新版提升版本号重新 `cargo tauri build`→签名/公证→分发；已分发版本由用户在 Release/商店下架或替换。
+4. **后续运维注意**：日志查看命令、secrets 轮换方式、域名/证书到期事项、已知限制；iOS 额外标注证书 / provisioning profile / ASC API key 的到期与轮换；Android 额外标注 keystore 备份位置与密码安全存储 / service account JSON 权限最小化 / 目标 API level 年度升级要求 / Google Play 政策合规事项；桌面额外标注 Developer ID 证书 / ASC API key / Windows code-signing 证书到期与轮换 / 公证需效期内有效证书 / 目标 OS 最低版本要求（macOS/Windows 年度变化）。
+5. **【仅原生 App / 桌面应用】提审/上架前待办清单（用户手动）**：
    - **iOS（App Store Connect）**：把 deploy 步骤里那份人工清单原样落进报告——建 App 记录 / 注册 Bundle ID / 填元数据 / 上传各机型截图 / 填隐私清单与数据收集说明 / 配 TestFlight 测试组 / 确认后由用户点「提交审核」。本流水线**到 TestFlight 为止**，提审与发布由用户决策。
    - **Android（Google Play Console）**：把 deploy 步骤里那份人工清单原样落进报告——在 Play Console 建应用记录（package name 与 applicationId 一致）/ 填商店信息（标题、简介、截图、图标）/ 完成内容分级问卷（IARC）/ 填写隐私政策链接 / 填写目标受众与内容说明 / 完成数据安全表单 / 内部测试冒烟通过后由用户手动在 Play Console 点「发布到生产」。本流水线**到 Google Play 内部测试为止**，生产轨道发布由用户决策。
+   - **桌面应用（P-Desktop）**：把 deploy 步骤里那份人工清单原样落进报告——上传已签名安装包到 GitHub Releases（附版本说明）；若可选上架 Mac App Store，改用 App Store Distribution 证书重新构建并通过 Transporter/altool 提交，在 App Store Connect 填元数据/截图/隐私清单后由用户点「提交审核」；若可选上架 Microsoft Store，打包 `.msix` 并在 Partner Center 填商店信息后由用户提交认证。本流水线**到产出已签名安装包为止**，上传 Release 及商店提交由用户决策。
 
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" artifact 7 artifacts/phase-7/report.md --title "上线交接报告"
@@ -389,5 +489,5 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status done
 
 1. `python3 "$SKILL_DIR/scripts/pf_state.py" inbox` 读网页端消息，逐条 `python3 "$SKILL_DIR/scripts/pf_state.py" reply "<回应>"` 后再继续。
 2. 确认 `artifacts/phase-7/live.png` 与 `artifacts/phase-7/report.md` 均已 artifact 登记（操作台靠登记展示）。
-3. `python3 "$SKILL_DIR/scripts/pf_state.py" phase 7 --status done` + `log "Phase 7 完成：已上线 <URL>"`（iOS 写 `log "Phase 7 完成：TestFlight 构建 <版本号> 已上传，待用户提审"`；Android 写 `log "Phase 7 完成：Google Play 内部测试 build 已上传：versionCode <n> / versionName <x>，待用户推生产"`）。
-4. **全流程收尾**：检查 `.productflow/state.json` 确认 7 个阶段全部 done，然后在 CLI 向用户做交付总结——Web 给线上 URL；iOS 给 TestFlight 构建版本号 + 需用户手动完成的 App Store Connect 提审清单；Android 给 Google Play 内部测试链接 + versionCode/versionName + 需用户手动完成的 Play Console 发布清单；各阶段关键产物清单（指向 artifacts/phase-N/）、回滚与运维入口（指向 report.md），并告知操作台可回看全部产物。这是流水线终点，无下一阶段确认。
+3. `python3 "$SKILL_DIR/scripts/pf_state.py" phase 7 --status done` + `log "Phase 7 完成：已上线 <URL>"`（iOS 写 `log "Phase 7 完成：TestFlight 构建 <版本号> 已上传，待用户提审"`；Android 写 `log "Phase 7 完成：Google Play 内部测试 build 已上传：versionCode <n> / versionName <x>，待用户推生产"`；桌面写 `log "Phase 7 完成：桌面安装包已构建：<版本> / <平台列表(dmg/msi/AppImage)>，待用户上传 Release/商店"`）。
+4. **全流程收尾**：检查 `.productflow/state.json` 确认 7 个阶段全部 done，然后在 CLI 向用户做交付总结——Web 给线上 URL；iOS 给 TestFlight 构建版本号 + 需用户手动完成的 App Store Connect 提审清单；Android 给 Google Play 内部测试链接 + versionCode/versionName + 需用户手动完成的 Play Console 发布清单；桌面给安装包/Release 下载链接（或构建产物路径）+ 版本号 + 平台列表 + 需用户手动完成的 Release 上传/商店提交清单；各阶段关键产物清单（指向 artifacts/phase-N/）、回滚与运维入口（指向 report.md），并告知操作台可回看全部产物。这是流水线终点，无下一阶段确认。
