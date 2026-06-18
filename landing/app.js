@@ -28,9 +28,9 @@
       art: '<div class="art-canvas"><span class="lit"></span><span></span><span class="lit"></span><span></span></div>' },
     { n: "05", tag: "看板", title: "功能与数据设计", desc: "模块清单、ER 图、表结构 DDL、API 契约，定清楚再动手。",
       art: '<div class="art-er"><span class="art-node">user</span><i class="art-link"></i><span class="art-node">project</span><i class="art-link"></i><span class="art-node">deploy</span></div><div class="art-row" style="margin-top:8px"><span class="art-chip">DDL</span><span class="art-chip">API 契约</span></div>' },
-    { n: "06", tag: "看板", title: "开发实现", desc: "脚手架、前后端全栈、TDD 测试、接口文档，逐步登记。",
+    { n: "06", tag: "看板", title: "开发实现", desc: "脚手架、前后端全栈或原生 App，TDD 测试，实现界面对着设计稿一一比对。",
       art: '<div class="art-row"><span class="art-chip">前端</span><span class="art-chip">后端</span><span class="art-chip ok">TDD 通过 ✓</span></div>' },
-    { n: "07", tag: "看板", title: "部署上线", desc: "本地 Docker、Cloudflare Pages/Workers 或单机，上线即出交付报告。",
+    { n: "07", tag: "看板", title: "部署上线", desc: "Web 走 Docker / Cloudflare / 单机，iOS 上 TestFlight、Android 上 Google Play，上线即出交付报告。",
       art: '<div class="art-deploy">▲ 已上线 · 127.0.0.1</div>' }
   ];
 

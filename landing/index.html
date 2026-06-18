@@ -4,18 +4,18 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>ProductFlow — 把一句话想法，变成一条上线的流水线 | Claude Code 本地 skill</title>
-<meta name="description" content="ProductFlow 是一个 Claude Code 本地 skill：把一句话产品想法变成一条端到端流水线，从市场调研、视觉设计、ER 图/DDL/API 契约，到前后端全栈 + TDD、部署上线，盖出一个能跑的完整互联网产品。落地页只是其中最简单的一种产物。本地操作台盯关键节点，数据全在自己机器上。" />
+<meta name="description" content="ProductFlow 是一个 Claude Code 本地 skill：把一句话产品想法变成一条端到端流水线，从市场调研、视觉设计、ER 图/DDL/API 契约，到前后端全栈 + TDD、部署上线，盖出能跑的完整互联网产品——Web 应用、iOS / Android 原生 App 都能做，落地页只是其中最简单的一种产物。本地操作台盯关键节点，数据全在自己机器上。" />
 <link rel="canonical" href="https://pf.gjs.ink/" />
 
 <meta property="og:type" content="website" />
 <meta property="og:title" content="ProductFlow — 把一句话想法，变成一条上线的流水线" />
-<meta property="og:description" content="一个 Claude Code 本地 skill。从一句话产品想法到上线的完整互联网产品：调研 → 设计 → 数据/API → 全栈 + TDD → 部署。7 阶段流水线 + 本地操作台，全程本地运行。" />
+<meta property="og:description" content="一个 Claude Code 本地 skill。从一句话产品想法到上线的完整互联网产品（Web 应用 + iOS/Android 原生 App）：调研 → 设计 → 数据/API → 全栈 + TDD → 部署。7 阶段流水线 + 本地操作台，全程本地运行。" />
 <meta property="og:image" content="https://github.com/hongnono-wdh/productflow/raw/main/og.png" />
 <meta property="og:url" content="https://pf.gjs.ink/" />
 
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="ProductFlow — 把一句话想法，变成一条上线的流水线" />
-<meta name="twitter:description" content="Claude Code 本地 skill：7 阶段流水线 + 本地操作台，从一句话想法到上线的完整互联网产品，全程本地运行。" />
+<meta name="twitter:description" content="Claude Code 本地 skill：7 阶段流水线 + 本地操作台，从一句话想法到上线的完整互联网产品（Web + iOS/Android 原生 App），全程本地运行。" />
 <meta name="twitter:image" content="https://github.com/hongnono-wdh/productflow/raw/main/og.png" />
 
 <meta name="theme-color" content="#FCFCFD" />
@@ -25,7 +25,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
 <link rel="preconnect" href="https://github.com" />
-<link rel="stylesheet" href="styles.css?v=light" />
+<link rel="stylesheet" href="styles.css?v=v26" />
 </head>
 <body>
 <a class="skip-link" href="#install">跳到安装</a>
@@ -64,9 +64,9 @@
   <section class="hero" aria-labelledby="hero-title">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <p class="eyebrow mono reveal">Claude Code 本地 skill · v2.1</p>
+        <p class="eyebrow mono reveal">Claude Code 本地 skill · v2.6</p>
         <h1 id="hero-title" class="reveal">把一句话想法，<br>变成一条上线的流水线。</h1>
-        <p class="lede reveal">市场调研 → 找参考 → 视觉/页面设计 → 功能与数据（ER 图 / DDL / API 契约）→ 全栈开发 + TDD → 部署上线。一条流水线盖出一个能跑的完整互联网产品，<strong>落地页只是其中最简单的一种产物</strong>。</p>
+        <p class="lede reveal">市场调研 → 找参考 → 视觉/页面设计 → 功能与数据（ER 图 / DDL / API 契约）→ 全栈开发 + TDD → 部署上线。一条流水线盖出能跑的完整互联网产品——<strong>Web 应用、iOS / Android 原生 App 都能做</strong>，落地页只是其中最简单的一种产物。</p>
         <div class="hero-cta reveal">
           <a class="btn btn-primary" href="#install">一键安装</a>
           <a class="btn btn-ghost" href="#console">看它怎么工作</a>
@@ -132,7 +132,7 @@
   <!-- LOCAL STRIP -->
   <section class="strip" aria-label="核心事实">
     <div class="wrap strip-grid">
-      <div class="strip-item reveal"><span class="strip-k mono">完整产品</span><span class="strip-v">端到端盖出能跑的 web 应用，不只是设计页面</span></div>
+      <div class="strip-item reveal"><span class="strip-k mono">完整产品</span><span class="strip-v">端到端盖出能跑的 Web 应用与 iOS/Android 原生 App，不只是设计页面</span></div>
       <div class="strip-item reveal"><span class="strip-k mono">本地优先</span><span class="strip-v">操作台只 bind 127.0.0.1，数据在你机器上</span></div>
       <div class="strip-item reveal"><span class="strip-k mono">一个进程</span><span class="strip-v">纯 Python3 起服务，无第三方依赖</span></div>
     </div>
@@ -143,7 +143,7 @@
     <div class="wrap">
       <header class="sec-head reveal">
         <h2 id="how-title">7 个阶段，从一句话想法走到上线</h2>
-        <p class="sec-sub">端到端盖出一个能跑的 web 应用，不只是设计页面——从调研、视觉，到数据库、API、前后端全栈，再到部署上线。每个阶段都有产物、有进度、有可以拍板的节点。</p>
+        <p class="sec-sub">端到端盖出能跑的 Web 应用或 iOS/Android 原生 App，不只是设计页面——从调研、视觉，到数据库、API、前后端全栈，再到部署上线。每个阶段都有产物、有进度、有可以拍板的节点。</p>
       </header>
 
       <ol class="pipeline" role="list">
@@ -191,16 +191,16 @@
           <span class="stage-ghost" aria-hidden="true">06</span>
           <span class="stage-rule" aria-hidden="true"></span>
           <span class="stage-n mono">06 · 开发实现</span>
-          <h3>前后端全栈 · TDD</h3>
-          <p>脚手架、前后端全栈、TDD 测试、接口文档，逐步登记。</p>
+          <h3>全栈 / 原生 App · TDD</h3>
+          <p>脚手架、前后端全栈或原生 App，TDD 测试，实现界面对着设计稿一一比对。</p>
           <span class="stage-view mono">看板</span>
         </li>
         <li class="stage reveal">
           <span class="stage-ghost" aria-hidden="true">07</span>
           <span class="stage-rule" aria-hidden="true"></span>
           <span class="stage-n mono">07 · 部署上线</span>
-          <h3>本地 Docker / CF / 单机</h3>
-          <p>部署上线：本地 Docker、Cloudflare Pages/Workers 或单机，上线即出交付报告。</p>
+          <h3>Web 上线 / App 上架</h3>
+          <p>Web 走本地 Docker、Cloudflare 或单机；iOS 上 TestFlight、Android 上 Google Play，上线即出交付报告。</p>
           <span class="stage-view mono">看板</span>
         </li>
       </ol>
@@ -280,7 +280,7 @@
             <span class="copy-label">复制提示词</span>
           </button>
         </div>
-        <pre class="code-block code-well"><code id="installPrompt">请帮我在这台电脑上安装并启动 ProductFlow（一个把"做互联网产品"变成 7 阶段流水线、配本地操作台的 Claude Code 工具，从落地页到带后端和数据库的 Web 应用都能做）。下面每一步你来执行，做完告诉我怎么用：
+        <pre class="code-block code-well"><code id="installPrompt">请帮我在这台电脑上安装并启动 ProductFlow（一个把"做互联网产品"变成 7 阶段流水线、配本地操作台的 Claude Code 工具，从落地页到带后端数据库的 Web 应用、iOS/Android 原生 App 都能做）。下面每一步你来执行，做完告诉我怎么用：
 
 1. 克隆代码到固定位置（已存在就进目录 git pull 更新）：
    git clone https://github.com/hongnono-wdh/productflow.git ~/.local/share/productflow 2>/dev/null || (cd ~/.local/share/productflow &amp;&amp; git pull)
@@ -317,7 +317,7 @@
           <span class="feat-k mono">完整产品</span>
           <div>
             <h3>不只是落地页</h3>
-            <p>从调研、视觉，到 ER 图 / DDL / API 契约、前后端全栈 + TDD、部署上线，盖出一个能跑的完整互联网产品。</p>
+            <p>从落地页到带数据库后端的 Web 应用，再到 iOS（SwiftUI+SwiftData）/ Android（Compose+Room）原生 App，端到端盖出能跑的完整产品。</p>
           </div>
         </div>
         <div class="feat reveal">
@@ -357,7 +357,7 @@
         </div>
       </div>
 
-      <p class="feat-foot mono reveal">v2.1 已由 3 个用户视角端到端走完 ①调研 → ⑦部署，三个项目全部用本地 Docker 上线、<span class="e2e-badge">E2E 全绿（8/8、12/12、6/6）</span>。</p>
+      <p class="feat-foot mono reveal">v2.6 起新增 iOS / Android 原生 App（SwiftUI+SwiftData / Compose+Room），与 Web 三端区分构建上架。v2.1 已由 3 个用户视角端到端走完 ①调研 → ⑦部署、三个项目本地 Docker 上线、<span class="e2e-badge">E2E 全绿（8/8、12/12、6/6）</span>。</p>
     </div>
   </section>
 
@@ -387,6 +387,6 @@
   </div>
 </footer>
 
-<script src="app.js?v=light" defer></script>
+<script src="app.js?v=v26" defer></script>
 </body>
 </html>
