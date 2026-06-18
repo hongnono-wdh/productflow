@@ -1,6 +1,6 @@
 ---
 name: productflow
-version: 2.7.0
+version: 2.7.1
 description: 完整互联网产品全自动生产操作台。启动 localhost 控制台 + 7 阶段流水线：市场调研 → 找参考 → 首图设计 → 页面设计 → 功能与数据设计(ER/数据层/接口) → 开发实现(前后端全栈 / 原生 App + 测试) → 部署上线（Web：CF Pages/Workers 或单机；iOS：TestFlight；Android：Google Play 内部测试；PC 桌面应用：Tauri 打包安装包/可选上架商店）。从落地页/官网/waitlist，到带数据库与后端的功能性 Web 应用，再到原生移动 App（iOS：SwiftUI+SwiftData / Android：Kotlin+Compose+Room）与 PC 桌面应用（Tauri）都能做（落地页只是最简单的一种）。只要用户想"做一个网站/Web 产品/应用/落地页/官网/waitlist/小工具"、"做一个 iOS App / Android 安卓 App / 原生移动应用"、"做一个 PC 桌面应用 / Windows / Mac 客户端"、"做一个带后端和数据库的产品"、"复刻某产品"、"从调研到上线"、提到 ProductFlow / 操作台 / landing page pipeline，或要求"启动产品项目"，就使用本 skill——即使他们没说出 skill 名字。
 ---
 
@@ -95,7 +95,8 @@ init 输出里有项目 id；告知用户项目地址 `http://127.0.0.1:7717/p/<
 PF="python3 $SKILL_DIR/scripts/pf_state.py"   # 已 export PF_PROJECT，命令免带 --dir
 $PF phase 1 --status active          # 阶段开始/结束（active|done）
 $PF step 1 capture-screenshots --status done   # 步骤状态（active|done|skipped）
-$PF artifact 1 artifacts/phase-1/competitors.md --title "竞品矩阵"   # 登记产物
+$PF artifact 1 artifacts/phase-1/competitors.md --title "竞品矩阵"   # 登记产物（同路径重登记=按路径去重+刷新时间戳，操作台只显示最新、自动绕过浏览器缓存）
+$PF artifact-rm 6 artifacts/phase-6/preview-home.png                 # 撤销登记并删文件（重做/作废某张截图、或页面被删时用，避免画廊残留旧图混淆）
 $PF log "已完成 4 个竞品截图"        # 一句话进展（显示在操作台日志流）
 $PF inbox                            # 读取网页端用户留言（读完推进已读游标）
 $PF reply "已按留言调整配色"         # 回应网页端留言（追加进对话流，网页端即时可见）

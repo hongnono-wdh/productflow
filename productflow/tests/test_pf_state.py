@@ -195,6 +195,36 @@ class TestArtifactLog(PfStateBase):
         ph1 = next(p for p in read_state(self.dir)["phases"] if p["id"] == 1)
         self.assertEqual(ph1["artifacts"][0]["type"], "weird")
 
+    def test_artifact_reregister_dedupes_by_path(self):
+        # 同路径重登记：去重（只留一条）+ 时间戳刷新（前端据此绕过浏览器缓存）
+        rel = self._make_file("artifacts/phase-6/preview-home.png")
+        self.run_ok(["artifact", "6", rel, "--title", "v1"])
+        ts1 = next(p for p in read_state(self.dir)["phases"] if p["id"] == 6)["artifacts"][0]["ts"]
+        self.run_ok(["artifact", "6", rel, "--title", "v2"])
+        arts = next(p for p in read_state(self.dir)["phases"] if p["id"] == 6)["artifacts"]
+        self.assertEqual(len(arts), 1)            # 没堆成两条
+        self.assertEqual(arts[0]["title"], "v2")  # 留的是最新那条
+        self.assertGreaterEqual(arts[0]["ts"], ts1)
+
+    def test_artifact_rm_unregisters_and_deletes(self):
+        rel = self._make_file("artifacts/phase-6/preview-home.png")
+        self.run_ok(["artifact", "6", rel, "--title", "Shot"])
+        full = os.path.join(self.dir, ".productflow", rel)
+        self.assertTrue(os.path.exists(full))
+        r = self.run_ok(["artifact-rm", "6", rel])
+        self.assertIn("file deleted", r.stdout)
+        ph6 = next(p for p in read_state(self.dir)["phases"] if p["id"] == 6)
+        self.assertEqual(len(ph6["artifacts"]), 0)   # 撤销登记
+        self.assertFalse(os.path.exists(full))       # 磁盘文件也删了
+
+    def test_artifact_rm_keep_file(self):
+        rel = self._make_file("artifacts/phase-6/keep.png")
+        self.run_ok(["artifact", "6", rel, "--title", "Keep"])
+        self.run_ok(["artifact-rm", "6", rel, "--keep-file"])
+        ph6 = next(p for p in read_state(self.dir)["phases"] if p["id"] == 6)
+        self.assertEqual(len(ph6["artifacts"]), 0)
+        self.assertTrue(os.path.exists(os.path.join(self.dir, ".productflow", rel)))  # 文件保留
+
     def test_artifact_mindmap_double_ext(self):
         # ".mm.md" is special-cased to type "mindmap" BEFORE the plain ".md"
         # extension lookup; a normal ".md" would otherwise infer "md".

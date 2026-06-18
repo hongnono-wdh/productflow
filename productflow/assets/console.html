@@ -677,7 +677,7 @@ let selectedPhase = null;
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const artUrl = file => PF_BASE + '/artifacts/' + file.replace(/^artifacts\//, '');
+const artUrl = (file, ts) => PF_BASE + '/artifacts/' + file.replace(/^artifacts\//, '') + (ts ? '?t=' + encodeURIComponent(ts) : '');
 
 function toggleSidebar() { document.body.classList.toggle('collapsed'); }
 let lastMsgCount = 0, chatSeen = 0;
@@ -1151,9 +1151,9 @@ function renderBoard() {
 
   $('gallery').innerHTML = ph.artifacts.length ? ph.artifacts.map(a => {
     const inner = a.type === 'image'
-      ? `<img src="${artUrl(a.file)}" loading="lazy">`
+      ? `<img src="${artUrl(a.file, a.ts)}" loading="lazy">`
       : `<div class="ic">${{md:'📄',html:'🌐',code:'⌘',json:'{}',mindmap:'🧠'}[a.type] || '📦'}</div>`;
-    return `<div class="art" onclick="openArtifact('${artUrl(a.file)}','${esc(a.title)}','${a.type}')">${inner}<div class="cap">${esc(a.title)}</div></div>`;
+    return `<div class="art" onclick="openArtifact('${artUrl(a.file, a.ts)}','${esc(a.title)}','${a.type}')">${inner}<div class="cap">${esc(a.title)}</div></div>`;
   }).join('') : '<div class="empty">本阶段还没有产物。</div>';
 
   $('log').innerHTML = state.log.slice(-60).reverse().map(l =>

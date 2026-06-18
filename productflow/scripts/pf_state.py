@@ -309,6 +309,22 @@ def cmd_artifact(args) -> None:
     print(f"registered {rel}")
 
 
+def cmd_artifact_rm(args) -> None:
+    s = _load(args.dir)
+    ph = _phase(s, args.n)
+    rel = args.file.lstrip("/")
+    before = len(ph["artifacts"])
+    ph["artifacts"] = [a for a in ph["artifacts"] if a["file"] != rel]
+    if before == len(ph["artifacts"]):
+        print(f"not registered: {rel}")
+        return
+    if not args.keep_file:
+        _rm_artifact_file(args.dir, rel)
+    s["log"].append({"ts": _now(), "msg": f"P{args.n} 移除产物：{rel}"})
+    _save(args.dir, s)
+    print(f"unregistered {rel}" + ("" if args.keep_file else " (file deleted)"))
+
+
 def cmd_log(args) -> None:
     s = _load(args.dir)
     s["log"].append({"ts": _now(), "msg": args.msg})
@@ -739,6 +755,12 @@ def main(argv: list[str]) -> int:
     sp.add_argument("--title", required=True)
     sp.add_argument("--type", default=None)
     sp.set_defaults(fn=cmd_artifact)
+
+    sp = sub.add_parser("artifact-rm", help="撤销登记一个产物（默认连磁盘文件一起删；--keep-file 只撤销登记）")
+    sp.add_argument("n", type=int)
+    sp.add_argument("file", help="要移除的产物路径，相对 .productflow/（如 artifacts/phase-6/preview-home.png）")
+    sp.add_argument("--keep-file", action="store_true", help="只从状态撤销登记，保留磁盘文件")
+    sp.set_defaults(fn=cmd_artifact_rm)
 
     sp = sub.add_parser("log")
     sp.add_argument("msg")
