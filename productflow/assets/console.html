@@ -255,9 +255,17 @@
   .hd-head .hd-x { border: 0; background: none; font-size: 16px; cursor: pointer; color: var(--dim); }
   .hd-body { flex: 1; overflow-y: auto; padding: 12px 14px; }
   .hd-sec-t { font-size: 11px; font-weight: 700; color: var(--dim); margin: 4px 0 7px; letter-spacing: .04em; }
-  .hd-refs { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
+  .hd-refs { display: flex; gap: 9px; flex-wrap: wrap; margin: 4px 0 8px; padding-top: 4px; }
   .hd-refs img, .hd-sel img { width: 46px; height: 46px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
   .hd-refs .none { font-size: 12px; color: var(--dim); }
+  .hd-ref { position: relative; width: 46px; }
+  .hd-ref img { cursor: pointer; display: block; }
+  .hd-ref:not(.off) img:hover { border-color: var(--ink); }
+  .hd-ref.off img { opacity: .32; filter: grayscale(1); cursor: default; }
+  .hd-rcode { position: absolute; left: 2px; bottom: 2px; background: rgba(20,20,20,.78); color: #fff; font-size: 10px; font-weight: 700; padding: 0 4px; border-radius: 5px; line-height: 15px; pointer-events: none; }
+  .hd-ref.off .hd-rcode { background: var(--dim); }
+  .hd-rck { position: absolute; right: -5px; top: -7px; cursor: pointer; font-size: 13px; line-height: 1; background: #fff; border-radius: 50%; user-select: none; }
+  .hd-hint { font-size: 11px; color: var(--dim); margin: 0 0 12px; line-height: 1.5; }
   .hd-sel { display: flex; align-items: center; gap: 9px; padding: 8px 10px; margin-bottom: 12px; border-radius: 10px;
     background: #eef3ff; border: 1px solid #cdd9f7; font-size: 12px; }
   .hd-sel .x { margin-left: auto; cursor: pointer; color: #5470c6; font-weight: 700; }
@@ -610,7 +618,7 @@
       <div class="hd-head" onclick="toggleHeroDialog()">✦ 生成首图 <button class="hd-x" title="折叠/展开">—</button></div>
       <div class="hd-body" id="hd-body"></div>
       <div class="hd-input">
-        <textarea id="hd-text" placeholder="描述想要的首图；点中某张图后在这里说怎么改…"></textarea>
+        <textarea id="hd-text" placeholder="描述想要的首图（点上方参考插入 图1/图2，如：主色参考 图1，布局参考 图2）；点中画布某张图=改那张…"></textarea>
         <button class="btn hd-go" id="hd-go" onclick="dialogGenerate()">✦ 生成首图</button>
       </div>
     </div>
@@ -1834,10 +1842,11 @@ function genHeroes() {
 /* ===== ③ 生成首图对话框 ===== */
 let heroSel = null;        // 点选要「改」的那张首图 file
 let hdCollapsed = false;
+let heroRefOff = {};       // ③ 本次生成里被取消勾选的参考 id（默认全参与）
 function refImgUrl(file) { return PF_BASE + '/artifacts/' + String(file).replace(/^artifacts\//, ''); }
-function selectedRefCards() {
-  const ids = pExplore.selectedRefs || [];
-  return (pExplore.refs || []).filter(r => ids.includes(r.id));
+function selectedRefCards() {   // 按 selectedRefs 勾选顺序返回——代号 图N 与喂给模型的 --image 顺序严格一致
+  const byId = {}; (pExplore.refs || []).forEach(r => { byId[r.id] = r; });
+  return (pExplore.selectedRefs || []).map(id => byId[id]).filter(Boolean);
 }
 function renderHeroDialog() {
   const el = $('hero-dialog'); if (!el) return;
@@ -1846,9 +1855,19 @@ function renderHeroDialog() {
   const gen = !!(pExplore.request && pExplore.request['gen-heroes']);
   const refs = selectedRefCards();
   const log = pExplore.heroGenLog || [];
+  let codeN = 0;
   const refsHtml = refs.length
-    ? refs.map(r => `<img src="${refImgUrl(r.file)}" title="${esc(r.title || '参考')}">`).join('')
+    ? refs.map(r => {
+        const off = !!heroRefOff[r.id];
+        const code = off ? '' : '图' + (++codeN);
+        return `<div class="hd-ref${off ? ' off' : ''}">
+          <img src="${refImgUrl(r.file)}" title="${off ? '已排除·点☑加回本次' : '点把「' + code + '」插进文字'}"${off ? '' : ` onclick="insertRefCode('${code}')"`}>
+          <span class="hd-rcode">${off ? '排除' : code}</span>
+          <span class="hd-rck" onclick="toggleHeroRef('${esc(r.id)}')" title="是否参与本次生成">${off ? '☐' : '☑'}</span>
+        </div>`;
+      }).join('')
     : `<span class="none">还没选参考——可去 ② 选几张，或直接生成（按产品需求）</span>`;
+  const refsHint = refs.length ? `<div class="hd-hint">点缩略图把代号插进下面文字（例：主色参考 图1，布局参考 图2）；☑ 切换是否参与本次</div>` : '';
   const selHtml = heroSel
     ? `<div class="hd-sel"><img src="${refImgUrl(heroSel)}"><span>正在改这张</span><span class="x" onclick="clearHeroSel()">取消 ✕</span></div>` : '';
   let logHtml = '';
@@ -1861,7 +1880,7 @@ function renderHeroDialog() {
     logHtml += `<div class="hd-entry"><div class="hd-meta"><span class="hd-mode ${e.mode === 'edit' ? 'edit' : ''}">${e.mode === 'edit' ? '改图' : '生成'}</span><span>${esc(String(e.ts || '').slice(5, 16))}</span><span>· ${(e.refs || []).length} 参考 → ${(e.results || []).length} 张</span></div>
       <div class="hd-thumbs">${thumbs}</div><div class="hd-prompt">${esc(e.prompt || '')}</div></div>`;
   }
-  $('hd-body').innerHTML = `<div class="hd-sec-t">本次参考</div><div class="hd-refs">${refsHtml}</div>${selHtml}<div class="hd-sec-t">生成记录</div><div class="hd-log">${logHtml}</div>`;
+  $('hd-body').innerHTML = `<div class="hd-sec-t">本次参考</div><div class="hd-refs">${refsHtml}</div>${refsHint}${selHtml}<div class="hd-sec-t">生成记录</div><div class="hd-log">${logHtml}</div>`;
   const go = $('hd-go');
   go.textContent = gen ? 'Agent 生成中…' : (heroSel ? '✦ 按指令改这张' : '✦ 生成首图');
   go.disabled = gen;
@@ -1869,6 +1888,21 @@ function renderHeroDialog() {
 }
 function toggleHeroDialog() { hdCollapsed = !hdCollapsed; renderHeroDialog(); }
 function clearHeroSel() { heroSel = null; renderHeroDialog(); renderCanvas(); }
+// 点参考缩略图 → 把它的代号（图1/图2…）插进生成文字框的光标处
+function insertRefCode(code) {
+  const ta = $('hd-text'); if (!ta) return;
+  const s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+  const needSp = s > 0 && !/[\s，,、。：:（(]$/.test(v.slice(0, s));
+  const ins = (needSp ? ' ' : '') + code + ' ';
+  ta.value = v.slice(0, s) + ins + v.slice(e);
+  const pos = s + ins.length;
+  ta.focus(); ta.setSelectionRange(pos, pos);
+}
+// 切换某张参考是否参与本次生成（取消勾选后代号会重新编号）
+function toggleHeroRef(id) {
+  if (heroRefOff[id]) delete heroRefOff[id]; else heroRefOff[id] = true;
+  renderHeroDialog();
+}
 function selectHeroForEdit(file) {   // 点图选中＝准备改这张
   heroSel = (heroSel === file) ? null : file;
   renderHeroDialog(); renderCanvas();
@@ -1878,7 +1912,9 @@ function dialogGenerate() {
   if (pExplore.request && pExplore.request['gen-heroes']) { toast('正在生成，稍等'); return; }
   const ta = $('hd-text'); const instruction = (ta ? ta.value : '').trim();
   if (heroSel && !instruction) { toast('说一句这张要怎么改'); return; }
+  const usedFiles = selectedRefCards().filter(r => !heroRefOff[r.id]).map(r => r.file);
   const req = { kind: 'gen-heroes', selectedRefs: pExplore.selectedRefs };
+  if (usedFiles.length) req.refFiles = usedFiles;   // 代号顺序的参考文件 → 服务端按此顺序喂 --image，图N 稳对应
   if (instruction) req.instruction = instruction;
   if (heroSel) req.baseImage = heroSel;
   pExplore.request = Object.assign({}, pExplore.request, { 'gen-heroes': req });

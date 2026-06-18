@@ -776,10 +776,26 @@ def _auto_explore(pf: str, req: dict) -> None:
         base_line = (f"\n🎯 **改图模式**：用户点选了画布上某张已生成图 `{base_image}` 要在它基础上改——"
                      f"用 edit.py 把 `{pf}/{base_image}` 作为 --image 输入，按上面诉求改，产出 1-2 张新版（mode=edit，不是从头生成一批）。\n"
                      if base_image else "")
+        # 用户在对话框里给参考图编了代号（图1/图2…）并在文字里点名引用——严格按这个顺序把对应文件喂给模型，
+        # 这样 prompt 里的「图N」就稳对应第 N 个 --image（gpt-image 多图按输入顺序理解）。
+        ref_files = [str(x).lstrip("/") for x in (req.get("refFiles") or []) if x]
+        if ref_files:
+            mapping = "，".join(f"图{i+1}=`{pf}/{f}`" for i, f in enumerate(ref_files))
+            img_args = " ".join(f"--image {pf}/{f}" for f in ref_files)
+            ref_codes_line = (
+                f"\n🏷 **用户用代号点名了参考图，严格按此顺序与代号对应**：{mapping}。\n"
+                f"把这些文件**按上面顺序**作为 --image 依次传给 edit.py（图1=第1个 --image、图2=第2个…）；"
+                f"用户诉求里出现的「图1/图2…」就指对应序号的输入图，edit.py 的 --prompt 里**原样保留用户的「图N」表述**，"
+                f"模型按输入图顺序理解。命令形如：\n"
+                f"   python3 {img_skill}/scripts/edit.py {img_args} --prompt \"<用户诉求原文，含图N>\" --size {size_arg} --count 4 --model gpt-image-2 --out-dir {heroes_dir}\n"
+                f"本代号顺序优先于下面「有 selectedRefs」的通用做法。\n"
+            )
+        else:
+            ref_codes_line = ""
         prompt = (
             "你是 ProductFlow 首图设计 Agent（阶段③），headless 运行，必须用工具实际完成任务（不要只输出描述）。\n"
             "任务：按用户选中的参考，生成首图（hero）——即【选定平台的关键屏纯 UI 设计稿】，定整套设计的视觉基调供阶段④复用。\n"
-            + instr_line + base_line +
+            + instr_line + base_line + ref_codes_line +
             f"做法见手册：{design_doc} 的「首图生成协作」节。\n"
             + _PURE_UI_RULES + plat_line +
             "重要执行约束：每个 Bash 工具调用都是独立 shell，定义的 shell 变量不会跨调用保留。"
