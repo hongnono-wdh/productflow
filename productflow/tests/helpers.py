@@ -75,6 +75,9 @@ def _env(home, project=None):
     # Prepend <home>/bin so the no-op `claude` stub shadows the real binary,
     # keeping the server's auto-spawn from launching real claude agents.
     e["PATH"] = os.path.join(home, "bin") + os.pathsep + e.get("PATH", "")
+    # 框选重绘默认调仓库自带的 scripts/edit.py（会真打网关）。测试里指向沙箱内的假 edit.py
+    # （TestRedraw._fake_edit_py 写在这），既不走网络又能验证 server 真传了 --mask 蒙版。
+    e["PF_EDIT_PY"] = os.path.join(home, ".claude", "skills", "openai-image-gen", "scripts", "edit.py")
     e.pop("PF_PROJECT", None)
     if project:
         e["PF_PROJECT"] = project

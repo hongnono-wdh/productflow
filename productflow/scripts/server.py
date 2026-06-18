@@ -582,7 +582,9 @@ def _auto_redraw(pf: str, payload: dict) -> None:
     phase_key = f"stage-{stage}"
     project_root = os.path.dirname(pf)
     ps = os.path.join(SKILL_DIR, "scripts", "pf_state.py")
-    img_skill = os.path.expanduser("~/.claude/skills/openai-image-gen")
+    # edit.py 随仓库自带（productflow/scripts/edit.py，带 --mask）——不依赖外部 openai-image-gen，
+    # 这样别人装了 ProductFlow 就能用框选重绘。PF_EDIT_PY 可覆盖（测试用假脚本/高级用户自定义）。
+    edit_py = os.environ.get("PF_EDIT_PY") or os.path.join(SKILL_DIR, "scripts", "edit.py")
     src = os.path.join(pf, rel)
     out_dir = os.path.join(pf, "artifacts", f"phase-{stage}")
     _log_reset(pf, phase_key, "局部重绘选中区域")
@@ -604,7 +606,7 @@ def _auto_redraw(pf: str, payload: dict) -> None:
             "严格保持与画面其余部分一致的配色/字体/字号/间距/圆角/风格，让改动无缝融入、看不出拼接痕迹。\n"
             f"本次诉求：{user_req}\n" + _PURE_UI_RULES
         )
-        cmd = ["python3", os.path.join(img_skill, "scripts", "edit.py"),
+        cmd = ["python3", edit_py,
                "--image", src, "--mask", mask_path, "--prompt", prompt,
                "--size", size, "--count", "1", "--model", "gpt-image-2", "--out-dir", out_dir]
         env = dict(os.environ)
