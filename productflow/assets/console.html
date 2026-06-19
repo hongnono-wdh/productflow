@@ -509,6 +509,8 @@
   .pv-box .pvx { position: absolute; right: -2px; top: -19px; background: #fff; color: #c0392b; border: 1px solid #ff5a5a; font-size: 11px; padding: 0 5px; border-radius: 4px; cursor: pointer; line-height: 1.5; }
   .pv-draft { position: absolute; border: 2px dashed #ff5a5a; background: rgba(255,90,90,.08); box-sizing: border-box; pointer-events: none; display: none; }
   .pv-hint { color: #cfcfcf; font-size: 12px; text-align: center; padding: 10px 22px 16px; }
+  .pv-instr { display: none; width: min(720px, 86vw); align-self: center; margin: 10px auto 0; padding: 9px 12px; border-radius: 10px; border: 1px solid #555; background: #2b2b2b; color: #fff; font: inherit; font-size: 13px; resize: vertical; min-height: 44px; }
+  .pv-instr.show { display: block; }
   #compat-banner .compat-warn { margin: 14px 24px 0; padding: 12px 16px; border: 1px solid #e0b4b4; background: #fdf4f4;
     color: #8a3b3b; border-radius: 10px; font-size: 13px; line-height: 1.6; }
   #compat-banner a { color: #8a3b3b; text-decoration: underline; }
@@ -655,7 +657,8 @@
     <div id="pv-boxes"></div>
     <div id="pv-draft" class="pv-draft"></div>
   </div></div>
-  <div class="pv-hint">拖拽框选有问题的区域 → 填一句意见（可框多处）。发送后 Agent 知道是「哪张图、哪块区域、什么问题」。</div>
+  <textarea id="pv-instr" class="pv-instr" placeholder="写一句要改成什么…"></textarea>
+  <div class="pv-hint" id="pv-hint">拖拽框选有问题的区域 → 填一句意见（可框多处）。发送后 Agent 知道是「哪张图、哪块区域、什么问题」。</div>
 </div>
 
 <!-- 极简创建项目：只要 名称 + 平台 -->
@@ -1695,13 +1698,11 @@ function cvAutoPlaceCards(cards) {
 }
 
 function heroCardHtml(c, pos) {
-  return `<div class="cv-item ${pos.liked ? 'liked' : ''} ${c.base ? 'base' : ''} ${c.file === heroSel ? 'sel' : ''}" data-id="${esc(c.id)}" data-title="${esc(c.title)}" data-img="${esc(c.img)}"
+  return `<div class="cv-item ${c.base ? 'base' : ''}" data-id="${esc(c.id)}" data-title="${esc(c.title)}" data-img="${esc(c.img)}" data-file="${esc(c.file)}"
     style="left:${pos.x}px; top:${pos.y}px"><img src="${c.img}" loading="lazy">
-    <div class="cv-heart" title="选中喜欢的">${pos.liked ? '❤' : '♡'}</div>
     <div class="cv-del" title="删除这张首图">✕</div>
-    <div class="cv-redraw" data-file="${esc(c.file)}" title="框选局部重绘">✏️</div>
     <div class="cv-base" data-file="${esc(c.file)}" title="设为视觉基调">${c.base ? '★ 基调' : '设为基调'}</div>
-    <div class="bar"><span class="ti">${esc(c.title)}</span>${cmtIconHtml(pos)}</div></div>`;
+    <div class="bar"><span class="ti">${esc(c.title)}</span></div></div>`;
 }
 
 // 卡片上的「针对这张写一句意见」图标——有意见时高亮并把意见作为 tooltip
@@ -1816,8 +1817,14 @@ function renderCanvas() {
   cvAutoPlaceCards(cards);
   $('cv-stagebar').innerHTML = stagebarHtml();
   $('cv-empty').style.display = cards.length ? 'none' : 'flex';
-  const n = likedCount();
-  $('cv-send').textContent = `发给 Agent ${n ? '❤' : '♡'}${n}`;
+  // ③首图画布不要「喜欢/评论/发给 Agent」反馈流（用右侧生成对话框迭代即可）；④ 保留
+  const tb = document.querySelector('.cv-toolbar');
+  if (tb) tb.style.display = (cvStage === 3) ? 'none' : 'flex';
+  if (cvStage !== 3) { const n = likedCount(); $('cv-send').textContent = `发给 Agent ${n ? '❤' : '♡'}${n}`; }
+  const hint = document.querySelector('.cv-hint');
+  if (hint) hint.textContent = (cvStage === 3)
+    ? '拖拽平移 · 滚轮缩放 · 拖动摆位 · 双击图编辑（框选某块=局部重绘 / 不框写一句=整图改）· 设为基调定方向'
+    : '拖拽空白处平移 · 滚轮缩放 · 拖动卡片摆位 · 双击设计稿框选局部重绘';
   let html = '';
   for (const c of cards) {
     const pos = cv.items[c.id]; if (!pos) continue;
@@ -2028,20 +2035,32 @@ function openPreview(file, title) {
   pvState = { mode: 'feedback', file, title: title || '成品预览', boxes: [], stage: null, pageId: null, platform: '' };
   $('pv-title').textContent = '圈选反馈 · ' + pvState.title;
   $('pv-action-btn').textContent = '发送给 Agent';
+  $('pv-instr').classList.remove('show');         // ⑥ 用每框一句，不要共享文本框
+  $('pv-hint').textContent = '拖拽框选有问题的区域 → 填一句意见（可框多处）。发送后 Agent 知道是「哪张图、哪块区域、什么问题」。';
   $('pv-img').src = artUrl(file);
   renderPvBoxes();
   $('pv-overlay').classList.add('show');
 }
-// ③首图/④页面：框选区域 + 描述 → gpt-image-2 局部重绘（只改框选块，其余保留）。file 是相对 .productflow/ 的产物路径。
+// ③首图（stage 3）：双击进编辑层——框选某块=局部重绘 / 不框写一句=整图改（共享一个文本框）。
+// ④页面（stage 4）：仍是框选局部重绘、每框一句（行为不变）。file 相对 .productflow/。
 function openRedraw(file, title, stage, pageId, platform) {
   pvState = { mode: 'redraw', file, title: title || '设计稿', boxes: [], stage, pageId: pageId || null, platform: platform || '' };
-  $('pv-title').textContent = '框选局部重绘 · ' + pvState.title;
-  $('pv-action-btn').textContent = '🎨 重绘选中区域';
+  const hero = (stage === 3);
+  $('pv-title').textContent = (hero ? '编辑这张 · ' : '框选局部重绘 · ') + pvState.title;
+  $('pv-action-btn').textContent = hero ? '🎨 整图按这句改' : '🎨 重绘选中区域';
+  $('pv-instr').classList.toggle('show', hero);
+  if (hero) $('pv-instr').value = '';
+  $('pv-hint').textContent = hero
+    ? '框选要改的局部 = 只改那块；不框、写一句 = 整图按这句改。结果作为新版本，原图保留。'
+    : '拖拽框选要改的区域 → 写一句怎么改（可框多处）→ 只重画框选块，其余像素保留。';
   $('pv-img').src = artUrl(file);
   renderPvBoxes();
   $('pv-overlay').classList.add('show');
 }
-function pvSend() { return pvState.mode === 'redraw' ? doRedraw() : sendPreviewFeedback(); }
+function pvSend() {
+  if (pvState.mode === 'redraw') return (pvState.stage === 3) ? doRedrawHero() : doRedraw();
+  return sendPreviewFeedback();
+}
 function doRedraw() {
   if (!pvState.boxes.length) { toast('先在图上框选要改的区域并写一句怎么改'); return; }
   const regions = pvState.boxes.map(b => ({ x: +b.x.toFixed(4), y: +b.y.toFixed(4), w: +b.w.toFixed(4), h: +b.h.toFixed(4) }));
@@ -2057,14 +2076,45 @@ function doRedraw() {
       setTimeout(() => { if (stage === 3) pollExplore(); else pollPages(); }, 4000);
     }).catch(() => toast('重绘请求发送失败，请重试'));
 }
+// ③首图编辑层：一个共享文本框 + 可选框选。有框=只重画框选块（inpaint）；没框=整图按这句改（gen-heroes baseImage 重生成）。
+function doRedrawHero() {
+  const instr = ($('pv-instr').value || '').trim();
+  if (!instr) { toast('写一句要改成什么'); return; }
+  const file = pvState.file;
+  if (pvState.boxes.length) {
+    const regions = pvState.boxes.map(b => ({ x: +b.x.toFixed(4), y: +b.y.toFixed(4), w: +b.w.toFixed(4), h: +b.h.toFixed(4) }));
+    fetch(PF_BASE + '/api/redraw', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ stage: 3, file, regions, prompt: instr }) })
+      .then(r => r.json()).then(j => {
+        if (!j || !j.ok) { toast('重绘请求被拒：' + ((j && j.error) || '未知')); return; }
+        closePreview();
+        toast('🎨 正在局部重绘选中区域…完成后作为新版本出现在画布（原图保留）');
+        setTimeout(() => pollExplore(), 4000);
+      }).catch(() => toast('重绘请求发送失败，请重试'));
+  } else {
+    const req = { kind: 'gen-heroes', baseImage: file, instruction: instr };
+    pExplore.request = Object.assign({}, pExplore.request, { 'gen-heroes': req });
+    pExplore.heroGenFailed = false;
+    renderHeroDialog();
+    fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ selectedRefs: pExplore.selectedRefs, request: req }) }).catch(() => {});
+    closePreview();
+    toast('🎨 已请 Agent 按这句整图改这张（新版本累积，原图保留）');
+  }
+}
 function closePreview() { $('pv-overlay').classList.remove('show'); }
 function renderPvBoxes() {
   $('pv-boxes').innerHTML = pvState.boxes.map((b, i) => {
     const short = b.text.length > 18 ? b.text.slice(0, 18) + '…' : b.text;
+    const label = b.text ? `${i + 1}. ${esc(short)}` : `${i + 1}`;
     return `<div class="pv-box" style="left:${b.x * 100}%;top:${b.y * 100}%;width:${b.w * 100}%;height:${b.h * 100}%">
-      <span class="pvn" title="${esc(b.text)}">${i + 1}. ${esc(short)}</span>
+      <span class="pvn" title="${esc(b.text || '选中区域')}">${label}</span>
       <span class="pvx" data-i="${i}" title="删除">✕</span></div>`;
   }).join('');
+  // ③ 编辑层：按是否框选切换动作文案
+  if (pvState.mode === 'redraw' && pvState.stage === 3) {
+    $('pv-action-btn').textContent = pvState.boxes.length ? '🎨 重绘选中区域' : '🎨 整图按这句改';
+  }
 }
 function sendPreviewFeedback() {
   if (!pvState.boxes.length) { toast('先在图上框选区域并写一句意见'); return; }
@@ -2123,9 +2173,14 @@ function sendPreviewFeedback() {
     const p = frac(e);
     const x = Math.min(sx, p.x), y = Math.min(sy, p.y), w = Math.abs(p.x - sx), h = Math.abs(p.y - sy);
     if (w < 0.02 || h < 0.02) return;   // 太小当误触
-    const t = prompt('这块区域有什么问题 / 想怎么改？');
-    if (!t || !t.trim()) return;
-    pvState.boxes.push({ x, y, w, h, text: t.trim() });
+    if (pvState.mode === 'redraw' && pvState.stage === 3) {
+      // ③ 编辑层：框只是选区，「改成什么」写在共享文本框（pv-instr），不再每框单独 prompt
+      pvState.boxes.push({ x, y, w, h, text: '' });
+    } else {
+      const t = prompt('这块区域有什么问题 / 想怎么改？');
+      if (!t || !t.trim()) return;
+      pvState.boxes.push({ x, y, w, h, text: t.trim() });
+    }
     renderPvBoxes();
   });
   $('pv-boxes').addEventListener('click', e => {
@@ -2182,8 +2237,12 @@ function sendPreviewFeedback() {
   vp.addEventListener('dblclick', e => {
     const item = e.target.closest('.cv-item');
     if (!item) return;
-    // 双击设计稿 = 打开框选局部重绘（和 ⑥ 成品预览圈选同一套交互：放大看图 + 框选 + 描述 → 重绘）。
-    // 占位/无设计稿的卡片没有重绘入口，退回查看大图。
+    // ③首图：双击 = 打开编辑层（框选某块=局部重绘 / 不框写一句=整图改）。卡片已无 ✏️ 按钮，双击是唯一精修入口。
+    if (cvStage === 3 && item.dataset.file) {
+      openRedraw(item.dataset.file, item.dataset.title || '设计稿', 3, null, '');
+      return;
+    }
+    // ④页面：双击 = 框选局部重绘（走卡片上的 .cv-redraw 数据，行为不变）。占位/无稿卡退回看大图。
     const rd = item.querySelector('.cv-redraw');
     if (rd) {
       const title = item.dataset.title || (item.dataset.pgid ? '页面' : '设计稿');
@@ -2265,12 +2324,7 @@ function sendPreviewFeedback() {
       }
       return;
     }
-    // ③ 点首图卡片（非按钮、非拖拽）= 选中这张准备在对话框里改图
-    const heroItem = e.target.closest('.cv-item');
-    if (heroItem && cvStage === 3 && !moved && heroItem.dataset.img) {
-      const c = stageCards().find(cc => cc.id === heroItem.dataset.id);
-      if (c && c.file) selectHeroForEdit(c.file);
-    }
+    // ③首图：单击不再进入「改图」模式——精修统一走双击编辑层。单击空白只是平移/选中，不触发任何编辑。
   });
 })();
 
