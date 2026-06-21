@@ -668,11 +668,13 @@ class ServerTest(unittest.TestCase):
                 "regions": [{"x": 0, "y": 0, "w": 0.3, "h": 0.3}]}
         for bad in ({**good, "stage": 5},                       # 非法阶段
                     {**good, "file": "artifacts/phase-4/nope.png"},  # 文件不存在
-                    {**good, "regions": []},                   # 空框选
                     {**good, "prompt": "   "},                 # 空描述
                     {**good, "file": "../../etc/passwd"}):     # 穿越
             status, _ = h.http(self.port, f"/p/{pid}/api/redraw", method="POST", body=bad)
             self.assertEqual(status, 400)
+        # 空 regions 现在合法：= 整图按这句改（不带蒙版整张重画），应被接受
+        status, _ = h.http(self.port, f"/p/{pid}/api/redraw", method="POST", body={**good, "regions": []})
+        self.assertEqual(status, 200)
 
     def _wait_until(self, fn, tries=40, gap=0.1):
         for _ in range(tries):
