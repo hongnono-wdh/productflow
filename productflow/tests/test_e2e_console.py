@@ -57,7 +57,9 @@ class TestE2EConsole(unittest.TestCase):
     def setUpClass(cls):
         cls.home = h.make_home()
         try:
-            cls.proc, cls.port = h.start_server(cls.home)
+            # These journeys drive the legacy assets/console.html specifically;
+            # pin the fallback UI (default is now the React dist build).
+            cls.proc, cls.port = h.start_server(cls.home, extra_env={"PF_UI": "legacy"})
             cls._pw = sync_playwright().start()
             cls.browser = cls._pw.chromium.launch(
                 executable_path=h.CHROMIUM_EXE, headless=True,

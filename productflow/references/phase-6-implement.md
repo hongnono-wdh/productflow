@@ -67,6 +67,8 @@ python3 "$SKILL_DIR/scripts/pf_state.py" log "Phase 6 开发实现开始"
 
 操作台跑在**用户本机**、agent 就是用户机器上的 shell——可以把运行中的产物**直接弹到用户屏幕上实时看**，不止 headless 截图。这让"模拟打开调试 + 调试中沟通"在 Phase 6 **进行中**就成立（用户实时看到运行产物 + 随时留言/圈选 + agent 用 `choice` 暂停问你），不必等阶段完成。
 
+> **操作台「预览」按钮（`/api/run-action` → 后台 spawn 本动作）**：⑥面板有一个按平台自适应的「📱构建并在模拟器预览 / 🖥本地运行预览 / 🌐本地预览」按钮，用户点它就是要你**只做本节这件事**——把当前已实现的产品按平台构建并起到他屏幕/模拟器上，不重做/推进整个阶段、不标任何 step/phase done、不改产品代码。起好后 `reply` 告诉他怎么看。下面按平台给做法。
+
 ⚠️ **仅当 agent 在能访问用户桌面 GUI 的本机会话时才弹窗**（本机 macOS 从用户终端起的 server 通常可以）。跑在远端/无显示环境（Ubuntu/root 服务器、无 `DISPLAY` 的后台进程）时 `open` / `xdg-open` / `open -a Simulator` / `emulator` / `cargo tauri dev` 会失败——这种情况**跳过弹窗**，改为只用 `reply` 把 `http://localhost:$PORT` 或复现方法告诉用户让其自行打开（或 `ssh -L` 端口转发），**别让 open/emulator/tauri dev 失败把流水线带成 command error**（同 iOS 缺 Xcode、Android 缺 Android Studio、Desktop 缺 Rust/Tauri 时"停下说明、别硬跑"的防御姿态）。
 
 - **Web 分支**：起 dev server 后，把它弹进用户浏览器让用户实时看，并把 URL 用 `log`/`reply` 告诉用户：

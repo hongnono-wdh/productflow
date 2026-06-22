@@ -188,6 +188,11 @@ ssh <user>@SERVER "caddy validate --config /etc/caddy/Caddyfile && systemctl rel
 
 凭证全程走环境变量，**绝不打印、不入库**（ASC key 的 .p8 内容、key id、issuer id、证书一律不进 agent-log / 产物 / 留言）。
 
+**签名凭证分两种情况处理（看用户在⑦「部署凭证」表单填没填，已注入则是环境变量）：**
+
+- **凭证齐全**（ASC API key + distribution 证书 + provisioning profile 都已注入）：走下面 archive → export 签名 `.ipa` → 上传 TestFlight 全程。
+- **凭证缺失**：**仍执行第 1 步 `xcodebuild archive` 产出 `.xcarchive`**，并用 artifact 登记到 `artifacts/phase-7/`（让用户先拿到可继续的归档，不至于空手）；随后 `choice ask` / `reply` 提示用户去⑦「部署凭证」表单补齐 ASC API key / distribution 证书 / provisioning profile，补齐后再触发导出 IPA + 上传——**绝不瞎填占位的 team id / 证书硬跑**（会产出废包或报错）。
+
 ```bash
 # 1. archive：构建可分发归档（scheme/Bundle ID 按工程实际；Release 配置）
 xcodebuild archive \

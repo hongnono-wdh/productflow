@@ -71,6 +71,8 @@ def _repo_root():
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # 让 import pf_state 可用（同目录）
 import pf_state  # noqa: E402  复用 create_project / _slug
 CONSOLE_HTML = os.path.join(SKILL_DIR, "assets", "console.html")
+DIST_DIR = os.path.join(SKILL_DIR, "assets", "dist")        # 编译好的 React+TS 应用（迁移期，PF_UI=dist 才启用）
+DIST_INDEX = os.path.join(DIST_DIR, "index.html")
 PF_HOME = os.path.expanduser("~/.productflow")
 PROJECTS_DIR = os.path.join(PF_HOME, "projects")
 PENDING_DIR = os.path.join(PF_HOME, "pending")
@@ -507,6 +509,47 @@ def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = No
         with _STAGE_RUN_LOCK:
             _STAGE_RUNNING.discard((pid, phase))   # 跑完/异常都释放，允许下次重做
     print(f"[stage-{phase}] 结束", file=sys.stderr)
+
+
+def _auto_action(pf: str, phase: int, action: str, pid: str | None = None) -> None:
+    """后台 spawn claude 做一个聚焦的「预览」动作（⑥开发实现）：把当前已实现的产品按平台
+    构建并起到用户屏幕/模拟器上实时预览——不重做整个阶段、不标 phase done。
+    复用 stage-{phase} 进度通道与 _STAGE_RUNNING 并发护栏（与「让 Agent 做本阶段」互斥，不并发覆盖）。"""
+    project_root = os.path.dirname(pf)
+    ps = os.path.join(SKILL_DIR, "scripts", "pf_state.py")
+    name = _STAGE_NAME.get(phase, f"阶段{phase}")
+    doc = os.path.join(SKILL_DIR, "references", _STAGE_DOC.get(phase, ""))
+    primary = _read_primary(pf) or ""
+    goal = (
+        "【只做一件事：把当前已实现的产品构建并启动起来让用户实时预览——不要重做/推进整个阶段、不要标任何 step/phase done、不要改产品代码】。\n"
+        "按平台（读 .productflow/wizard.json 的 primary、artifacts/phase-5/template-choice.md 的预设）执行手册里对应的「起本地预览 / 把界面跑到用户屏幕上」做法：\n"
+        "- iOS（P-iOS）：`xcrun simctl boot` 目标机型 → `open -a Simulator` 把模拟器开到用户屏幕 → `xcodebuild` 构建并装进模拟器启动 App → `xcrun simctl io booted screenshot` 截一张确认；\n"
+        "- Android（P-Android）：起 `emulator` → `./gradlew installDebug` 装上并启动 → `adb exec-out screencap` 截图确认；\n"
+        "- 桌面（P-Desktop）：`cargo tauri dev`（或 `npm run tauri dev`）把原生窗口起到用户屏幕；\n"
+        "- Web（PC/H5）：起 dev server（`npm run dev` / `wrangler dev` 等），拿到本地端口后 `open http://localhost:<PORT>`。\n"
+        "起好后用 `reply` 一句话告诉用户「已起到你屏幕/模拟器上，可直接看」并附本地地址/复现方式。"
+    )
+    prompt = (
+        f"你是 ProductFlow「{name}」Agent，headless 运行，必须用工具实际完成（不要只输出描述）。\n"
+        f"完整做法见手册：{doc}——先读它里「起本地预览 / 模拟器 / 原生窗口」相关段落（按你的平台/预设那一支），再执行。\n"
+        f"项目目录：{project_root}（先读 .productflow/state.json、wizard.json(primary={primary or '未设置'})、artifacts/phase-5/template-choice.md 认清平台与预设；产品代码在项目根目录）。\n"
+        "重要：每个 Bash 调用都是独立 shell，命令必须每次写完整 `python3 <绝对路径> --dir <绝对路径> ...`，禁用 $PF 等缩写。\n"
+        f"{goal}\n"
+        f"过程登记进展：python3 {ps} --dir {project_root} log \"<进展>\"。\n"
+        f"遇到该让用户拍板的歧义：python3 {ps} --dir {project_root} choice ask --stage {phase} --question '...' --option A --option B（拿到 ch-xxxx 后 choice wait <id> --timeout 600 阻塞等答复）。\n"
+        "前置工具/环境检测照手册：缺 Xcode / Android SDK / Tauri 工具链，或跑在无显示的远端环境（无 DISPLAY、Ubuntu/root 服务器）导致 `open`/`open -a Simulator`/`emulator`/`cargo tauri dev` 会失败时——停下用 reply 说明并给本地复现方法（或 ssh -L 端口转发），别让命令失败跑成一串 command error。\n"
+        "只做这一个预览动作，起好即停。\n\n"
+        "⚠️ 浏览器：headless 无任何浏览器 MCP（playwright MCP / claude-in-chrome 都不可用）——需要 Web 截图就用本机 Python Playwright（chromium headless）或 webapp-testing / playwright-cli skill。"
+    )
+    env = dict(os.environ)
+    _inject_openai_env(env)
+    _log_reset(pf, f"stage-{phase}", f"{name}：构建并预览")
+    try:
+        _run_claude_streaming(pf, f"stage-{phase}", prompt, project_root, env=env, timeout=1800)
+    finally:
+        with _STAGE_RUN_LOCK:
+            _STAGE_RUNNING.discard((pid, phase))
+    print(f"[action-{phase}-{action}] 结束", file=sys.stderr)
 
 
 def _auto_page_version(pf: str, page_id: str, platform: str) -> None:
@@ -1030,15 +1073,210 @@ def _projects_payload() -> dict:
     return {"version": VERSION, "projects": projects, "pending": pending}
 
 
+# ───────────────────────── WebSocket 全局推送（手写 RFC6455 in stdlib server） ─────────────────────────
+import hashlib as _hashlib
+import base64 as _base64
+import struct as _struct
+
+_WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+# 推送频道集（见 web/MIGRATION_PLAN.md）。canvas/deploy-creds 不在此列——保持 request/response。
+_WS_PROJECT_CHANNELS = [
+    "state", "inbox", "health", "pages", "choices", "brief", "explore", "wizard",
+    "agent-log:research", "agent-log:search-refs",
+    "agent-log:stage-4", "agent-log:stage-5", "agent-log:stage-6", "agent-log:stage-7",
+]
+
+
+def _read_json_or(pf: str, name: str, default):
+    try:
+        with open(os.path.join(pf, name), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return default
+
+
+def _ws_channel_payload(pf: str, pid: str, channel: str):
+    """某频道当前 JSON 负载——与对应 GET 端点形状逐字一致（test 有 parity 守卫）。"""
+    if channel == "state":
+        return _read_json_or(pf, "state.json", {"error": "not_initialized"})
+    if channel == "inbox":
+        msgs = []
+        try:
+            with open(os.path.join(pf, "inbox.jsonl"), encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            msgs.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            pass
+        except FileNotFoundError:
+            pass
+        return {"messages": msgs}
+    if channel == "health":
+        return _read_json_or(pf, "health.json", {})
+    if channel == "pages":
+        return _read_json_or(pf, "pages.json", {"pages": []})
+    if channel == "choices":
+        return _read_json_or(pf, "choices.json", {"choices": []})
+    if channel == "brief":
+        return _read_json_or(pf, "brief.json", {"description": "", "request": None, "questions": [],
+                             "confirmed": False, "summary": {"goal": "", "users": "", "need": "", "scope": ""}, "ready": False})
+    if channel == "explore":
+        return _read_json_or(pf, "explore.json", {"stylePrefs": [], "request": {}, "refs": [], "selectedRefs": [],
+                             "styleSummary": "", "heroes": [], "selectedHero": ""})
+    if channel == "wizard":
+        return _read_json_or(pf, "wizard.json", {"brief": "", "platforms": [], "primary": None, "priority": [], "stylePrefs": []})
+    if channel.startswith("agent-log:"):
+        phase = channel.split(":", 1)[1]
+        lines = []
+        try:
+            with open(_agent_log_path(pf, phase), encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            lines.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            pass
+        except FileNotFoundError:
+            pass
+        running = waiting = False
+        m = re.match(r"stage-(\d+)$", phase)
+        if m:
+            ph = int(m.group(1))
+            with _STAGE_RUN_LOCK:
+                running = (pid, ph) in _STAGE_RUNNING
+            if running:
+                waiting = _has_open_choice(pf, ph)
+        return {"lines": lines[-50:], "running": running, "waiting": waiting}
+    return None
+
+
+def _ws_accept_key(key: str) -> str:
+    return _base64.b64encode(_hashlib.sha1((key + _WS_GUID).encode()).digest()).decode()
+
+
+def _ws_build_frame(payload: bytes, opcode: int = 0x1) -> bytes:
+    fin_op = 0x80 | opcode
+    n = len(payload)
+    if n < 126:
+        header = _struct.pack(">BB", fin_op, n)
+    elif n < 65536:
+        header = _struct.pack(">BBH", fin_op, 126, n)
+    else:
+        header = _struct.pack(">BBQ", fin_op, 127, n)
+    return header + payload
+
+
+def _ws_read_frame(rf):
+    """读一帧（客户端→服务端帧必带 mask）。返回 (opcode, payload) 或 None(EOF/错)。"""
+    try:
+        h = rf.read(2)
+        if len(h) < 2:
+            return None
+        b0, b1 = h[0], h[1]
+        opcode = b0 & 0x0F
+        masked = b1 & 0x80
+        ln = b1 & 0x7F
+        if ln == 126:
+            ln = _struct.unpack(">H", rf.read(2))[0]
+        elif ln == 127:
+            ln = _struct.unpack(">Q", rf.read(8))[0]
+        mask = rf.read(4) if masked else b""
+        data = rf.read(ln) if ln else b""
+        if len(data) < ln:
+            return None
+        if masked:
+            data = bytes(data[i] ^ mask[i % 4] for i in range(ln))
+        return (opcode, data)
+    except OSError:
+        return None
+
+
+def _ws_serve(handler, scope: str, pf, pid):
+    """单连接：reader 线程处理 ping/close；本线程按 ~0.6s 扫描各频道，仅在负载变化时推。"""
+    wfile = handler.wfile
+    send_lock = threading.Lock()
+    closed = threading.Event()
+
+    def send_frame(payload: bytes, opcode: int = 0x1) -> bool:
+        try:
+            with send_lock:
+                wfile.write(_ws_build_frame(payload, opcode))
+                wfile.flush()
+            return True
+        except OSError:
+            closed.set()
+            return False
+
+    def send_msg(channel, data) -> bool:
+        return send_frame(json.dumps({"channel": channel, "data": data}, ensure_ascii=False).encode("utf-8"))
+
+    def reader():
+        while not closed.is_set():
+            fr = _ws_read_frame(handler.rfile)
+            if fr is None:
+                break
+            op, data = fr
+            if op == 0x8:           # close
+                break
+            if op == 0x9:           # ping -> pong
+                send_frame(data, 0x0A)
+        closed.set()
+
+    threading.Thread(target=reader, daemon=True).start()
+
+    # `system` is pushed on BOTH scopes — Sidebar/UpdateBar render on home AND project pages.
+    channels = ["projects", "system"] if scope == "home" else _WS_PROJECT_CHANNELS + ["system"]
+    last: dict = {}
+
+    def _sys_payload():
+        return {"current": VERSION, "latest": _latest_version,
+                "update_available": bool(_latest_version) and _version_tuple(_latest_version) > _version_tuple(VERSION),
+                "repo": UPDATE_REPO, "git": bool(_repo_root())}
+
+    def scan_and_push() -> None:
+        for ch in channels:
+            try:
+                if ch == "projects":
+                    payload = _projects_payload()
+                elif ch == "system":
+                    payload = _sys_payload()
+                else:
+                    payload = _ws_channel_payload(pf, pid, ch)
+            except Exception:
+                continue
+            try:
+                fp = _hashlib.md5(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
+            except (TypeError, ValueError):
+                fp = None
+            if fp != last.get(ch):
+                last[ch] = fp
+                if not send_msg(ch, payload):
+                    return
+
+    scan_and_push()   # 连上先全量快照
+    ping_acc = 0.0
+    while not closed.is_set():
+        time.sleep(0.6)
+        if closed.is_set():
+            break
+        scan_and_push()
+        ping_acc += 0.6
+        if ping_acc >= 20:
+            ping_acc = 0.0
+            send_frame(b"", 0x09)   # keepalive ping
+    closed.set()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *a):  # quiet
         pass
 
-    def _send(self, code: int, body: bytes, ctype: str) -> None:
+    def _send(self, code: int, body: bytes, ctype: str, cache: str = "no-store") -> None:
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache)
         self.end_headers()
         self.wfile.write(body)
 
@@ -1064,17 +1302,87 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def _console(self) -> None:
+        # 默认 serve 编译好的 React 应用（assets/dist）；PF_UI=legacy 显式回退到旧 console.html
+        if os.environ.get("PF_UI", "").lower() != "legacy" and os.path.isfile(DIST_INDEX):
+            try:
+                with open(DIST_INDEX, "rb") as f:
+                    self._send(200, f.read(), "text/html; charset=utf-8")
+                return
+            except OSError:
+                pass
         try:
             with open(CONSOLE_HTML, "rb") as f:
                 self._send(200, f.read(), "text/html; charset=utf-8")
         except FileNotFoundError:
             self._send(500, b"console.html missing", "text/plain")
 
+    def _serve_dist(self, path: str) -> None:
+        # /dist/<hashed> 静态资源：路径穿越防护 + 按扩展名 content-type + 长缓存（hashed 名）
+        rel = path[len("/dist/"):]
+        full = os.path.normpath(os.path.join(DIST_DIR, rel))
+        if not (full == DIST_DIR or full.startswith(DIST_DIR + os.sep)) or not os.path.isfile(full):
+            self._send(404, b"not found", "text/plain")
+            return
+        ext = os.path.splitext(full)[1].lower()
+        ctype = {
+            ".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+            ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8",
+            ".svg": "image/svg+xml", ".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf",
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+            ".ico": "image/x-icon", ".map": "application/json",
+        }.get(ext, "application/octet-stream")
+        cache = "no-store" if ext == ".html" else "public, max-age=31536000, immutable"
+        try:
+            with open(full, "rb") as f:
+                self._send(200, f.read(), ctype, cache)
+        except OSError:
+            self._send(404, b"not found", "text/plain")
+
+    def _ws_upgrade(self, path: str) -> None:
+        # 全局推送 WS：/api/ws（首页）或 /p/<id>/api/ws（项目）。同 POST 的 Origin 校验。
+        origin = self.headers.get("Origin")
+        if origin and urllib.parse.urlsplit(origin).hostname not in ALLOWED_HOSTS:
+            self._send(403, b"forbidden", "text/plain")
+            return
+        key = self.headers.get("Sec-WebSocket-Key")
+        if not key:
+            self._send(400, b"bad websocket request", "text/plain")
+            return
+        if path == "/api/ws":
+            scope, pf, pid = "home", None, None
+        else:
+            m = P_ROUTE.match(path)
+            pid = m.group(1) if m else None
+            root = _resolve(pid) if pid else None
+            if root is None:
+                self._send(404, b"not found", "text/plain")
+                return
+            scope, pf = "project", os.path.join(root, ".productflow")
+        # 手写 101（强制 HTTP/1.1，避免 BaseHTTPRequestHandler 默认 1.0 让浏览器拒绝升级）
+        self.close_connection = True
+        try:
+            self.wfile.write((
+                "HTTP/1.1 101 Switching Protocols\r\n"
+                "Upgrade: websocket\r\n"
+                "Connection: Upgrade\r\n"
+                f"Sec-WebSocket-Accept: {_ws_accept_key(key)}\r\n\r\n"
+            ).encode())
+            self.wfile.flush()
+        except OSError:
+            return
+        try:
+            _ws_serve(self, scope, pf, pid)
+        except OSError:
+            pass
+
     def do_GET(self):
         if not self._host_ok():
             return
         path = self.path.split("?")[0]
         qs = urllib.parse.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+        if self.headers.get("Upgrade", "").lower() == "websocket" and path.endswith("/api/ws"):
+            self._ws_upgrade(path)
+            return
         if path == "/":
             self._console()
         elif path == "/api/version":
@@ -1087,6 +1395,8 @@ class Handler(BaseHTTPRequestHandler):
                         "repo": UPDATE_REPO, "git": bool(_repo_root())})
         elif path == "/api/projects":
             self._json(_projects_payload())
+        elif path.startswith("/dist/"):
+            self._serve_dist(path)
         elif path.startswith("/vendor/"):
             name = os.path.basename(path)
             ctype = {
@@ -1392,7 +1702,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         pid, sub = m.group(1), m.group(2) or ""
         root = _resolve(pid)
-        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/deploy-creds", "/api/reveal", "/api/redraw"):
+        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/run-action", "/api/deploy-creds", "/api/reveal", "/api/redraw"):
             self._send(404, b"not found", "text/plain")
             return
         pf = os.path.join(root, ".productflow")
@@ -1619,6 +1929,30 @@ class Handler(BaseHTTPRequestHandler):
                 f.write(json.dumps({"ts": _now(), "from": "web", "type": "stage-request",
                                     "text": note}, ensure_ascii=False) + "\n")
             threading.Thread(target=_auto_stage, args=(pf, phase, instruction, pid), daemon=True).start()
+            self._json({"ok": True})
+            return
+        if sub == "/api/run-action":
+            # 聚焦动作触发：目前是 ⑥开发实现 的「构建并预览」（不重做整个阶段）
+            try:
+                phase = int(data.get("phase"))
+            except (TypeError, ValueError):
+                self._json({"error": "bad_phase"}, 400)
+                return
+            action = (data.get("action") or "").strip()
+            if phase != 6 or action != "preview":
+                self._json({"error": "bad_action"}, 400)
+                return
+            # 与「让 Agent 做本阶段」共用 (pid, phase) 并发护栏，别和整阶段 agent 双开互相覆盖
+            with _STAGE_RUN_LOCK:
+                if (pid, phase) in _STAGE_RUNNING:
+                    self._json({"error": "already_running"}, 409)
+                    return
+                _STAGE_RUNNING.add((pid, phase))
+            with open(os.path.join(pf, "inbox.jsonl"), "a", encoding="utf-8") as f:
+                f.write(json.dumps({"ts": _now(), "from": "web", "type": "action-request",
+                                    "text": f"让 Agent 在阶段{phase}「{_STAGE_NAME[phase]}」构建并预览"},
+                                   ensure_ascii=False) + "\n")
+            threading.Thread(target=_auto_action, args=(pf, phase, action, pid), daemon=True).start()
             self._json({"ok": True})
             return
         if sub == "/api/deploy-creds":

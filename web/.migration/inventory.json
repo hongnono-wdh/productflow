@@ -1,0 +1,1239 @@
+{
+  "screens": {
+    "entries": [
+      {
+        "name": "Design tokens / CSS palette (:root)",
+        "where": "console.html:9-18",
+        "what": "Single-color minimalist palette. --bg #fff, --ink #111, --ink-2 #555, --dim #8a8a8a, --faint #b5b5b5; lines --line #e7e7e7, --line-2 #ededec, --field #e2e2e2, --dash #d6d6d6; --hover #f7f7f7, --fill #f4f4f4. Block layout: --surface #f3f3f4 (page bg), --block #fff (cards), --block-sh: none (flat — shadows replaced by surface/block contrast). --canvas-bg #f7f7f6. Note colors --note #fbf6d2/--note-line #ece2a8/--note-ink #5c5320. Base font-size 14px. Fonts: Noto Sans SC + system stack; .mono = ui-monospace/SF Mono/Menlo. ::selection rgba(17,17,17,.1). Scrollbars 8px, thumb #e4e4e4 r4.",
+        "portingNotes": "Port verbatim as CSS variables / theme object — every component references these. CRITICAL: --block-sh is currently `none` (recently flattened) so cards read as white blocks on grey surface with NO resting shadow; hover states reintroduce explicit shadows (e.g. pcard hover 0 8px 26px rgba(17,17,17,.10)). Do NOT add resting shadows. Keep 14px root. Tailwind users must map these exactly; many inline styles also use var(--block-sh).",
+        "risk": "medium"
+      },
+      {
+        "name": "Two-page shell + router",
+        "where": "console.html:707-709 (PF_MATCH), .page/.page.on:101-102, bootstrap 2503-2535",
+        "what": "SPA with exactly two top-level pages toggled by .page.on (display:none/flex). Route: /p/<id>/ => #page-project, anything else => #page-home. body is display:flex with #sidebar (fixed) + #main (flex:1, column). #main holds #update-bar (hidden), #page-home, #page-project. Page chosen at boot by IS_PROJECT; nav-proj always gets .on.",
+        "portingNotes": "In React this becomes a router (e.g. react-router) with two routes; PF_BASE prefix (`/p/<id>`) is prepended to ALL project-scoped API calls — preserve. Both pages share the persistent sidebar and update-bar OUTSIDE the page switch. Stage within project page is tracked in URL hash #s<id> (history.replaceState + hashchange listener 2427-2430).",
+        "risk": "medium"
+      },
+      {
+        "name": "Left sidebar (#sidebar) — collapse 232<->64",
+        "where": "#sidebar CSS 39-97; HTML 550-567; toggleSidebar()/sbLogoClick() 724-729",
+        "what": "Fixed-width 232px sidebar on --surface, width transitions to 64px when body.collapsed (width .18s ease). Contains: .sb-head (logo block + collapse btn), .sb-nav (3 items: 项目/资产/设置), .sb-acct account card pinned bottom (margin-top:auto). Logo .mark = 34px ink square radius10 with white 'P' or chevron-expand SVG on hover when collapsed. Collapse button .sb-collapse only appears on #sidebar:hover (opacity 0->1); hidden when collapsed (logo doubles as expand). Nav items: padding 9px 11px, radius10, transparent default; hover/.on = --block bg + --block-sh, .on adds font-weight 600. Icons 20px box w/ 18px Lucide SVG, --dim default -> --ink on hover/active. Collapsed: labels (.name/.lbl/.meta) hidden, items centered.",
+        "portingNotes": "Collapse state is a body class (`collapsed`) — port as a top-level boolean controlling a CSS class or data attribute, since MANY descendant selectors key off `body.collapsed`. Logo click behavior is conditional: collapsed=expand (preventDefault on the <a href='/'>), expanded=navigate home. '资产'/'设置' nav items are stubs that just toast('…即将上线'). Account card shows version via #sb-ver (clickable -> checkUpdate, dotted underline).",
+        "risk": "medium"
+      },
+      {
+        "name": "Topbar (.topbar) — both pages",
+        "where": ".topbar CSS 104-116; home HTML 576-581; project HTML 595-605",
+        "what": "60px fixed-height bar, padding 0 28px, on --surface. Home topbar: .ttl '总览' + right-aligned '＋ 新建项目' btn. Project topbar: .back '全部项目' (arrow), .ttl with #product (ellipsis-truncated product name), the .steps-bar stepper (flex:1), then .right with 💬留言 (#chat-btn, ghost sm), 📋全部产物 (openOverview), .meta #meta ('N/M 完成'), and #next-stage-btn '下一步 →' (hidden until rendered). At @media 1180px padding shrinks to 0 18px and .meta hidden.",
+        "portingNotes": "chat-btn carries .has-unread pseudo-element badge (red dot top-right) when unread messages exist and drawer closed. #product set by renderBoard from state.product. #meta computed from done/total phases. next-stage-btn visibility/label set in renderBoard (hidden on last phase).",
+        "risk": "low"
+      },
+      {
+        "name": "7-stage stepper (#stepper / .steps-bar)",
+        "where": ".steps-bar/.step-pill CSS 117-143; render in renderBoard() 1178-1188",
+        "what": "Horizontal pill row, flex:1, horizontally scrollable (scrollbar hidden). Each .step-pill = .num circle (20px) + .lbl. Default num bg --fill / color --faint, lbl --dim. .done: num bg --fill color --ink (shows IC_CHECK check icon instead of number), lbl --ink-2. .sel (currently-viewed stage, DECOUPLED from done): bg --block + inset 0 0 0 1.5px --ink ring; .num becomes ink bg white text; .lbl ink + bold. .step-sep = 18px×1px --line line between pills. Built from state.phases; onclick=selectStage(id). Selected pill auto-scrollIntoView (inline:center).",
+        "portingNotes": "KEY visual: .sel state is independent of .done — the stage you are VIEWING is always ring-highlighted regardless of completion. A pill can be both done+sel. Number cell shows check SVG (IC_CHECK) when done, else (index+1). @media 1180px: pills collapse to number-only (gap 0, padding 6px, hide .lbl) EXCEPT the .sel pill which keeps its label (padding 6px 12px, gap 8px, lbl inline) for context. step-sep narrows to 8px.",
+        "risk": "medium"
+      },
+      {
+        "name": "Home card wall (#page-home / #proj-grid)",
+        "where": "CSS .home-h1/.grid/.pcard 155-187; HTML 575-591; renderHome()/projCard()/ghostCard() 807-821",
+        "what": "#home-scroll (overflow-y auto, padding 28px 36px 60px). Title .home-h1 (26px/900) + .home-sub. .grid = auto-fill minmax(280px,1fr) gap18. .pcard = --block radius16, cover image (150px object-fit cover) or .cover.ph placeholder (2.4rem 900 first-letter on --fill), .pbody with .pname (+inline badges), .pdir (mono, ellipsis), .segs (per-phase 5px progress bars: .seg/.seg.done(ink)/.seg.active(dim)), .pmeta 'N/7 阶段 · relTime'. Hover lifts (translateY -1 + shadow). .pcard-del trash btn top-right (opacity 0 -> 1 on hover). Badges: .badge-working '进行中' (ink pill), .hdot health (.hdot-d ok green #16a34a / bad red #dc2626 + online/offline + ms). .pcard.broken (opacity .6) for missing/error. Ghost cards (.pcard.ghost, --fill, 'CLI 待接单'). Archive section #arch-sec with toggle + #arch-grid. Empty: .home-empty.",
+        "portingNotes": "projCard uses inline onclick=location.href and event.stopPropagation for delete. Health/working flags conditional on p.health/p.working. Segs map phase.status to classes. relTime() helper for human times. Polls /api/projects every 3s. Archive open state is module var archOpen.",
+        "risk": "low"
+      },
+      {
+        "name": "View-board (#view-board) — panel stages 1,2,5,6,7",
+        "where": "CSS #view-board/.wrap/.card 190-244; HTML 613-623; renderBoard() 1172-1212",
+        "what": "Scroll container shown for non-canvas stages. Contains #health-line (hidden by default, populated by pollHealth: '线上 <dot> ms · 检查于 HH:MM'), then .wrap (max-width 1100, padding 24px 36px 36px) with <main> holding: #stage-extra (stage-specific injected HTML), then 3 .card blocks — '阶段步骤' (#phase-title + #steps list), '产物' gallery (#gallery), '进展日志' (#log). .card = --block radius12 padding 18/20, --block-sh. Steps list: .dot (9px) states none/.done(ink)/.active(dim+pulse anim)/.skipped(dash) + .st-title + mono step id right-aligned. Gallery = auto-fill minmax(150px,1fr); .art tiles (image 100px cover OR .ic doc-icon) + .cap. Log: last 60 rows reversed, ts(mono) + msg, max-height 280 scroll.",
+        "portingNotes": "#stage-extra content swapped by renderStageExtra() per selectedPhase (briefSectionHtml / refsPanelHtml / runStageHtml). renderBoard runs on EVERY poll — must NOT clobber focused inputs (guards check document.activeElement). phase-title hint shows 已完成/进行中/待开始 from phase.status. Gallery items open modal via openArtifact. health-line display toggled by data presence.",
+        "risk": "medium"
+      },
+      {
+        "name": "Stage-extra: P1 Brief + Market Research",
+        "where": "briefSectionHtml() 1280-1343; CSS .wz-aibox/.wz-airow/.wz-textarea/.wz-tags 446-468",
+        "what": "Two cards injected into #stage-extra for stage 1. '产品需求' card: #st-brief textarea (.wz-textarea), summary box that switches between 4 states — ready (4 .wz-airow rows 产品目标/目标用户/核心需求/输出范围), running (.wz-aibox spinner text), failed (red-tinted aibox), idle (prompt). Optional clarify box with .wz-tag option chips (questions) + #st-clarify textarea. Action buttons vary: with-questions => 重新生成 + ✓确认; else single 生成摘要/重新生成 button. '市场调研' card: hint + optional redo-instruction input + run button (让/重新做市场调研) + running/failed aiboxes.",
+        "portingNotes": "Heavy local state object pBrief (description/summary/ready/generating/questions/answers/confirmed/failed). foldClarifications() folds picked answers + free text into description string with '问题澄清N' / '用户澄清N' markers — preserve this exact folding format (Agent parses it). Render is suppressed while user types in st-brief/st-clarify (focus guard). Tag chips toggle pBrief.answers via event delegation on #stage-extra. Tinted error/warn boxes use specific colors #e0b4b4/#fdf4f4/#b3403a and #f0e2c8/#fdfaf2/#9a6a1a.",
+        "risk": "high"
+      },
+      {
+        "name": "Stage-extra: P2 Find references (refsPanelHtml)",
+        "where": "refsPanelHtml() 1555-1595; CSS .wz-tags/.wz-refgrid/.wz-ref 465-497; viewer init 1635-1649",
+        "what": "'找参考' card in #stage-extra (stage 2). STAGE_TAGS style chips (.wz-tag, multi-select), 找参考 button, paste-link input #st-ref-url + 采集链接 button. Reference grid .wz-refgrid (column, one big image per row): .wz-ref cards full-width images (.rthumb img width100% height auto, true aspect), .rbar with caption + selected badge + actions (🔍放大 zoomRef, 🔗源 optional, ＋类似 moreLikeRef), .wz-check top-left + .wz-del top-right. Selected .wz-ref.on => inset ink ring + dark .rbar + white caption. Searching/empty/failed states use .wz-aibox. Hidden #refs-viewer div feeds Viewer.js for zoom/pan/paging.",
+        "portingNotes": "State pExplore (refs/selectedRefs/stylePrefs/searchFailed). Selecting refs/tags POSTs to /api/explore immediately (optimistic + persist). Uses external Viewer.js (viewer.min.js/css) — re-init on each render via initRefsViewer; refsViewerOpen flag suppresses re-render while zoomed (renderStageExtra guard line 1272). moreLikeRef seeds a refined search. Failed state detected from agent-log last line kind==='error' (pollSearchLog).",
+        "risk": "high"
+      },
+      {
+        "name": "Stage-extra: P5/P6/P7 run-stage (runStageHtml)",
+        "where": "runStageHtml() 1473-1508; deployCredsHtml() 1415-1437; previewSectionHtml() 2045-2055",
+        "what": "Generic 'let Agent do this stage' card for stages 5/6/7. Title+hint per phase (names/hints maps), optional redo-instruction input (#st-stage-req when done), main run button (IC_SPARK + label), running/failed/waiting aiboxes. Phase 7 prepends deployCredsHtml card; phase 6 prepends previewSectionHtml + adds a platform-aware preview/run button (📱模拟器/🖥本地运行/🌐本地预览). Main button label on P7 varies by platform (APP=分发包, PC=部署上线, H5=部署上线). Also a 📂 reveal-code button (访达/资源管理器).",
+        "portingNotes": "pStageRun[phase] = {line,running,waiting,failed,instr}; running state from server (/api/agent-log?phase=stage-N, data.running/.waiting). waiting => amber-tinted box (#d8c98a/#fcf8e8/#7a6a1f) telling user Agent awaits their choice. Button labels depend on pfWizard.primary (loaded from /api/wizard). 409 from /api/run-stage => 'already running' toast (concurrency guard).",
+        "risk": "high"
+      },
+      {
+        "name": "Deploy-creds card (deployCredsHtml)",
+        "where": "deployCredsHtml() 1415-1437; save/remove/clear 1438-1461",
+        "what": "P7-only card. 4-grid inputs (PF_SSH_HOST/USER/PORT/DEPLOY_TARGET) + #dc-extra textarea (KEY=VALUE lines). Stored list shows masked creds as pills (key=masked) with ✕ delete + 清空全部 btn. 💾保存凭证 button. Hint explains storage at ~/.productflow/secrets/ (600, not in git/inbox).",
+        "portingNotes": "State pDeployCreds {keys:[{key,masked}], draft}. Draft persisted in-memory via pdcDraft on input. saveDeployCreds parses extra lines with regex /^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(.*)$/. Only non-empty fields sent; merges server-side. removeCred/clearCreds POST to /api/deploy-creds. clearCreds uses window.confirm.",
+        "risk": "medium"
+      },
+      {
+        "name": "Infinite canvas (#view-canvas) — stages 3,4",
+        "where": "CSS #view-canvas/#cv-world 246-381; HTML 639-659; enterCanvas/renderCanvas/cvApply 1729-2015; pan/zoom handlers 2202-2303",
+        "what": "Full-area pannable/zoomable canvas, display:none unless canvas stage. background --canvas-bg + radial-gradient dotted grid (#e3e3e1 1px dots, 22px tile). cursor grab / grabbing(.panning). #cv-world is the transformed layer (translate(x,y) scale(z), transform-origin 0 0). Cards (.cv-item, 320px, radius14, shadow 0 2px 12px, hover deepens, .dragging deepens more). #cv-empty centered message when empty. #cv-stagebar top-center control band. .cv-hint bottom-left usage text. .cv-controls bottom-right (zoom +/-, fit, #cv-zoom % readout). cvDefaultView = {x:60,y:80,z:0.7}. Zoom clamp 0.08-3. Layout grid ITEM_W 320, CARD_GAP 44, GRID_COLS 4, ROW_GAP 500.",
+        "portingNotes": "Two separate canvases per stage (3 heroes, 4 pages), never mixed — enterCanvas flushes prior stage's layout before loading. Layout persisted per-stage to /api/canvas (debounced 600ms cvSave + flushCanvasSave on leave). Pan/drag/zoom all manual pointer-event math (no lib) — careful porting: drag delta divided by zoom; wheel zoom anchors at cursor (cvZoomAt). cvDragging/cvEditing flags suppress re-render mid-interaction. Auto-place new cards into grid (cvAutoPlaceCards). Selectors exclude interactive children from pan (textarea/.cv-base/.cv-del/.cv-plat/.cv-controls/#cv-stagebar/#hero-dialog). dblclick => openRedraw (edit layer). Many overlapping classes for cv-item variants — see page-card notes.",
+        "risk": "high"
+      },
+      {
+        "name": "Canvas stage bar (#cv-stagebar)",
+        "where": "CSS 326-332; stagebarHtml() 1795-1828",
+        "what": "Top-center floating band (white, radius12, shadow). Empty => display:none. P3: 生成首图 button (IC_SPARK) with three-state note (generating / failed-retry red / basis-summary), plus guide to go pick refs if none selected. P4: 让Agent列出页面 button + 批量生成全部(N页) + 整理排布 + 手动添加 buttons, with guide (set hero base first) + failed note. .sb-guide (dim, inline buttons) and .sb-sum (dim, ellipsis 360px) sub-styles.",
+        "portingNotes": "P3 generate state from pExplore.request['gen-heroes'] + heroGenFailed + heroes.length. P4 from pStageRun[4] + cv.pages.length + selectedHero. Buttons disabled (dash bg) while running. genAllPages carries a very long, exact instruction string to Agent (concurrency 20 image-gen guidance) — preserve verbatim, it's load-bearing. runPageMap also has an exact instruction string. tidyPages re-grids by group then name and cvFit.",
+        "risk": "high"
+      },
+      {
+        "name": "Hero cards & page cards (canvas items)",
+        "where": "heroCardHtml() 1765-1771; pageCardHtml2() 1774-1793; CSS .cv-item.page-card/.pthumb/.cv-plat 339-377",
+        "what": "Hero card (.cv-item, P3): image + .cv-del (✕ top-right hover) + .cv-base toggle ('设为基调'/'★ 基调', ink when base) + title bar. .cv-item.base => 2px ink ring, base button inverts. Page card (.cv-item.page-card, P4): 184px wide (300px if .plat-pc), .pthumb with REAL aspect-ratio (1080/2340 phone portrait, or 1440/1080 for PC), thumbnail or placeholder ('设计中…'/'待设计'), .cv-page-del (×), bar.col with .pn (status dot placeholder/designing/done + name + group) and .cv-platrow of .cv-plat badges (PC/H5/APP; .on=ink filled when version exists, else click-to-generate).",
+        "portingNotes": "Card aspect ratio follows the primary version's platform (PC=landscape). Platform matrix derived from pg.versions grouped by platform. Empty platform badge click => confirm() then POST gen-version; filled badge click => openArtifact preview. Hero base set via setHeroBase. data-* attributes (id/title/img/file/pgid) drive pointer handlers — keep them.",
+        "risk": "high"
+      },
+      {
+        "name": "Hero-generation dialog (#hero-dialog)",
+        "where": "CSS #hero-dialog/.hd-* 273-316; HTML 644-651; renderHeroDialog() 1912-1947",
+        "what": "P3-only right-docked panel (absolute top/right/bottom 12px, width 320, white radius14 shadow). .on shows it (only cvStage===3); .collapsed hides body+input (bottom:auto). .hd-head (title 生成首图 + collapse —). .hd-body: '本次参考' thumbnails (.hd-ref 46px, code label 图1/图2, checkbox toggle include/exclude via .hd-rck, .off => greyed) + hint, '生成记录' log (.hd-entry per gen with mode badge 生成/改图(blue), ts, ref/result counts, result thumbnails, prompt). .hd-input textarea #hd-text + 生成首图 button #hd-go (disabled+dash while generating).",
+        "portingNotes": "Reference codes 图N must stay in strict selectedRefs order (model --image order depends on it). insertRefCode inserts at cursor in textarea. heroRefOff{} tracks excluded refs (renumbers codes). dialogGenerate sends refFiles in code order + instruction to /api/explore gen-heroes. Result thumbs path artifacts/phase-3/heroes/. Collapsed state module var hdCollapsed. Edit-from-canvas (openRedraw stage 3) feeds baseImage back into gen-heroes here.",
+        "risk": "high"
+      },
+      {
+        "name": "Artifact modal (#modal) — image/markmap/text viewer",
+        "where": "CSS .modal 383-396; HTML 664-669; openArtifact()/openOverview()/closeModal() 2355-2425",
+        "what": "Centered overlay (rgba(17,17,17,.32) backdrop). .box white radius16 max 960px, .box.wide for mindmaps (94vw × 88vh). .bar with #modal-title + ✕ 关闭. #modal-body content varies by type: image => img.full (max 78vh contain); html => window.open new tab (no modal); mindmap => #mm-svg rendered via markmap (lazy-loads d3/markmap-lib/markmap-view; grey palette #111-#999, autoFit, initialExpandLevel -1); text/md/json/code => <pre> escaped. Also hosts '全部产物' overview (openOverview): per-phase grid of image/doc/text cards aggregating brief+explore+pages+state artifacts.",
+        "portingNotes": "openOverview fetches brief/explore/pages in parallel and assembles a cross-stage gallery (_ovImgCard/_ovDocCard/_ovTextCard) — distinct from per-stage gallery; preserve aggregation logic and 'P{id} {name} · count' headers. Markmap needs the 3 vendor scripts loaded on demand (ensureMarkmap) — port as dynamic import. docIco() returns inline Lucide SVGs per type (md/html/code/json/mindmap). Esc closes modal+preview.",
+        "risk": "medium"
+      },
+      {
+        "name": "Chat drawer (#chat-drawer)",
+        "where": "CSS #chat-drawer 194-199; HTML 626-637; toggleChatDrawer/pollInbox 731-738,1125-1155",
+        "what": "Right slide-in drawer (fixed, 372px / max 92vw, full height, shadow -10px 0 44px, z46, translateX(100%) -> 0 on .open). Holds a borderless .chat .card: header '给 Agent 留言' + 收起, #msgs message list, #chat-form (textarea #chat-input + 发送), note-txt footer. Messages (.msg.me ink right / .msg.agent fill left, 88% max, pre-wrap). Special message types render headers: canvas-feedback (📌 ❤N张·N条), preview-feedback (🖼 N处意见).",
+        "portingNotes": "Toggled from topbar #chat-btn. Unread tracking: lastMsgCount vs chatSeen; #chat-btn.has-unread red badge when new msgs arrive while closed. Auto-scroll only if near bottom (stick check). Enter sends / Shift+Enter newline. Polls /api/inbox every 4s. esc/scroll preservation matters.",
+        "risk": "medium"
+      },
+      {
+        "name": "Choices bar (#choices-bar)",
+        "where": "CSS #choices-bar/.choice-card 200-209; HTML 611; renderChoices()/answerChoice 1048-1082",
+        "what": "Fixed top-center floating stack (top 64px, z35, width min(760, 100%-120)), display:none unless .show. Each .choice-card (warm #fffaf0, radius14, big shadow): .cq header '💬 Agent 在问你' + optional 阶段N, .cqt question text, .copts option chips (.copt white pills, hover => ink ring), .crow free-text #ci-<id> input + 回复 button.",
+        "portingNotes": "Shows only unanswered choices (answer==null) from /api/choices (poll 3s). Click chip or submit free text => answerChoice POST /api/choice + optimistic removal + toast. Render suppressed when an INPUT inside it is focused (don't interrupt typing). Click delegation on bar for .copt.",
+        "risk": "medium"
+      },
+      {
+        "name": "New-project modal (#new-modal)",
+        "where": "CSS .nbox/.wz-* 398-468; HTML 687-692; renderNewModal/platformPickerHtml/createProject 933-1011",
+        "what": "Modal (.box max 640) for create. Body: 2-col name+slug inputs, then platform picker (platformPickerHtml): .wz-platforms 3-col cards (PC/H5/APP, .wz-pcard with device SVG icon, .wz-check tick, .on=block+shadow), 主平台 radio row (.wz-pr), 优先级 draggable list (.wz-prio-item, grip/idx/name/主平台 tag). Actions: 清空重填 / 取消 / 创建项目 →.",
+        "portingNotes": "Draft persisted to localStorage (pf-new-project-draft) — restored on open with toast. autoSlug() generates slug from name (中文 falls back to random fb id). Platform multi-select + primary fallback when primary deselected. Drag-reorder priority via native HTML5 DnD (dragstart/dragover splice). Event delegation on #new-body. createProject sorts priority (primary first), POST /api/create, redirect to /p/<id>/. deviceIcon() returns inline SVGs per platform.",
+        "risk": "medium"
+      },
+      {
+        "name": "New-project wizard styles (.wz-*) — legacy/shared",
+        "where": "CSS .wz-h1..wz-log 409-509",
+        "what": "A full set of wizard styles (wz-h1/sub/sec/label/input/platforms/pcard/primary/prio/numstep/textarea/aibox/airow/substeps/actions/todo/tags/refgrid/ref/herogrid/hero/log). Most are reused by the in-stage panels (brief/refs use wz-textarea/wz-tag/wz-ref/wz-aibox/wz-airow) and by the new-project modal (wz-pcard/wz-pr/wz-prio). The standalone multi-step wizard page itself was removed (per comments 'create-now, do PRD/design inside stages').",
+        "portingNotes": "Don't build a separate wizard route — these classes survive only as the styling vocabulary for the create modal + stage panels. wz-log/wz-substeps may be unused (dead-ish) — flag, don't assume needed, but the progress-log/aibox patterns ARE used inline. Verify usage before dropping.",
+        "risk": "low"
+      },
+      {
+        "name": "Delete modal (#del-modal)",
+        "where": "CSS .modal shared; HTML 695-700; renderDelModal/openDelete/remove/hardDelete 862-910",
+        "what": "Modal (.box max 500). Two tiers: (1) '从操作台移除' grey card — removes card only, keeps disk files; (2) '彻底删除（不可恢复）' red-bordered card (#fdf6f6 bg) requiring typing the exact project name into #del-confirm to enable the red 彻底删除 button. Button stays disabled/grey (--dash) until name matches.",
+        "portingNotes": "delTarget {id,name,dir}. syncDelConfirm gates the hard-delete button on exact name match (also re-checked in handler). removeProject => /api/project-remove; hardDeleteProject => /api/project-delete. Both pollProjects after. Confirm-by-typing pattern + button color transition (#c0392b enabled).",
+        "risk": "low"
+      },
+      {
+        "name": "Preview annotation overlay (#pv-overlay)",
+        "where": "CSS .pv-* 516-536; HTML 671-684; openPreview/openRedraw/pvSend/box-drawing 2056-2199",
+        "what": "Fullscreen dark overlay (rgba(18,18,18,.84), z90) for two modes: feedback (⑥ annotate finished screenshots) and redraw (③④ edit design via region/whole-image). .pv-head (title + action btn + ✕). .pv-stage holds #pv-img (max 90vw/74vh) + #pv-boxes (drawn .pv-box red rectangles with numbered .pvn label + .pvx delete) + #pv-draft (dashed live-draw rect). Optional shared #pv-instr textarea (.show only in redraw mode). .pv-hint footer. Drag to draw normalized (0-1) boxes via pointer events.",
+        "portingNotes": "pvState {mode,file,title,boxes,stage,pageId,platform}. Coordinates normalized 0-1 (resolution-independent, Agent maps to pixels). feedback mode: each box prompts for text immediately; redraw mode: boxes are selection-only, text in shared #pv-instr. Action button label flips by mode + box presence. sendPreviewFeedback builds a structured text string with percent coords + posts to /api/inbox (type preview-feedback) then offers confirm() to immediately re-run stage 6 with the feedback. redraw: boxes => /api/redraw regions (inpaint); no boxes + stage3 => gen-heroes baseImage; no boxes + stage4 => /api/redraw whole. Min box size 0.02. Preserve exact text-format strings (Agent-parsed).",
+        "risk": "high"
+      },
+      {
+        "name": "Update bar / version (#update-bar, #sb-ver)",
+        "where": "CSS #update-bar/#compat-banner 537-543; HTML 572,608; loadVersion/checkUpdate/pollUpdate/doUpdate 2445-2500; compat banner 1100-1108",
+        "what": "#update-bar: ink banner at top of #main (hidden until update available) — '🆕 有新版本 vX (当前 vY)' + 立即更新 button + #update-msg. #compat-banner: project-page warning (.compat-warn red box) shown when state.phases != 7 (legacy data). #sb-ver: sidebar version label, click => checkUpdate (shows 检查中/已是最新/🆕 vX).",
+        "portingNotes": "/api/update-check is a GLOBAL route (no /p/<id> prefix) — use absolute '/api/...'. Polls every 60s on both pages. doUpdate POSTs /api/update (git pull) and instructs restart. Compat banner lists the 7 stage names verbatim. update-bar shadows the home/project page switch (lives in #main above pages).",
+        "risk": "low"
+      },
+      {
+        "name": "Toast (#toast)",
+        "where": "CSS #toast 511-514; toast()/hideToast() 740-749",
+        "what": "Bottom-center pill (ink bg white text, fixed bottom 30px, fades opacity .25s, auto-hide 2.2s). Single global element reused for all transient messages.",
+        "portingNotes": "toast() is called everywhere as user feedback — port as a global toast context/portal. hideToast() called on stage switch to clear stale toasts. Single timer (toastTimer) cleared/reset per call.",
+        "risk": "low"
+      }
+    ],
+    "focus": "screens-layout",
+    "notes": "FILE: /Users/hong/.claude/skills/productflow/assets/console.html (2538 lines; CSS+HTML 1-704, JS 705-2538). Vendor deps: /vendor/viewer.min.css+js (Viewer.js for ref zoom), and on-demand /vendor/d3.min.js + markmap-lib.js + markmap-view.js (mindmap).\\n\\nARCHITECTURE FOR THE REWRITE:\\n- Single body.flex layout: persistent #sidebar + #main. #main contains update-bar + two mutually-exclusive .page divs. No real router lib — path-regex (/p/<id>/) decides page at boot; stage tracked in URL hash #s<id>.\\n- ALL project-scoped fetches are prefixed with PF_BASE (`/p/<id>`); global routes (/api/projects, /api/version, /api/update-check, /api/update) are NOT prefixed. This split MUST be preserved in the React API layer.\\n- Stage routing inside project: CANVAS_STAGES=[3,4] show #view-canvas; stages 1,2,5,6,7 show #view-board. selectStage() is the central switcher (also flushes canvas layout, updates hash, triggers per-stage polls).\\n\\nKEY VISUAL/STYLE FACTS TO PRESERVE PIXEL-FAITHFULLY:\\n- Flat block aesthetic: --block-sh is currently `none`. Cards are white blocks on grey --surface; depth comes from surface/block contrast, NOT resting shadows. Shadows appear ONLY on hover/drag/floating panels (explicit values). Do not regress to bordered/shadowed cards.\\n- Stepper .sel is decoupled from .done: the VIEWED stage always shows the inset ink ring + filled ink number; done stages show a check icon. A pill can be both.\\n- Single-ink palette (no accent colors) except: status greens/reds (#16a34a/#dc2626), choice/brief warm yellows (#fffaf0/#fbf6d2/#9a6a1a), edit-mode blue (#5470c6), error reds (#c0392b/#b3403a/#fdf4f4), annotation red (#ff5a5a). These semantic colors are the only color in an otherwise monochrome UI.\\n- Sidebar collapse (232<->64) is driven by body.collapsed class with MANY descendant selectors — model as a top-level state class/attribute, not per-component props.\\n- @media 1180px: topbar tightens, .meta hides, stepper pills shrink to numbers-only except the selected pill keeps its label.\\n- Canvas dotted grid = radial-gradient(#e3e3e1 1px) 22px tiles on --canvas-bg #f7f7f6; default view {x:60,y:80,z:0.7}; zoom clamp 0.08-3.\\n\\nGOTCHAS / EDGE CASES THE REWRITE MUST HANDLE:\\n1. RENDER-ON-POLL FOCUS GUARDS: renderBoard/renderStageExtra/renderChoices run on 2-2.5s intervals and rebuild innerHTML; they bail out if a textarea/input inside is focused (document.activeElement checks) to avoid stealing focus / interrupting typing. In React this maps naturally to controlled components + not remounting, but the polling cadence and 'don't clobber drafts' behavior must be intentional.\\n2. CANVAS INTERACTION FLAGS: cvDragging/cvEditing/refsViewerOpen suppress re-renders mid-interaction. Manual pointer math for pan/drag (delta/zoom) and cursor-anchored wheel zoom — no canvas lib used.\\n3. PER-STAGE CANVAS ISOLATION: stages 3 and 4 have separate persisted canvases; enterCanvas flushes the previous stage's debounced layout before loading the next (or last drag is lost / saved to wrong stage).\\n4. AGENT-PARSED STRINGS ARE LOAD-BEARING: foldClarifications() '问题澄清N/用户澄清N' format, sendPreviewFeedback region text, genAllPages/runPageMap instruction strings — these are read by the Agent/CLI; copy verbatim, do not 'clean up'.\\n5. DRAFT PERSISTENCE: new-project draft in localStorage (pf-new-project-draft); deploy-creds draft in-memory.\\n6. CONCURRENCY: run-stage returns HTTP 409 when an Agent already runs that stage — UI shows a toast and keeps state; preserve.\\n7. Server-driven running/waiting state for stages comes from /api/agent-log?phase=... (data.running/.waiting/.kind==='error') — not inferred client-side anymore.\\n8. The standalone multi-step wizard route was removed; .wz-* classes now only style the create modal + in-stage panels. Confirm wz-log/wz-substeps usage before porting (possibly dead).\\n9. Two nav items (资产/设置) are stubs (toast '即将上线').\\n10. relTime/esc/artUrl/_svg/docIco/deviceIcon are shared helpers reused across many components — extract as utils.\\n\\nESCAPING: esc() HTML-escapes all interpolated user/state text — React handles this automatically, but watch the few places that intentionally inject HTML (e.g. .replace(/\\\\n/g,'<br>') in chat messages) which need dangerouslySetInnerHTML or a newline-aware renderer."
+  },
+  "dataflow": {
+    "entries": [
+      {
+        "name": "setInterval poll (state)",
+        "where": "console.html:2514 (def 1109-1123); boot 2507",
+        "what": "Every 2000ms fetches GET /api/state (backing file .productflow/state.json). Sets module var `state`. On first run resolves selectedPhase from URL hash #s<id> else state.current_phase via selectStage(). On later ticks calls renderBoard(), and if on a canvas stage and cvLoaded/cvStage match → renderCanvas(). Also drives renderCompatBanner() (non-7-phase legacy warning). 404 → '(等待初始化…)'.",
+        "portingNotes": "This is the heartbeat. Becomes channel `state` triggered by state.json writes. WS payload should carry full state (phases[], steps[], artifacts[], log[], current_phase, product). CRITICAL: the first-load hash-resolution logic (only run when selectedPhase===null) must move into client init, NOT into the WS message handler, or stage selection will re-trigger on every push. renderBoard reads heavily from `state`; keep state as single source. log is sliced last 60 reversed.",
+        "risk": "high"
+      },
+      {
+        "name": "setInterval pollProjects (home)",
+        "where": "console.html:2533 (def 765-772); boot 2531",
+        "what": "HOME PAGE only. Every 3000ms fetches GET /api/projects (scans PROJECTS_DIR/*.json + per-project state.json + health.json + pending dir). Sets `homeData`, calls renderHome() which rebuilds #proj-grid + #arch-grid via projCard()/ghostCard().",
+        "portingNotes": "Becomes channel `projects` (global, not project-scoped) triggered by any change under PROJECTS_DIR or any project's state.json/health.json or PENDING_DIR. projCard rebuilds <img class=cover> each render → FLICKER-PRONE. In React, key cards by p.id and let img src be stable so React diffs instead of replacing DOM.",
+        "risk": "medium"
+      },
+      {
+        "name": "setInterval pollInbox",
+        "where": "console.html:2516 (def 1125-1155); boot 2509",
+        "what": "Every 4000ms fetches GET /api/inbox (backing inbox.jsonl). Rebuilds #msgs innerHTML from messages[]. Handles 3 message types: plain, canvas-feedback (liked/comments counts), preview-feedback (regions count). Maintains scroll-stick, lastMsgCount, and chat-btn `has-unread` dot vs chatSeen.",
+        "portingNotes": "Becomes channel `inbox` triggered by inbox.jsonl append. Preserve: scroll-stick (only autoscroll if near bottom), unread-dot logic (lastMsgCount > chatSeen && drawer closed). Note POST /api/inbox also exists (chat send, preview feedback) — after WS, optimistic append + server echo, avoid double-render. me/agent side derived from m.from.",
+        "risk": "medium"
+      },
+      {
+        "name": "setInterval pollHealth",
+        "where": "console.html:2517 (def 1157-1168); boot 2510",
+        "what": "Every 15000ms fetches GET /api/health (backing health.json). Renders #health-line innerHTML (online dot + ms + checked-at time). Hidden if no h.url.",
+        "portingNotes": "Becomes channel `health` triggered by health.json write (server-side periodic smoke check). Slow cadence, low priority. Same health data also surfaces on home cards via /api/projects (p.health) — one WS health push could update both views.",
+        "risk": "low"
+      },
+      {
+        "name": "setInterval pollPages",
+        "where": "console.html:2518 (def 2002-2010); boot 2511; also called in enterCanvas(4), selectStage, postRedraw, addPagePrompt, page-del/gen-version handlers",
+        "what": "Every 5000ms fetches GET /api/pages (backing pages.json). Sets cv.pages. If cvStage===4 && selectedPhase===4 → renderCanvas() (rebuilds page cards w/ <img> thumbnails + platform matrix).",
+        "portingNotes": "Becomes channel `pages` triggered by pages.json write (Agent adds pages / page versions). pageCardHtml2 rebuilds <img> thumbnails → FLICKER on canvas. Stage-4 canvas cards must be React components keyed by page id + version file so thumbnails don't blink while Agent generates versions. Note many imperative callers also call pollPages() after mutations — replace with WS push + optimistic update.",
+        "risk": "high"
+      },
+      {
+        "name": "setInterval pollChoices",
+        "where": "console.html:2519 (def 1039-1047); boot 2512",
+        "what": "PROJECT only. Every 3000ms fetches GET /api/choices (backing choices.json). Filters answer==null. Sets `pChoices`, renders #choices-bar floating cards (Agent yes/no/option questions). POST /api/choice answers them.",
+        "portingNotes": "Becomes channel `choices` triggered by choices.json write. CRITICAL guard at 1052-1053: skip re-render while an INPUT inside the bar is focused (don't interrupt typing). answerChoice does optimistic local filter then POST. In React keep controlled input state separate from WS-driven list so a push doesn't clobber a half-typed reply.",
+        "risk": "medium"
+      },
+      {
+        "name": "setInterval pollUpdate",
+        "where": "console.html:2515 & 2534 (def 2473-2485); boot 2513,2532",
+        "what": "Every 60000ms fetches GET /api/update-check (server-cached git version check). Toggles #update-bar banner with 'new version vX' + 立即更新 button. Runs on BOTH home and project pages (note: registered twice on project page lines 2515 — duplicate of one in the 2521 block? no, 2515 is the only project one; home 2534).",
+        "portingNotes": "Low value over WS — version rarely changes. Could stay as a slow poll OR a `system/version` channel. Path is global '/api/update-check' (no /p/<id>). loadVersion() (one-shot, /api/version) shows sidebar #sb-ver. Keep simple; not worth a per-file watcher.",
+        "risk": "low"
+      },
+      {
+        "name": "setInterval stage-extra poller (brief/explore/research/searchLog/stageRun)",
+        "where": "console.html:2521-2526",
+        "what": "Every 2500ms, switch on selectedPhase: P1→pollBrief()+pollResearch(); P2→pollExplore()+pollSearchLog(); canvas(3/4)→pollExplore() + (P4)pollStageRun(); P5/6/7→pollStageRun(). This single interval multiplexes 5 distinct data sources by current stage.",
+        "portingNotes": "This is the biggest consolidation target. In WS world there is NO 'only poll the active stage' — server pushes per channel regardless of which stage is open, and React renders the active panel from whatever channel data it holds. Split into channels: brief, explore, agent-log:research, agent-log:search-refs, agent-log:stage-<n>. Drop the selectedPhase gating entirely; gate RENDER not FETCH.",
+        "risk": "high"
+      },
+      {
+        "name": "pollBrief",
+        "where": "console.html:1218-1237 (called by selectStage(1), interval block)",
+        "what": "GET /api/brief (backing brief.json). Reconciles into `pBrief`: description (only if textarea not focused & local empty), summary, ready, request, questions, confirmed, plus derived generating/_serverGen/failed flags (槽 gen-summary present→generating; slot vanished w/o ready→failed). Re-renders stage-extra if P1 & st-brief not focused.",
+        "portingNotes": "Becomes channel `brief` triggered by brief.json write. HEAVY local-vs-server reconciliation (confirmed-but-server-lagging guard at 1226-1228; generating/failed derivation 1229-1234). This optimistic-state merge must be ported faithfully or you'll get 'confirm then question flashes back' bugs. Keep textarea (description, clarify, answers) as uncontrolled/local; merge server only into non-edited fields.",
+        "risk": "high"
+      },
+      {
+        "name": "pollExplore",
+        "where": "console.html:1238-1254 (called selectStage(2/3/4), interval, postRedraw, genHeroes etc.)",
+        "what": "GET /api/explore (backing explore.json). Sets pExplore: refs, heroes, selectedRefs, selectedHero, styleSummary, heroGenFailed, heroGenLog, request (normalizes legacy single-slot {kind} → {[kind]:...} per-kind). stylePrefs only filled if local empty. Re-renders stage-extra (P2) OR renderCanvas (P3/P4 canvas).",
+        "portingNotes": "Becomes channel `explore` triggered by explore.json write. Drives THREE views: P2 refs panel, P3 hero canvas+dialog, overview modal. refs & heroes are <img> grids → FLICKER-PRONE (refs gallery, hero cards). request map is per-kind concurrent slots (search-refs/collect-ref/gen-heroes) used to show spinners — preserve per-kind semantics. selectedRefs/stylePrefs are also locally mutated + POSTed; reconcile carefully.",
+        "risk": "high"
+      },
+      {
+        "name": "pollSearchLog",
+        "where": "console.html:1256-1265 (P2 only)",
+        "what": "GET /api/agent-log?phase=search-refs (backing agent-log-search-refs.jsonl). Reads last line; if kind==='error' sets pExplore.searchFailed and re-renders P2 panel (shows '访问失败重试').",
+        "portingNotes": "Becomes channel `agent-log:search-refs`. Only the tail-line kind matters for this view. WS push of the jsonl append; client keeps last line. Self-gates to selectedPhase===2 — drop fetch gate, keep render gate.",
+        "risk": "low"
+      },
+      {
+        "name": "pollResearch",
+        "where": "console.html:1392-1403 (P1)",
+        "what": "GET /api/agent-log?phase=research (agent-log-research.jsonl). Tail line → researchLog.line/running/failed (running = kind not in done|error). Re-renders P1 if st-brief not focused.",
+        "portingNotes": "Becomes channel `agent-log:research`. Same tail-line pattern as searchLog. researchLog also holds local `instr` (重做要求 input) — keep separate from WS tail data.",
+        "risk": "low"
+      },
+      {
+        "name": "pollStageRun",
+        "where": "console.html:1532-1552 (P4 canvas + P5/6/7)",
+        "what": "GET /api/agent-log?phase=stage-<phase> (agent-log-stage-N.jsonl). Reads data.running (server truth), data.waiting (blocked on choice), tail text, last.kind==='error'→failed. Writes pStageRun[phase] keeping local `instr`. P4→renderCanvas (stagebar), others→renderStageExtra if st-stage-req not focused.",
+        "portingNotes": "Becomes channel `agent-log:stage-<n>` (n=4,5,6,7). IMPORTANT: running/waiting come from server runtime flags (data.running/data.waiting), not just log lines — the WS server must include those flags in the push, not only the jsonl tail. pStageRun is a phase-keyed map; preserve per-phase `instr` local field across pushes (don't overwrite user's redo text).",
+        "risk": "high"
+      },
+      {
+        "name": "pollDeployCreds",
+        "where": "console.html:1407-1413 (P7, via selectStage(7))",
+        "what": "GET /api/deploy-creds (backing ~/.productflow/secrets/, returns keys[] masked). Sets pDeployCreds, re-renders P7 if active. NOT on any setInterval — fetched on stage entry + after save/remove/clear mutations only.",
+        "portingNotes": "Low-frequency, mutation-driven. Could be a channel `deploy-creds` but realistically only changes from this UI's own POSTs → optimistic update + refetch is fine; no server-side watcher needed. Secrets stored outside repo (600 perms).",
+        "risk": "low"
+      },
+      {
+        "name": "loadWizard",
+        "where": "console.html:1467-1472 (boot 2508, one-shot)",
+        "what": "GET /api/wizard (backing wizard.json). Sets pfWizard {primary, platforms}. Re-renders P6/P7 stage-extra so preview/deploy button text adapts to platform (PC/H5/APP). One-shot at boot, not polled.",
+        "portingNotes": "Rarely changes after project creation. Channel `wizard` optional; simplest is fetch-once on load + refetch if create flow edits it. Drives button COPY only (📱构建模拟器 vs 🖥本地运行 etc.).",
+        "risk": "low"
+      },
+      {
+        "name": "loadCanvas",
+        "where": "console.html:1692-1701 (called by enterCanvas, cvSave uses same file)",
+        "what": "GET /api/canvas?stage=<3|4> (backing canvas.json = {\"3\":{view,items,notes},\"4\":{...}}). Loads cv.view/items/notes for one stage. Paired with debounced POST /api/canvas (cvSave, 600ms) + flushCanvasSave on stage-leave.",
+        "portingNotes": "Canvas LAYOUT (positions/zoom) is user-owned, written by THIS client (debounced). Do NOT make it a push-on-change channel that echoes the client's own writes back (would fight in-progress drags — note renderCanvas already bails if cvEditing||cvDragging, line 1873). Keep canvas layout as request/response + local optimistic; only the CONTENT (heroes/pages = explore/pages channels) needs WS. Server serializes writes via _CANVAS_LOCK.",
+        "risk": "medium"
+      },
+      {
+        "name": "loadVersion",
+        "where": "console.html:2448-2454 (boot, one-shot)",
+        "what": "GET /api/version → sidebar #sb-ver text 'vX'. One-shot at boot on both pages.",
+        "portingNotes": "Static per session. No channel needed; fetch once on mount.",
+        "risk": "low"
+      },
+      {
+        "name": "module state: `state`",
+        "where": "console.html:711",
+        "what": "The whole project state object from /api/state: {product, current_phase, phases[{id,name,status,steps[],artifacts[]}], log[]}. Read by renderBoard, renderCompatBanner, selectStage/nextStage, runStageHtml, previewSectionHtml, openOverview, briefSectionHtml (phase 1 steps), stagebar logic.",
+        "portingNotes": "Single most-read store. In React this is the root state context fed by the `state` WS channel. Everything stage-related derives from state.phases.find(id===selectedPhase).",
+        "risk": "high"
+      },
+      {
+        "name": "module state: `selectedPhase`",
+        "where": "console.html:712",
+        "what": "Currently viewed phase id (1-7). null until first poll resolves it. Drives view switching (board vs canvas), which sub-poll runs, all render gating. Persisted to URL hash #s<id> via history.replaceState in selectStage; restored on load and hashchange.",
+        "portingNotes": "Becomes router/URL state (React Router or hash). Decouple from polling: in WS model selectedPhase only gates WHICH panel renders, never which data fetches. Keep hash sync + hashchange listener (2427-2430).",
+        "risk": "medium"
+      },
+      {
+        "name": "module state: `homeData`, `archOpen`",
+        "where": "console.html:763",
+        "what": "homeData = /api/projects response {projects[], pending[]}; archOpen toggles archived grid. Read by renderHome, openDelete (find project).",
+        "portingNotes": "Home page store fed by `projects` channel. archOpen is pure UI toggle (local).",
+        "risk": "low"
+      },
+      {
+        "name": "module state: `pBrief`",
+        "where": "console.html:1215",
+        "what": "P1 brief state: {description, summary{goal,users,need,scope}, ready, generating, request, clarify, questions[], answers{}, confirmed, _serverGen, failed}. Mixed server-synced + local-draft fields. Read by briefSectionHtml, foldClarifications, genSummary, confirmBrief.",
+        "portingNotes": "Split into server-synced (summary/ready/questions/confirmed/request from `brief` channel) and local-draft (description textarea, clarify, answers picks). The reconciliation guards (confirmed-lag, generating/failed derivation) are subtle — port verbatim. answers{} is index-keyed to questions[].",
+        "risk": "high"
+      },
+      {
+        "name": "module state: `pExplore`",
+        "where": "console.html:1216",
+        "what": "P2/P3 state: {stylePrefs[], request{}, refs[], selectedRefs[], styleSummary, heroes[], selectedHero, searchFailed, heroGenFailed, heroGenLog[]}. Read by refsPanelHtml, stagebarHtml, stageCards(P3), renderHeroDialog, selectedRefCards, openOverview.",
+        "portingNotes": "Fed by `explore` channel + `agent-log:search-refs` (searchFailed). request{} holds per-kind in-flight slots (search-refs/collect-ref/gen-heroes) for spinners. stylePrefs/selectedRefs locally mutable + POSTed. heroGenLog drives the P3 dialog generation history. refs/heroes → <img> → flicker.",
+        "risk": "high"
+      },
+      {
+        "name": "module state: `pStageRun` (map)",
+        "where": "console.html:1464",
+        "what": "phase→{line, running, waiting, failed, instr}. Per-phase agent run status from agent-log-stage-N + server flags. Read by runStageHtml, stagebarHtml(P4), doRunStage/doRunAction guards.",
+        "portingNotes": "Fed by `agent-log:stage-<n>` channels carrying running/waiting flags. Keep `instr` (user redo text) local & survive pushes. Used as a double-click/concurrency guard (running===true blocks re-trigger; server also 409s).",
+        "risk": "medium"
+      },
+      {
+        "name": "module state: `pfWizard`",
+        "where": "console.html:1466",
+        "what": "{primary, platforms[]} from wizard.json. Drives P6 preview button + P7 deploy button COPY per platform.",
+        "portingNotes": "Static-ish; fetch once. Only affects button labels.",
+        "risk": "low"
+      },
+      {
+        "name": "module state: `pDeployCreds`",
+        "where": "console.html:1406",
+        "what": "{keys[](masked), draft{}}. P7 secrets. draft = unsaved input buffer, keys = stored masked list.",
+        "portingNotes": "Mutation-driven (this UI only). keys from server, draft purely local input state.",
+        "risk": "low"
+      },
+      {
+        "name": "module state: `researchLog`",
+        "where": "console.html:1279",
+        "what": "{line, running, failed, instr}. P1 market-research agent status from agent-log-research tail.",
+        "portingNotes": "Fed by `agent-log:research`. instr (redo input) is local. Mirror of pStageRun pattern but single (not map).",
+        "risk": "low"
+      },
+      {
+        "name": "module state: `pChoices`",
+        "where": "console.html:1038",
+        "what": "Array of unanswered Agent choice questions (answer==null) from choices.json. Read by renderChoices (floating bar).",
+        "portingNotes": "Fed by `choices` channel. Optimistic removal on answer. Guard against re-render while input focused.",
+        "risk": "medium"
+      },
+      {
+        "name": "module state: `cv` (+ cvStage/cvLoaded/cvSaveTimer/cvDirty/cvDragging/cvEditing)",
+        "where": "console.html:1685-1688",
+        "what": "cv={view{x,y,z}, items{id:{x,y}}, notes[], pages[]}. cvStage=3|4 loaded. cvLoaded gate. cvSaveTimer/cvDirty for 600ms debounce. cvDragging/cvEditing block renderCanvas during interaction. items = per-card positions; pages = pages.json content; view = pan/zoom.",
+        "portingNotes": "cv.view & cv.items are USER-OWNED layout (request/response + debounced POST). cv.pages is server content (`pages` channel). cv.heroes come from pExplore. The dragging/editing render-suppression (renderCanvas bails at 1873) is essential to stop WS pushes from yanking a card mid-drag — replicate with a 'isInteracting' ref that pauses store→DOM sync.",
+        "risk": "high"
+      },
+      {
+        "name": "module state: `pvState`",
+        "where": "console.html:2056",
+        "what": "{mode:'feedback'|'redraw', file, title, boxes[], stage, pageId, platform}. Preview/redraw modal: boxes are normalized 0-1 region selections drawn on image. Read by renderPvBoxes, pvSend→sendPreviewFeedback/doEditImage.",
+        "portingNotes": "Pure local UI/interaction state (modal). No WS. boxes built by pointer drag handlers (2154-2199). On send: feedback→POST /api/inbox(type preview-feedback) + optional rerun stage 6; redraw→POST /api/redraw or explore gen-heroes baseImage.",
+        "risk": "medium"
+      },
+      {
+        "name": "module state: `nm`, `delTarget`, `NM_DRAFT_KEY` localStorage",
+        "where": "console.html:830,832,863",
+        "what": "nm = new-project wizard draft (name/slug/platforms/primary/priority), persisted to localStorage. delTarget = project pending deletion. Both pure local UI.",
+        "portingNotes": "Local form state only; nm draft persists in localStorage (restore on modal open). No WS involvement.",
+        "risk": "low"
+      },
+      {
+        "name": "module state: chat unread (`lastMsgCount`,`chatSeen`)",
+        "where": "console.html:730",
+        "what": "Track inbox msg count vs seen to show chat-btn unread dot. Updated in pollInbox/toggleChatDrawer.",
+        "portingNotes": "Derive from `inbox` channel length vs a seen marker stored on drawer-open. Keep dot logic.",
+        "risk": "low"
+      },
+      {
+        "name": "render: renderHome → #proj-grid/#arch-grid",
+        "where": "console.html:807-819 (innerHTML 812,818)",
+        "what": "Rebuilds project card wall + archived grid from homeData via projCard()/ghostCard().",
+        "portingNotes": "projCard embeds <img class=cover> per project → FLICKER on every 3s poll. React: keyed <ProjectCard key={id}> with stable img src; only re-render changed cards. Reads homeData.",
+        "risk": "medium"
+      },
+      {
+        "name": "render: projCard / ghostCard",
+        "where": "console.html:774-805",
+        "what": "Single project card HTML: cover img or placeholder, name+flags(working/health), phase segs, done/total, relTime; ghost = pending CLI cards.",
+        "portingNotes": "FLICKER-PRONE (rebuilds cover <img>). Convert to component. Reads p.* fields from homeData.projects.",
+        "risk": "medium"
+      },
+      {
+        "name": "render: renderBoard (5 innerHTML sites)",
+        "where": "console.html:1172-1212 (innerHTML: #stepper 1179, #phase-title 1197, #steps 1198, #gallery 1202, #log 1209; textContent #product 1173/#meta 1175)",
+        "what": "Master board render: top step pills, phase title+status, step list, artifacts gallery, activity log. Then calls renderStageExtra(). Reads `state` + selectedPhase.",
+        "portingNotes": "#gallery rebuilds artifact <img> tags (artUrl with ?t=ts cache-bust) → FLICKER-PRONE on every 2s state poll. Split into 5 components; key gallery items by file; keep artUrl ts so updated artifacts bust cache but unchanged ones keep stable src (React won't reload). scrollIntoView on selected pill (1188).",
+        "risk": "high"
+      },
+      {
+        "name": "render: renderStageExtra → #stage-extra",
+        "where": "console.html:1267-1277 (innerHTML 1273-1276)",
+        "what": "Stage-specific panel dispatcher: P1→briefSectionHtml, P2→refsPanelHtml+initRefsViewer, P5/6/7→runStageHtml, else ''. GUARD: bails if a textarea/input inside is focused, or if refs viewer open (P2).",
+        "portingNotes": "The focus-guard (1270-1271) and viewer-open guard (1272) are why polling doesn't nuke user input — in React these become 'don't let WS push remount the panel while editing'. Use controlled inputs with local state so a push to surrounding data doesn't reset the field.",
+        "risk": "high"
+      },
+      {
+        "name": "render: briefSectionHtml → (within #stage-extra)",
+        "where": "console.html:1280-1343",
+        "what": "P1 panel: product-desc textarea, AI summary card (ready/running/failed states), clarification question chips + supplement textarea, gen/confirm buttons, market-research card with running/failed states. Reads pBrief + researchLog + state.phases[1].steps.",
+        "portingNotes": "Many conditional states (ready/running/failed/hasQuestions). textareas st-brief/st-clarify must be local-controlled (oninput writes pBrief directly, render skipped while focused). Port the multi-state machine carefully.",
+        "risk": "high"
+      },
+      {
+        "name": "render: refsPanelHtml → (within #stage-extra) + initRefsViewer",
+        "where": "console.html:1555-1594 (+ viewer 1635-1644)",
+        "what": "P2 panel: style tag chips, find-refs button, ref cards grid (each with <img>, select/zoom/source/more-like), URL-collect input, hidden Viewer.js gallery, searching/failed states. Reads pExplore.",
+        "portingNotes": "FLICKER-PRONE (ref card <img> grid rebuilt each poll). Viewer.js is initialized against a hidden gallery div and must be destroyed/recreated on render (1637) — in React wrap in effect keyed to refs list; guard renderStageExtra bails while viewer open. selectedRefs toggle is optimistic+POST.",
+        "risk": "high"
+      },
+      {
+        "name": "render: runStageHtml → (within #stage-extra)",
+        "where": "console.html:1473-1508",
+        "what": "P5/6/7 panel: title/hint, optional redo input, main run button (platform-aware copy for P7), P6 preview button, reveal-code button, running/waiting/failed status box. Embeds deployCredsHtml (P7) + previewSectionHtml (P6). Reads pStageRun[phase], pfWizard, state.",
+        "portingNotes": "Button copy depends on pfWizard.primary. running/waiting/failed from pStageRun (agent-log channel). st-stage-req input local. Port the platform-conditional labels (1488-1499).",
+        "risk": "medium"
+      },
+      {
+        "name": "render: deployCredsHtml / previewSectionHtml",
+        "where": "console.html:1415-1437 / 2045-2055",
+        "what": "deployCredsHtml: P7 secret inputs + stored masked list (reads pDeployCreds). previewSectionHtml: P6 finished-product screenshot thumbnails → openPreview (reads state.phases[6].artifacts images).",
+        "portingNotes": "previewSectionHtml thumbnails are <img> → mild flicker; key by file. deployCreds draft inputs local.",
+        "risk": "low"
+      },
+      {
+        "name": "render: renderChoices → #choices-bar",
+        "where": "console.html:1048-1064 (innerHTML 1050,1055)",
+        "what": "Floating Agent-question cards: question text, option chips, free-text reply input. Reads pChoices. Skips re-render while an input is focused (1052-1053).",
+        "portingNotes": "Fed by `choices` channel. Preserve focus-skip guard; controlled reply input.",
+        "risk": "medium"
+      },
+      {
+        "name": "render: renderInbox (#msgs, inside pollInbox)",
+        "where": "console.html:1130-1147 (innerHTML 1132)",
+        "what": "Chat drawer message list, 3 message types, scroll-stick. Reads /api/inbox messages.",
+        "portingNotes": "Fed by `inbox` channel. Keyed message list; scroll-stick logic preserved.",
+        "risk": "medium"
+      },
+      {
+        "name": "render: renderCanvas (#cv-world, #cv-stagebar, #cv-empty, .cv-hint)",
+        "where": "console.html:1871-1891 (innerHTML #cv-stagebar 1876, #cv-world 1888)",
+        "what": "Rebuilds entire canvas: stagebar (stagebarHtml), all cards (heroCardHtml/pageCardHtml2 from stageCards()), empty state, hint text. cvApply() transform. renderHeroDialog(). GUARD: bails if !cvLoaded or cvEditing or cvDragging.",
+        "portingNotes": "MOST FLICKER-PRONE: full #cv-world innerHTML rebuild including every hero/page <img> on every explore/pages push. MUST become keyed React nodes (key=card.id) so dragging a card or an Agent updating one image doesn't blink the whole board. The cvDragging/cvEditing bail is the critical anti-yank guard — replicate. cv-world transform (pan/zoom) should be a CSS transform on a stable container, never re-created.",
+        "risk": "high"
+      },
+      {
+        "name": "render: heroCardHtml / pageCardHtml2 / stagebarHtml",
+        "where": "console.html:1765-1771 / 1774-1793 / 1795-1828",
+        "what": "heroCardHtml: P3 hero card <img>+base toggle+delete. pageCardHtml2: P4 page card thumbnail <img> + platform matrix (PC/H5/APP badges, on=has version). stagebarHtml: P3 gen-hero / P4 list-pages+batch+tidy controls with running/failed states.",
+        "portingNotes": "Both rebuild <img> → FLICKER. pageCardHtml2 platform matrix: empty badge → confirm+gen-version (real claude spawn), on badge → openArtifact preview. Card aspect ratio follows platform (PC horizontal vs phone vertical). Key by card id + version file.",
+        "risk": "high"
+      },
+      {
+        "name": "render: renderHeroDialog → #hd-body, #hd-go",
+        "where": "console.html:1912-1947 (innerHTML 1942)",
+        "what": "P3 right-side generate dialog: selected-ref thumbnails with code labels (图1/图2) + include/exclude toggles, generation-history log (heroGenLog with result thumbnails), generating/failed states, generate button. Only shown when cvStage===3. Reads pExplore + heroRefOff + hdCollapsed.",
+        "portingNotes": "Rebuilds ref + history <img> thumbnails → flicker. The 图N code↔--image order mapping (selectedRefCards order) is load-bearing for the model call — preserve ordering. heroRefOff (local exclude set) + hdCollapsed local UI. insertRefCode mutates a textarea by cursor — keep imperative or use controlled w/ care.",
+        "risk": "medium"
+      },
+      {
+        "name": "render: renderPvBoxes → #pv-boxes",
+        "where": "console.html:2115-2127 (innerHTML 2116)",
+        "what": "Preview/redraw modal: draws normalized region boxes over image with labels/delete. Reads pvState.boxes. Updates action button copy by mode/box-count.",
+        "portingNotes": "Pure local interaction (no WS). Boxes from pointer drag. Port to React overlay positioned by % coords.",
+        "risk": "low"
+      },
+      {
+        "name": "render: openOverview → #modal-body",
+        "where": "console.html:2355-2395 (innerHTML 2359,2394)",
+        "what": "All-artifacts overview modal: Promise.all fetches /api/brief + /api/explore + /api/pages, then aggregates per-phase cards (brief summary text, refs, heroes, page×platform versions, state.json artifacts). Reads state + the 3 fetched blobs.",
+        "portingNotes": "On-demand aggregate; in WS world can read from already-subscribed brief/explore/pages stores instead of refetching (no need for 3 fetches if channels are live). _ovImgCard rebuilds <img> but it's a one-shot modal → flicker not an issue. Could drop the Promise.all entirely.",
+        "risk": "medium"
+      },
+      {
+        "name": "render: openArtifact → #modal-body",
+        "where": "console.html:2397-2424 (innerHTML 2402,2405,2421)",
+        "what": "Artifact viewer modal: image (<img full>), html (open new tab), mindmap (lazy-load d3+markmap, render SVG), text/md (<pre>). Reads url/title/type args.",
+        "portingNotes": "Local on-demand. markmap lazy-loads vendor scripts (ensureMarkmap). Port as modal component; mindmap path needs dynamic import of vendor libs.",
+        "risk": "medium"
+      },
+      {
+        "name": "render: renderHealth (#health-line), renderCompatBanner (#compat-banner), pollUpdate (#update-bar), updateMsg (#update-msg)",
+        "where": "console.html:1167 / 1100-1108 / 2473-2485 / 2487-2499",
+        "what": "health-line: online status. compat-banner: legacy <7-phase warning (reads state.phases.length). update-bar: new-version banner + update button. Small innerHTML sites.",
+        "portingNotes": "compat-banner reads `state` (channel). health/update from their slow channels/polls. Minor; low flicker.",
+        "risk": "low"
+      },
+      {
+        "name": "render: renderNewModal/renderDelModal (#new-body/#del-body)",
+        "where": "console.html:933-947 / 871-887 (+ platformPickerHtml 913-931)",
+        "what": "New-project modal (name/slug/platform picker/priority drag) and delete-confirm modal innerHTML. Local form state (nm/delTarget).",
+        "portingNotes": "Pure local; no WS. Event-delegation handlers on #new-body (969-1011) for platform/primary/priority-drag — convert to React handlers.",
+        "risk": "low"
+      }
+    ],
+    "focus": "dataflow-channels",
+    "notes": "ENDPOINT→FILE MAP (confirmed in scripts/server.py, used for channel/trigger design): /api/state→state.json (1164); /api/inbox→inbox.jsonl (1171); /api/agent-log?phase=X→agent-log-X.jsonl (107-108,1176); /api/canvas→canvas.json (per-stage keys \"3\"/\"4\", _CANVAS_LOCK serialized, 1200-1205,935); /api/health→health.json (1215); /api/pages→pages.json (1223); /api/choices→choices.json (1227); /api/deploy-creds→~/.productflow/secrets/ (1233); /api/explore→explore.json (1239); /api/brief→brief.json (1246); /api/wizard→wizard.json (1251); /api/projects→PROJECTS_DIR/*.json + each project state.json/health.json + PENDING_DIR (965-1086); /api/version, /api/update-check, /api/update are GLOBAL (no /p/<id>).\n\nPROPOSED WEBSOCKET CHANNELS (channel : backing-file watcher that triggers push):\n 1. state            : .productflow/state.json            (replaces poll@2s)  — also re-derive home card data\n 2. inbox            : .productflow/inbox.jsonl            (replaces pollInbox@4s)\n 3. health           : .productflow/health.json           (replaces pollHealth@15s)\n 4. pages            : .productflow/pages.json            (replaces pollPages@5s)\n 5. choices          : .productflow/choices.json          (replaces pollChoices@3s)\n 6. brief            : .productflow/brief.json            (replaces pollBrief)\n 7. explore          : .productflow/explore.json          (replaces pollExplore)  — drives P2 refs, P3 heroes, overview\n 8. agent-log:research      : agent-log-research.jsonl    (replaces pollResearch) — push tail line + done/error kind\n 9. agent-log:search-refs   : agent-log-search-refs.jsonl (replaces pollSearchLog) — push tail kind\n10. agent-log:stage-<n>     : agent-log-stage-N.jsonl + RUNTIME running/waiting flags (replaces pollStageRun) — n∈{4,5,6,7}; CRITICAL: server must include data.running/data.waiting, not just jsonl tail\n11. projects (global): PROJECTS_DIR + per-project state/health + PENDING_DIR (replaces pollProjects@3s) — home page only\n12. wizard          : wizard.json (or fetch-once)         — replaces loadWizard one-shot\n13. system/version  : git version cache                   — replaces pollUpdate@60s (low value; could stay polled)\n\nNOT channels (keep request/response, client-owned): /api/canvas layout (view/items/notes — written by THIS client, debounced 600ms; echoing it back would fight live drags — see renderCanvas bail at 1873 on cvDragging/cvEditing). deploy-creds (only mutated by this UI). loadVersion (static). All POST mutation endpoints (/api/brief,/explore,/choice,/run-stage,/run-action,/redraw,/pages,/create,/research,/reveal,/deploy-creds,/inbox) remain POST; the resulting file change flows back via the matching channel — enables clean optimistic-update-then-confirm.\n\nFLICKER-PRONE RENDERS (rebuild <img> on every push — MUST be keyed React components, not innerHTML): (a) project cards #proj-grid (cover img, projCard); (b) board artifacts #gallery (renderBoard, artUrl ?t= cache-bust); (c) P2 ref cards grid (refsPanelHtml) + Viewer.js gallery; (d) P3 hero cards + hero-dialog ref/history thumbs; (e) P4 page cards thumbnails (pageCardHtml2); (f) whole #cv-world canvas rebuild (renderCanvas). For all of these: stable keys + stable img src (keep ?t=ts only when the artifact actually changed) so React diffs instead of dropping/recreating <img>, eliminating blink.\n\nCRITICAL PORTING GOTCHAS (optimistic/local-vs-server reconciliation that exists ONLY to survive polling — must be re-expressed for WS):\n - Focus guards: renderStageExtra (1270-1271), renderChoices (1052-1053), pollBrief/pollResearch/pollStageRun all skip re-render while the relevant input/textarea is focused. In React: controlled inputs backed by LOCAL state so an incoming WS push to surrounding data never resets the field; never remount a panel containing a focused field.\n - Canvas anti-yank: renderCanvas bails on cvEditing||cvDragging (1873); pointer handlers set cvDragging. Replicate with an isInteracting ref that pauses store→DOM application for canvas item positions.\n - Brief confirm-lag guard (1226-1234): keeps local confirmed=true until server catches up, and derives generating/failed from presence/absence of request slot. Port verbatim or get 'confirm → question flashes back' / 'spinner never stops after failure'.\n - request{} per-kind in-flight slots (explore: search-refs/collect-ref/gen-heroes; brief: gen-summary): drive spinners; server legacy single-slot normalized at 1248. These are how the UI knows an Agent op is running — keep per-kind.\n - pStageRun running/waiting come from SERVER runtime flags (not log tail) — the agent-log:stage WS push MUST carry them.\n - Local-only fields that must survive every push: pStageRun[n].instr, researchLog.instr, pBrief.description/clarify/answers, pExplore.stylePrefs/selectedRefs (optimistically mutated then POSTed), heroRefOff, hdCollapsed, pvState, nm (localStorage), cv.view/cv.items (debounced own-write).\n - URL hash #s<id> ↔ selectedPhase (selectStage replaceState 1087; hashchange 2427-2430; first-load resolve in poll 1115-1119). Move first-load resolution to init, NOT the WS message handler.\n - selectStage triggers per-stage fetches today (1094-1097); in WS model subscriptions are always live — selectStage should only switch the visible panel, optionally flush canvas (flushCanvasSave on leaving canvas, 1089).\n - Cache-busting: artUrl appends ?t=ts (716) so updated artifacts reload; preserve to avoid stale images, but only change ts when file changes (keep stable otherwise for diffing).\n - Concurrency guards: doRunStage/doRunAction/runPageMap/genAllPages check pStageRun running + server returns 409; keep both.\n - pollUpdate is registered on project page (2515) AND home page (2534); loadVersion + pollUpdate use GLOBAL '/api/...' paths even on project pages."
+  },
+  "interactions": {
+    "entries": [
+      {
+        "name": "Infinite-canvas pan/drag/zoom controller (single pointer handler IIFE)",
+        "where": "console.html:2202-2303 (vp=#view-canvas); world transform applied by cvApply() 2012-2015",
+        "what": "One IIFE binds pointerdown/move/up/wheel/dblclick/click on #view-canvas. pointerdown: button!==0 ignored; if e.target.closest of any interactive subzone (textarea, .cv-base, .cv-page-del, .cv-del, .cv-plat, .cv-controls, #cv-stagebar, #hero-dialog) → bail (let inner handlers run). If target.closest('.cv-item') → mode='item' (drag card: capture ox/oy from cv.items[id], add .dragging, cvDragging=true). Else mode='pan' (snapshot cv.view.x/y, add .panning). pointermove: dx/dy from start; if |dx|+|dy|>3 set moved=true; FIRST move after threshold calls vp.setPointerCapture(e.pointerId) once (captured flag). pan: cv.view.x=ox+dx, y=oy+dy, cvApply(). item: p.x=ox+dx/cv.view.z, p.y=oy+dy/cv.view.z (divide by zoom so card tracks cursor at any scale), write dragEl.style.left/top directly (not full re-render). pointerup: if mode → cvSave() (debounced persist); remove .dragging/.panning, reset all. cursor:grab on #view-canvas, grabbing via .panning class.",
+        "portingNotes": "This is the single highest-risk port. Must use Pointer Events (not mouse), with setPointerCapture on the canvas element via a ref. Keep the 3px move threshold to distinguish click vs drag (clicks fire separately via the click listener). The closest()-bail allowlist is load-bearing: in React, hit-testing must replicate exactly which subzones swallow the gesture, or drag will hijack buttons/badges. Card position update during drag writes style directly for perf — in React, mutate a ref/transform imperatively during drag, commit to state only on pointerup (re-rendering every move will jank). cv.items is a plain object keyed by card id ('hero:'+id / 'page:'+id). The dragId/dragEl/moved/captured are closure locals — model as a useRef drag-session object. cvDragging/cvEditing gate renderCanvas() (line 1873) to avoid clobbering an in-progress drag — replicate by skipping reconciliation/poll-driven re-render while dragging.",
+        "risk": "high"
+      },
+      {
+        "name": "Canvas world transform math + zoom-at-cursor (cvApply / cvZoomAt / cvZoomBy / cvFit)",
+        "where": "console.html:2012-2041; default view cvDefaultView() {x:60,y:80,z:0.7} at 1690",
+        "what": "World is #cv-world with transform-origin:0 0 and transform: translate(x,y) scale(z). cvApply writes that transform + updates #cv-zoom text to round(z*100)+'%'. cvZoomAt(cx,cy,factor): z2=clamp(z*factor, 0.08, 3); k=z2/z; x = cx-(cx-x)*k; y = cy-(cy-y)*k (keeps point under cursor fixed). cvZoomBy(f) zooms about viewport center via getBoundingClientRect. cvFit: bbox over cv.items values (x..x+ITEM_W, y-40..y+320 padding), z=clamp(min(vp.w/bbox.w, vp.h/bbox.h),0.08,2), centers content. Constants: ITEM_W=320, CARD_GAP=44, GRID_COLS=4, ROW_GAP=500 (1684).",
+        "portingNotes": "Pure math — port verbatim. Screen→world conversion appears in three places (drag uses /z, zoom uses the cx-(cx-x)*k formula, wheel passes clientX-rect.left). Keep transform-origin 0 0. Coordinate spaces: pointer client coords → subtract canvas rect → that's the zoom anchor in viewport space; card positions are in WORLD space (px before scale). The /cv.view.z divide in drag converts viewport delta to world delta. cvFit's padding asymmetry (y-40 top, +320 bottom, because card visuals extend below the stored top-left) must be preserved or fit clips cards.",
+        "risk": "medium"
+      },
+      {
+        "name": "Canvas wheel zoom + horizontal pan",
+        "where": "console.html:2239-2245",
+        "what": "wheel with {passive:false}, e.preventDefault(). If ctrlKey/metaKey OR |deltaY|>|deltaX| → cvZoomAt(clientX-rect.left, clientY-rect.top, Math.exp(-deltaY*0.0018)) (pinch/trackpad-pinch and vertical wheel = zoom). Else horizontal scroll → cv.view.x -= deltaX; cvApply(); cvSave().",
+        "portingNotes": "Must register with {passive:false} and call preventDefault — React onWheel is passive by default in some setups, so attach via ref+addEventListener('wheel',h,{passive:false}) in useEffect, NOT the JSX onWheel prop (page will scroll/zoom-browser otherwise, esp. on ctrl+wheel = browser zoom). The exp(-deltaY*0.0018) curve gives smooth trackpad zoom; keep the constant. ctrl/meta detection routes trackpad pinch (browsers send wheel+ctrlKey) to zoom.",
+        "risk": "high"
+      },
+      {
+        "name": "Canvas persistence to /api/canvas (cvSave debounce / flushCanvasSave / loadCanvas / enterCanvas)",
+        "where": "console.html:1692-1738; flush on stage-leave at selectStage 1089",
+        "what": "loadCanvas(stage): GET /api/canvas?stage=N → {view, items, notes}. cvSave(): sets cvDirty, debounces 600ms, POST /api/canvas {stage:String, view, items, notes}. flushCanvasSave(): if dirty, clearTimeout + immediate POST using the LEAVING stage id (captured in local var st) — prevents last drag loss & cross-stage leakage. enterCanvas(stage): awaits flushCanvasSave() of previous, resets cv.items/notes/view to defaults, shows 'loading' placeholder in #cv-world, loadCanvas, cvLoaded=true, (stage4→pollPages), renderCanvas. Two distinct canvases (stage 3 hero, stage 4 pages) never share state.",
+        "portingNotes": "Debounce + flush-on-unmount is critical: must flush pending save when leaving a canvas stage (selectStage line 1089 calls flushCanvasSave before switching display) AND capture the stage id at debounce-schedule time so the in-flight save targets the correct stage even if user switched. In React: useEffect cleanup on stage change must await/fire the flush; store the target stage in the closure, not in current state. cvStage vs selectedPhase are separate — cvStage is which canvas is currently materialized; poll() (1120) only re-renders canvas if cvLoaded && cvStage===selectedPhase.",
+        "risk": "high"
+      },
+      {
+        "name": "Canvas dblclick → preview or edit-layer (openRedraw / openArtifact)",
+        "where": "console.html:2246-2261",
+        "what": "dblclick on .cv-item: stage3 with dataset.file → openRedraw(file,title,3,null,''); stage4 with dataset.pgid → find page, find first version with file → openRedraw(v.file,name,4,pg.id,v.platform) (no version = no edit); else dataset.img → openArtifact(img,...,'image'). Double-click is the ONLY entry to the per-image edit/redraw layer (cards have no ✏️ button).",
+        "portingNotes": "Must coexist with single-click and drag on same element — order matters: drag threshold (3px) prevents click during drag; dblclick is native. In React keep dblclick as a separate handler; ensure it reads the same dataset (id/file/pgid/title/img) — port these as data passed via closure/props, not DOM dataset, but the dispatch logic per cvStage must match.",
+        "risk": "medium"
+      },
+      {
+        "name": "Canvas click dispatch (set-base / delete hero / delete page / platform badge gen+view)",
+        "where": "console.html:2262-2302",
+        "what": "click on #view-canvas delegates: .cv-base → setHeroBase(file) POST /api/explore {selectedHero}; .cv-del → removeHero(id) POST /api/explore {removeHero}; .cv-page-del → POST /api/pages {action:'remove',id} then pollPages; .cv-plat.on[data-file] → openArtifact(view that platform's design); .cv-plat:not(.on) → confirm() then POST /api/pages {action:'gen-version',id,platform} (spawns claude, so confirm guards). Single click on hero no longer enters edit mode (comment 2301).",
+        "portingNotes": "This is event-delegation on the canvas container distinguishing many sub-targets by class. In React, attach onClick handlers directly to each sub-element (button/badge) and stopPropagation so the pan handler's closest()-bail (line 2208-2210) is unnecessary for those — BUT note the pan pointerdown already bails on these same selectors, so React components must stopPropagation on pointerDown too, or attach pointer handlers only to the canvas background. Empty-platform-badge click uses window.confirm before spawning agent — keep a confirm/modal.",
+        "risk": "medium"
+      },
+      {
+        "name": "Preview圈选 annotation drawing (normalized 0..1 boxes via pointer)",
+        "where": "console.html:2154-2199 (#pv-stage IIFE); box render renderPvBoxes 2115-2127",
+        "what": "On #pv-stage (cursor:crosshair, touch-action:none): pointerdown (unless on .pvx delete) preventDefault, frac(e) maps clientX/Y minus getBoundingClientRect to clamped 0..1 {x,y}; setPointerCapture; show #pv-draft. pointermove updates draft rect via min/abs of start vs current (handles drag any direction). pointerup: compute x=min(sx,px),y=min(sy,py),w=abs,h=abs; if w<0.02||h<0.02 ignore (mis-tap). If mode='redraw' push {x,y,w,h,text:''} (text via shared #pv-instr textarea); if mode='feedback' prompt() for per-box text, push if non-empty. renderPvBoxes draws each box as %-positioned div with numbered label + ✕. #pv-boxes click on .pvx splices that box.",
+        "portingNotes": "Coordinates are stored normalized (0..1) so they survive any display size — REQUIRED for the Agent to remap to source pixels. Port frac() with getBoundingClientRect on the image stage element (ref). Use Pointer Events + setPointerCapture + touch-action:none (already in CSS .pv-stage) so touch drag works and doesn't scroll. The 0.02 min-size mis-tap filter must stay. Two modes share the stage: redraw (box=region only, text in shared textarea) vs feedback (each box gets its own text via window.prompt — replace prompt with an inline input in React but preserve per-box text model). #pv-draft is a live preview rect distinct from committed #pv-boxes.",
+        "risk": "high"
+      },
+      {
+        "name": "Preview feedback POST + redraw POST (coordinate mapping & batch)",
+        "where": "console.html:2079-2113 (pvSend/doEditImage/postRedraw), 2128-2152 (sendPreviewFeedback)",
+        "what": "sendPreviewFeedback (mode feedback): requires ≥1 box; regions=[{n,x,y,w,h,text}] each toFixed(4); builds human-readable text '区域(左X% 上Y% 宽W% 高H%):text'; POST /api/inbox {text,type:'preview-feedback',file,regions}; then pollInbox, closePreview, and window.confirm to optionally trigger /api/run-stage phase6 with the feedback as instruction (sets pStageRun[6].running). doEditImage (mode redraw): instr from #pv-instr; if boxes→postRedraw {stage,file,regions(toFixed4),prompt,pageId,platform} to /api/redraw with toast '局部重绘'; elif stage3→POST /api/explore gen-heroes {baseImage,instruction} (whole-image hero regen); else postRedraw with regions:[] (whole page redraw). postRedraw posts /api/redraw, on ok closePreview + delayed pollExplore/pollPages after 4s.",
+        "portingNotes": "toFixed(4) precision on normalized coords is the wire contract — keep it. Three divergent redraw paths by stage (3 whole-image→/api/explore; 3 region & 4 any→/api/redraw) must be preserved exactly. The post-send confirm() that optionally kicks /api/run-stage is a UX bridge (feedback otherwise only lands in inbox) — replicate as a modal. Endpoints: /api/inbox (type preview-feedback), /api/redraw, /api/run-stage, /api/explore.",
+        "risk": "high"
+      },
+      {
+        "name": "Hero-generation dialog (#hero-dialog): ref insertion 图N, generate, edit",
+        "where": "console.html:1904-1993; HTML 644-651; dialogGenerate 1964-1978",
+        "what": "Right-side dialog, only when cvStage===3 (renderHeroDialog toggles .on). Lists selectedRefCards() (refs in selectedRefs order — code 图N must match --image order fed to model). Each ref thumb: click image inserts its code (图1/图2) at textarea cursor via insertRefCode (selectionStart/End splice + smart leading-space + refocus/setSelectionRange); a checkbox (toggleHeroRef) excludes a ref from this gen (heroRefOff map) which re-numbers remaining codes. dialogGenerate: reads #hd-text, usedFiles=selected minus off (in order), builds req {kind:'gen-heroes',selectedRefs, refFiles?, instruction?}, POST /api/explore, clears textarea. Shows gen-log entries (mode gen/edit, ts, ref→result counts, thumbs, prompt). toggleHeroDialog collapses (hd-head onclick). Header/+go buttons.",
+        "portingNotes": "insertRefCode does manual textarea cursor manipulation (selectionStart/selectionEnd, setSelectionRange, focus) — in React use a ref to the <textarea>, read/write .selectionStart directly and setState value, then restore caret in a useLayoutEffect (controlled inputs reset caret otherwise). The ordering contract is subtle: 图N numbering follows selectedRefs order filtered by heroRefOff, and refFiles sent to server must be in that SAME order so 图N maps to --image N. heroRefOff is per-session UI state (not persisted). Dialog visibility is derived from cvStage===3. The whole-image edit path from openRedraw also routes here (gen-heroes baseImage).",
+        "risk": "high"
+      },
+      {
+        "name": "Viewer.js image zoom integration (refs gallery)",
+        "where": "console.html:1633-1649 (initRefsViewer/zoomRef); hidden gallery 1579-1580; vendor at HTML 545/704",
+        "what": "Stage-2 refs panel renders a hidden #refs-viewer div containing all ref <img>. initRefsViewer destroys any prior Viewer and news up `new Viewer(g,{navbar,title:false,transition:false,keyboard:true,shown/hidden callbacks})`. shown/hidden set refsViewerOpen flag. zoomRef(id) finds index and calls refsViewer.view(idx). The visible ref cards are decoupled from the gallery (avoids click=select vs click=zoom conflict); '🔍放大' button calls zoomRef. renderStageExtra bails if refsViewerOpen (line 1272) so polling won't tear down the open viewer.",
+        "portingNotes": "Viewer.js is an imperative jQuery-style lib operating on a DOM node. In React: keep the hidden gallery as a ref'd div, instantiate Viewer in useEffect, and CRITICALLY destroy()+recreate when the ref list changes (current code destroys on every initRefsViewer). Guard re-renders while viewer is open (the refsViewerOpen flag gates renderStageExtra) — port as: skip list reconciliation while viewer modal open, or React will unmount the node Viewer holds. keyboard:true gives arrow/esc nav inside Viewer. Decoupling zoom (button) from select (card click) is intentional — preserve.",
+        "risk": "medium"
+      },
+      {
+        "name": "Markmap mind-map rendering in modal (d3 + markmap-lib + markmap-view, lazy-loaded)",
+        "where": "console.html:2305-2320 (loadScript/ensureMarkmap), 2404-2417 (openArtifact mindmap branch)",
+        "what": "For artifact type 'mindmap': modal box gets .wide, sets innerHTML '<svg id=\"mm-svg\">', shows modal, ensureMarkmap() lazily loads /vendor/d3.min.js then markmap-lib.js then markmap-view.js sequentially (once, mmLoaded flag), fetches the .md text, `new Transformer().transform(md)` → root, `Markmap.create('#mm-svg', {duration:300,maxWidth:340,paddingX:18,autoFit:true,initialExpandLevel:-1, color: grayscale palette by node path depth}, root)`. Grayscale palette indexed by parseInt(node.state.path.split('.')[1]).",
+        "portingNotes": "Three vendored scripts loaded on demand via injected <script> tags (window.markmap, window.d3 globals). In React: lazy-import or inject once and memoize the loaded promise (ensureMarkmap's mmLoaded). Markmap.create targets a CSS selector '#mm-svg' and mutates an SVG imperatively — render an empty <svg ref> and pass the node, re-create on each open, and clean up on modal close. autoFit + initialExpandLevel:-1 (fully expanded) + the path-depth color fn must be kept. Load ORDER matters (d3 first). CSS for .markmap-foreign already styles fonts/code.",
+        "risk": "medium"
+      },
+      {
+        "name": "Generic artifact preview modal (openArtifact / closeModal) by type",
+        "where": "console.html:2397-2425",
+        "what": "openArtifact(url,title,type): image→<img class=full>; html→window.open(url,'_blank') and return (no modal); mindmap→markmap branch above; else (md/json/code)→fetch text into <pre> escaped. Sets #modal-title, toggles .wide for mindmap, shows #modal. closeModal hides. Used by gallery cards, overview cards, canvas dblclick on plain images, platform-version view.",
+        "portingNotes": "Type dispatch is central — port as a typed modal component. html opens new tab (not in-modal). Text types fetch the raw artifact and escape into <pre> (preserve esc()). Image uses object-fit contain via .full class. Title/wide are modal-level state.",
+        "risk": "low"
+      },
+      {
+        "name": "Overview modal (openOverview) — cross-stage product gallery",
+        "where": "console.html:2322-2395; opened by topbar '📋全部产物' button (HTML 601)",
+        "what": "Parallel Promise.all fetches /api/brief, /api/explore, /api/pages; builds per-phase card grids: P1 brief summary text card, P2 refs imgs, P3 hero imgs (★基调 marker if selectedHero), P4 page×platform version imgs, plus each phase's state.json artifacts (img or doc-icon card). Cards open openArtifact on click. docIco() returns inline Lucide SVG per file type (md/html/code/json/mindmap).",
+        "portingNotes": "Read-only aggregation across 3 endpoints + state.phases. Keep the per-phase grouping and the ★基调 annotation logic (ex.selectedHero===h.file). docIco maps type→SVG path — port as an icon component map.",
+        "risk": "low"
+      },
+      {
+        "name": "Chat drawer + inbox (keyboard Enter/Shift+Enter, unread badge, sticky scroll)",
+        "where": "console.html:730-738 (toggleChatDrawer), 1125-1155 (pollInbox), 2432-2443 (form submit + keydown); HTML 626-637",
+        "what": "toggleChatDrawer toggles .open on #chat-drawer; opening marks read (chatSeen=lastMsgCount, removes .has-unread). chat-form submit: preventDefault, trim, POST /api/inbox {text}, clear, pollInbox. chat-input keydown: Enter w/o Shift → preventDefault + form.requestSubmit() (Shift+Enter = newline). pollInbox renders messages (special bodies for type canvas-feedback / preview-feedback), preserves scroll stickiness (within 30px of bottom → autoscroll), and toggles #chat-btn .has-unread when new msgs arrive while drawer closed.",
+        "portingNotes": "Enter-to-send / Shift+Enter-newline is standard but uses form.requestSubmit() — replicate with onKeyDown checking e.key==='Enter'&&!e.shiftKey. Sticky-scroll: capture scroll position BEFORE re-render, restore after (scrollTop+clientHeight>=scrollHeight-30). Unread tracking is two counters (lastMsgCount vs chatSeen) — model in state. Message body has 3 render variants by m.type; canvas-feedback shows ❤count/comment count even though canvas no longer emits likes (legacy inbox messages still rendered).",
+        "risk": "medium"
+      },
+      {
+        "name": "Agent choices浮条 (待确认问题) — option click & free-text reply",
+        "where": "console.html:1037-1082 (pollChoices/renderChoices/answerChoice/answerChoiceInput + delegation IIFE); HTML 611",
+        "what": "Polls /api/choices (3s), filters unanswered (answer==null) into #choices-bar (fixed bar top-center, .show). Each choice: question + option chips (.copt data-cid/data-opt) + free-text input + reply button. Click delegation on bar: .copt → answerChoice(cid,opt). answerChoice optimistically removes from pChoices, re-renders, POST /api/choice {id,answer}, toast. answerChoiceInput reads #ci-<id>. renderChoices bails if an INPUT in the bar is focused (avoid interrupting typing).",
+        "portingNotes": "Optimistic removal + POST. The 'don't re-render while my input is focused' guard (line 1052-1053) prevents poll from wiping in-progress typing — in React, either keep input as uncontrolled or skip reconcile while focused, or use a stable keyed list so React preserves the focused input. Stage-tagged choices (c.stage). Endpoints /api/choices (GET), /api/choice (POST).",
+        "risk": "medium"
+      },
+      {
+        "name": "New-project modal: platform multi-select, primary radio, priority drag-reorder + localStorage draft",
+        "where": "console.html:830-1011 (draft + render + delegation IIFE); platformPickerHtml 913-931",
+        "what": "nm state object; NM_DRAFT_KEY='pf-new-project-draft' in localStorage. openNewModal loads draft (loadNmDraft with field backfill) or freshNm(); toast if restored. Every input/click saves draft (saveNmDraft). Delegation IIFE on #new-body: .wz-pcard click toggles platform (re-picks primary if disabled); .wz-pr click sets primary; input on #nm-name auto-derives slug (autoSlug, fb fallback for CJK) unless slugEdited; #nm-slug input sets slugEdited. HTML5 drag-and-drop on .wz-prio-item (dragstart/dragend/dragover) reorders nm.priority array (splice). createProject sorts primary first, POST /api/create, on {id} clearNmDraft + navigate /p/<id>/.",
+        "portingNotes": "Draft persistence: every keystroke/toggle writes localStorage; cleared only on successful create. Port with a useEffect syncing nm→localStorage and a load-on-open. autoSlug + CJK fallback (fb random) logic must stay (Chinese names yield empty slug→placeholder). Priority drag uses native HTML5 DnD (draggable + dragover preventDefault + array splice) — can keep native DnD or a lib, but the splice-reorder semantics (remove dragK, insert before target) must match. slugEdited flag stops auto-derive once user types slug. Primary auto-reselect when its platform is deselected.",
+        "risk": "medium"
+      },
+      {
+        "name": "Delete-project modal (two-tier: remove vs hard-delete with name-confirm)",
+        "where": "console.html:862-910 (openDelete/renderDelModal/syncDelConfirm/removeProject/hardDeleteProject)",
+        "what": "openDelete(id) sets delTarget {id,name,dir}, renders modal with two actions. removeProject → POST /api/project-remove {id} (keeps disk). Hard delete: input oninput=syncDelConfirm enables #del-hard-btn only when typed value===project name (also turns btn red); hardDeleteProject re-checks name match then POST /api/project-delete {id}, toast result, pollProjects.",
+        "portingNotes": "Type-to-confirm gating (value===name enables destructive button + color change) is a safety pattern — replicate with controlled input + disabled state. Two endpoints: /api/project-remove (soft), /api/project-delete (hard). Re-validates name on click too (defense).",
+        "risk": "low"
+      },
+      {
+        "name": "Sidebar collapse toggle + collapsed-logo expand",
+        "where": "console.html:724-729 (toggleSidebar/sbLogoClick); body.collapsed CSS 44/55-58/71/84-97",
+        "what": "toggleSidebar toggles body.collapsed (CSS animates #sidebar 232↔64px, hides labels/name/account meta). Collapse button (.sb-collapse) visible only on sidebar hover, hidden when collapsed. sbLogoClick: when collapsed, clicking logo prevents default nav and expands instead (logo doubles as expand affordance); when expanded, lets <a href='/'> navigate home.",
+        "portingNotes": "State is a body class — in React use a top-level boolean (context/state) and conditional class on the layout root, not document.body (or keep body class if layout is outside React root). sbLogoClick's conditional preventDefault (collapsed→expand, else navigate) needs the collapsed state at click time.",
+        "risk": "low"
+      },
+      {
+        "name": "relTime formatting + toast system",
+        "where": "console.html:740-760 (toast/hideToast/relTime)",
+        "what": "toast(msg): sets #toast text, adds .show, clears prior timer, auto-hides after 2200ms. hideToast clears immediately (called on stage switch to clear stale toasts, selectStage 1085). relTime(s): parses 'YYYY-MM-DD HH:MM:SS' (space→T), returns 刚刚 / N分钟前 / N小时前 / N天前 / raw if unparseable.",
+        "portingNotes": "toast is a global singleton with a single timer — port as a context/provider with one active toast + timeout ref; hideToast must be callable from elsewhere (stage switches clear it). relTime: replace(' ','T') is needed for Safari Date parsing of the server timestamp format — keep it; NaN guard returns the raw string.",
+        "risk": "low"
+      },
+      {
+        "name": "Stepper + stage routing (selectStage, URL hash #sN, board vs canvas swap)",
+        "where": "console.html:1026-1098 (CANVAS_STAGES=[3,4], selectStage, nextStage); renderBoard stepper 1178-1194; hashchange 2427-2430",
+        "what": "selectStage(id): hideToast; sets selectedPhase; history.replaceState '#s'+id; canvas stages 3/4 show #view-canvas (display:block) else #view-board; if leaving canvas→flushCanvasSave; renderBoard always; enterCanvas if canvas; then kicks the right pollers per stage. Stepper pills (renderBoard) onclick=selectStage; selected pill scrollIntoView (narrow-screen). hashchange listener also routes. poll() first-load reads #sN from hash to restore stage.",
+        "portingNotes": "Use a router/state for selectedPhase synced to location.hash (#sN) via replaceState + hashchange. The board↔canvas swap is display toggle of two containers — in React, conditionally render. Per-stage poller wiring (1094-1097) determines which data fetches run — model as effects keyed on selectedPhase. flushCanvasSave on canvas→board transition is essential (see canvas persistence entry).",
+        "risk": "medium"
+      },
+      {
+        "name": "Polling architecture (state/inbox/health/pages/choices/update + per-stage brief/explore)",
+        "where": "console.html:1109-1169, 1218-1265, 1392-1413, 1532-1552, 2502-2535",
+        "what": "On project load: poll() then setInterval poll 2s, pollUpdate 60s, pollInbox 4s, pollHealth 15s, pollPages 5s, pollChoices 3s, and a 2.5s per-stage tick dispatching pollBrief/pollResearch (s1), pollExplore/pollSearchLog (s2), pollExplore+pollStageRun (canvas), pollStageRun (s5-7). Each poll fetches its endpoint and re-renders the relevant section, with guards to NOT re-render while a textarea/input in that section is focused (renderStageExtra 1270-1271; pollBrief 1235; pollResearch 1401; pollStageRun 1550) or while a Viewer is open (1272).",
+        "portingNotes": "Many independent intervals. In React, model as useEffect timers; the focus-guard pattern (skip re-render while user typing in this section) is the recurring gotcha — controlled inputs that re-render on poll would steal focus/caret. Solution: keep editable fields as local component state decoupled from poll data, or keep poll data in a ref and only commit to render-state when the field is unfocused. Endpoints: /api/state, /api/inbox, /api/health, /api/pages, /api/choices, /api/update-check, /api/brief, /api/explore, /api/agent-log?phase=, /api/wizard, /api/deploy-creds.",
+        "risk": "high"
+      },
+      {
+        "name": "Stage-1 brief flow (description, gen-summary, clarify questions, confirm)",
+        "where": "console.html:1215-1403 (pBrief, briefSectionHtml, foldClarifications, genSummary, confirmBrief, doResearch)",
+        "what": "Textarea oninput→pBrief.description. genSummary folds clarifications (structured accumulation of picked Q/A + free text into the description with 问题澄清N/用户澄清N tags), POST /api/brief {description,request:{kind:'gen-summary'}}. AI returns summary + clarify questions (chips, single-select toggle via stage-extra delegation 1657-1660). confirmBrief finalizes without re-running AI. doResearch POST /api/research. Generation/failure state derived from server request slot presence (1229-1234).",
+        "portingNotes": "foldClarifications mutates and re-serializes the description (visible/editable accumulation) — port faithfully; it reads live textarea values before folding. The generating/failed state machine is inferred from whether server still has the gen-summary request slot (slot vanished + not ready = failed). Question chips are single-select-toggle stored in pBrief.answers by index. Focus-guard: don't re-render while #st-brief focused.",
+        "risk": "medium"
+      },
+      {
+        "name": "Stage-2 refs panel (style tags, search, collect link, more-like, remove, select)",
+        "where": "console.html:1554-1632, 1651-1682",
+        "what": "Style tag chips (STAGE_TAGS) multi-select → immediate POST /api/explore {stylePrefs}. searchRefs/moreLikeRef/collectRef POST /api/explore with request kinds search-refs/collect-ref (seedRef for more-like). Ref card click toggles selectedRefs → POST /api/explore {selectedRefs}. removeRef optimistic + POST {removeRef}. Buttons: 🔍放大 (Viewer), 🔗源 (open source), ＋类似 (more-like). Request slots are per-kind (pExplore.request keyed by kind).",
+        "portingNotes": "All selections persist immediately to /api/explore (optimistic local + POST). Per-kind request object replaced the old single slot (compat shim at 1248). Event delegation on #stage-extra distinguishes .wz-tag (with data-qi → brief question vs data-tag → style) and .wz-ref. stopPropagation on inner buttons (放大/源/类似/删除) so card-select click doesn't fire.",
+        "risk": "medium"
+      },
+      {
+        "name": "Stage-3 hero generation + stage-4 pages (genHeroes/genAllPages/runPageMap/tidyPages/addPagePrompt)",
+        "where": "console.html:1741-1902, 1994-2010; stagebarHtml 1795-1828",
+        "what": "stageCards() builds cards from pExplore.heroes (s3) or cv.pages (s4 × platform matrix). cvAutoPlaceCards grid-places new cards (GRID_COLS=4, ROW_GAP=500). genHeroes POST /api/explore gen-heroes. runPageMap/genAllPages POST /api/run-stage phase4 with long instruction strings. tidyPages re-lays cards by group/name into grid, prunes orphan item coords, cvSave+renderCanvas+cvFit. addPagePrompt uses window.prompt ×2 (name, group) → POST /api/pages {action:'add'}. pollPages 5s.",
+        "portingNotes": "cvAutoPlaceCards auto-assigns positions to cards lacking cv.items entries (and saves) — port the placement math. tidyPages prunes orphan 'page:' keys (deleted pages) before re-grid — keep to avoid cvFit blowup. addPagePrompt uses native prompt() — replace with a small form/modal but keep name+group fields. genAllPages has a window.confirm gate. The instruction strings are passed verbatim to the agent — preserve them (they encode the agent workflow, incl. concurrency directives).",
+        "risk": "medium"
+      },
+      {
+        "name": "Stage 5/6/7 run-stage + deploy creds + ⑥ preview action",
+        "where": "console.html:1463-1552 (runStageHtml/doRunStage/doRunAction/revealCode), 1405-1461 (deploy creds), 1466-1472 (loadWizard)",
+        "what": "runStageHtml builds per-phase card; main button doRunStage POST /api/run-stage {phase,instruction} (409=already running). ⑥ extra preview button doRunAction POST /api/run-action {phase,action:'preview'}. Button labels adapt to pfWizard.primary (APP/PC/H5) loaded from /api/wizard. revealCode POST /api/reveal (opens Finder/Explorer). Deploy creds (s7): inputs→pdcDraft, saveDeployCreds parses extra KEY=VALUE lines + POST /api/deploy-creds {creds}; removeCred/clearCreds. pollStageRun reads /api/agent-log?phase=stage-N for running/waiting/failed (server-authoritative running flag).",
+        "portingNotes": "Running/waiting/failed state comes from server (data.running/data.waiting) not log-guessing. 409 handling on double-trigger. Platform-adaptive button text depends on async-loaded wizard.primary — re-render when it arrives. Deploy-creds 'extra' textarea parses KEY=VALUE per line (regex). clearCreds uses window.confirm. doRunAction reuses phase-6 progress channel without redoing the stage.",
+        "risk": "medium"
+      },
+      {
+        "name": "Home project wall + version/update banner",
+        "where": "console.html:762-821 (pollProjects/projCard/renderHome/toggleArch), 2445-2500 (version/update)",
+        "what": "pollProjects GET /api/projects (3s), renders active + archived (toggle) + pending ghost cards. projCard: cover/initial, phase segs, working badge, health dot, broken state, relTime; onclick→/p/<id>/; del button stopPropagation→openDelete. loadVersion GET /api/version (sidebar). checkUpdate GET /api/update-check?refresh=1 (confirm→doUpdate). pollUpdate 60s shows #update-bar. doUpdate POST /api/update.",
+        "portingNotes": "Straightforward list rendering + intervals. onclick inline navigation and stopPropagation on delete button → in React use onClick with e.stopPropagation. Update flow uses window.confirm/alert. Version text in sidebar is clickable (checkUpdate).",
+        "risk": "low"
+      },
+      {
+        "name": "Global keyboard: Escape closes modals/preview",
+        "where": "console.html:2426",
+        "what": "document keydown: Escape → closeModal() + closePreview() (closes both the artifact modal and the圈选 overlay).",
+        "portingNotes": "Single global Escape handler closing whichever overlay is open. In React, a top-level useEffect keydown listener, or per-modal onKeyDown. Note Viewer.js handles its OWN Escape internally (keyboard:true) — don't double-bind in a way that fights it.",
+        "risk": "low"
+      }
+    ],
+    "focus": "interactions-libs",
+    "notes": "File: /Users/hong/.claude/skills/productflow/assets/console.html (2538 lines; CSS 7-544, body 547-704, JS 705-2536). Single-file vanilla app, no framework — all rendering via innerHTML string templates + esc() escaping; all interactivity via inline onclick/oninput/onsubmit attributes PLUS several event-delegation IIFEs (#new-body, #choices-bar, #stage-extra, #pv-stage, #pv-boxes, #view-canvas).\\n\\nIMPERATIVE LIBS (3): (1) Viewer.js (/vendor/viewer.min.js + .css, loaded eagerly) for ref image zoom/pan/pager — operates on a hidden DOM gallery, must destroy()+recreate, and re-renders are GUARDED while it's open (refsViewerOpen). (2) markmap (d3.min.js + markmap-lib.js + markmap-view.js, lazy-loaded in order via injected <script>, mmLoaded flag) renders .md mindmaps into an <svg id=mm-svg> imperatively. (3) No other libs — icons are inline Lucide SVG strings (IC_*, deviceIcon, docIco).\\n\\nCOORDINATE SYSTEMS (the porting minefield): (a) Canvas world transform = translate(view.x,view.y) scale(view.z) on #cv-world, origin 0 0. Screen→world: drag delta /view.z; zoom-anchor keeps cursor point fixed via x=cx-(cx-x)*k. Card positions stored in WORLD px in cv.items{id:{x,y}}. (b) Annotation boxes stored NORMALIZED 0..1 (frac() = (clientX-rect.left)/rect.width clamped), toFixed(4) on wire — display-size independent so the agent can remap to source pixels. Two totally separate coordinate models — don't conflate.\\n\\nPOINTER EVENTS: both the canvas controller and the annotation drawer use raw Pointer Events + setPointerCapture + a move threshold (3px canvas / 0.02 normalized annotation). Canvas pointerdown bails via e.target.closest() on an allowlist of interactive subzones — this dispatch must be replicated or drags hijack buttons. wheel needs {passive:false}+preventDefault (attach via ref/addEventListener, NOT JSX onWheel) or browser zoom/scroll leaks; ctrl/meta+wheel routes trackpad-pinch to zoom.\\n\\nRECURRING REACT GOTCHA — focus/caret preservation: the app polls every 2-2.5s and re-renders sections via innerHTML, but EVERY editable section guards against re-render while its textarea/input is focused (renderStageExtra, pollBrief, pollResearch, pollStageRun, renderChoices, openInbox sticky-scroll, refsViewerOpen). A naive controlled-input React port that re-renders on each poll WILL steal focus/caret and break typing, drag, and the open Viewer. Strategy: decouple editable/in-progress UI state from poll-driven data (refs or local state), commit only when unfocused/idle; keep stable keys so React preserves focused nodes.\\n\\nlocalStorage: only the new-project draft (key 'pf-new-project-draft', saved on every keystroke/toggle, cleared on successful create). Canvas positions are NOT localStorage — they persist server-side via /api/canvas (per stage, 600ms debounce + flush-on-leave capturing the leaving stage id). NOTE: the cv.notes array and a 'cv positions' localStorage are referenced conceptually but in THIS file notes are server-persisted alongside items and there is no localStorage for canvas — only NM draft uses localStorage.\\n\\nKEYBOARD: chat Enter=send / Shift+Enter=newline (form.requestSubmit); global Escape closes modal+preview; Viewer.js has its own keyboard:true (arrows/esc) — don't fight it.\\n\\nENDPOINTS touched: /api/projects, /api/create, /api/project-remove, /api/project-delete, /api/state, /api/inbox (GET+POST, types: plain, preview-feedback; legacy canvas-feedback render), /api/health, /api/choices, /api/choice, /api/brief (GET+POST), /api/research, /api/explore (GET+POST: stylePrefs/selectedRefs/selectedHero/removeRef/removeHero/request{search-refs,collect-ref,gen-heroes}), /api/agent-log?phase=, /api/canvas (GET ?stage / POST), /api/pages (GET+POST: add/remove/gen-version), /api/redraw, /api/run-stage (409 guard), /api/run-action, /api/reveal, /api/wizard, /api/deploy-creds (GET+POST: creds/remove/clear), /api/version, /api/update-check (?refresh=1), /api/update. Project-scoped calls prefix PF_BASE=/p/<id>; global calls (projects/version/update/create) are unprefixed. Routing: location.pathname /p/<id>/ → project view, else home; stage in location.hash #sN.\\n\\nLegacy/dead-ish code to be aware of (do NOT silently drop without asking): inbox renders canvas-feedback type (❤likes/comments) though the current canvas emits no likes; PLAT/wizard fields. Compat banner warns on non-7-phase projects."
+  },
+  "endpoints": {
+    "focus": "server-endpoints",
+    "entries": [
+      {
+        "name": "Routing model: global vs per-project (/p/<pid>/...)",
+        "where": "server.py:82 P_ROUTE; do_GET 1114-1277; do_POST 1279-1748",
+        "what": "Two route namespaces. GLOBAL routes (no prefix): /, /api/version, /api/update-check, /api/projects, /vendor/<name>, plus POST /api/update, /api/create, /api/project-remove, /api/project-delete, /api/pending. PER-PROJECT routes match P_ROUTE = ^/p/([a-z0-9-]{1,64})(/.*)? — the 'sub' tail after the pid is the actual api path (/api/state, /api/inbox, etc.). So the prompt's '/api/state' etc. live at /p/<pid>/api/state. pid resolved to abs project path via _resolve() reading ~/.productflow/projects/<pid>.json; pf = <path>/.productflow.",
+        "portingNotes": "WS layer must key every channel by (pid, channel). React router/WS client should mirror this: a global channel (projects/version) + per-project channels. ID validation regex ID_RE=^[a-z0-9-]{1,64}$ must be preserved server-side. Note do_POST whitelists allowed sub paths at line 1436 (404 otherwise) — keep that allowlist when adding WS endpoints.",
+        "risk": "medium"
+      },
+      {
+        "name": "GET / and GET /p/<pid>/ and /p/<pid> (console HTML)",
+        "where": "do_GET 1119-1120, 1154-1156; _console() 1107-1112; CONSOLE_HTML=SKILL_DIR/assets/console.html (line 73)",
+        "what": "Serves the single-page console: reads assets/console.html raw, sends text/html, Cache-Control no-store. Same HTML for global dashboard and per-project view (front-end reads pid from URL). 500 'console.html missing' if file absent.",
+        "portingNotes": "This is THE repointing target for a built React dist/. Change _console() to serve dist/index.html, and add a catch-all that serves hashed JS/CSS assets from dist/ (currently only /vendor/ whitelist exists; built bundles need their own static handler with correct content-types + long-cache for hashed files, but index.html stays no-store). SPA fallback: /p/<pid>/ already returns index HTML — keep that so client routing works.",
+        "risk": "high"
+      },
+      {
+        "name": "GET /vendor/<name> (whitelisted vendor JS/CSS)",
+        "where": "do_GET 1131-1147",
+        "what": "Serves a fixed whitelist of 5 files from SKILL_DIR/assets/vendor/: d3.min.js, markmap-lib.js, markmap-view.js, viewer.min.js, viewer.min.css (content-type from a dict). Anything not in the dict -> 404. 404 if file missing on disk.",
+        "portingNotes": "If React bundles these via npm (d3, markmap, viewerjs), the /vendor route can be dropped — but verify console.html's usages first. If kept, it must coexist with the new dist/ static handler. The hardcoded content-type dict pattern is the template to reuse for serving dist assets.",
+        "risk": "low"
+      },
+      {
+        "name": "GET /api/version",
+        "where": "do_GET 1121-1122; VERSION from _read_version() line 33 (SKILL_DIR/VERSION file)",
+        "what": "Returns {app:'productflow', version:VERSION}. Also used by _probe_version() (line 1796) to detect an already-running instance on the port.",
+        "portingNotes": "No backing project file — VERSION read once at module load from skill-root VERSION file. Keep stable; the singleton-port detection depends on the exact {app:'productflow'} shape.",
+        "risk": "low"
+      },
+      {
+        "name": "GET /api/update-check?refresh=1",
+        "where": "do_GET 1123-1128; _refresh_latest 57-60; _fetch_remote_version 49-54; _version_tuple 42-46; _repo_root 63-70",
+        "what": "Compares local VERSION to remote GitHub VERSION (raw.githubusercontent.com/.../productflow/VERSION). Returns {current, latest, update_available(bool), repo:'hongnono-wdh/productflow', git:bool(is-git-checkout)}. ?refresh=1 re-fetches synchronously (network, ~4s timeout); otherwise uses cached _latest_version (refreshed once in bg at startup, line 1854).",
+        "portingNotes": "Network call — keep the cached-vs-refresh split so the default poll is cheap. WS could push 'update_available' once instead of front-end polling. _latest_version is module-global mutated by bg thread and by POST /api/update.",
+        "risk": "low"
+      },
+      {
+        "name": "GET /api/projects (global dashboard payload)",
+        "where": "do_GET 1129-1130; _projects_payload 1045-1071; _project_summary 997-1042; _registry_entries 958-977",
+        "what": "Returns {version, projects:[...], pending:[...]}. Each project summary: {id,name,dir_label,phases:[{id,status}],done,current_phase,updated,cover(/p/<pid>/artifacts/...),working(updated<120s ago),missing,error,archived,health}. Sources: registry ~/.productflow/projects/<pid>.json + each project's .productflow/state.json + .productflow/health.json. pending from ~/.productflow/pending/*.json -> {file,name,brief,created}.",
+        "portingNotes": "Heaviest read — iterates ALL projects, opening state.json+health.json per project on every poll. For WS push, watch mtime of: each projects/<pid>.json (registry), each <proj>/.productflow/state.json, each <proj>/.productflow/health.json, and pending/ dir. 'working' is time-derived (updated within 120s) so it changes WITHOUT a file write — WS can't rely purely on mtime for the working flag; recompute on each push or tick. cover URL is /p/<pid>/artifacts/<rel> (rel stripped of leading 'artifacts/').",
+        "risk": "high"
+      },
+      {
+        "name": "GET /p/<pid>/api/state",
+        "where": "do_GET 1162-1167",
+        "what": "Streams raw .productflow/state.json bytes (application/json). 404 {error:'not_initialized'} if missing. state.json holds: id, product, phases[{id,status,artifacts[{type,file,ts,title}]}], current_phase, updated.",
+        "portingNotes": "PRIMARY per-project channel. WS: watch mtime of <proj>/.productflow/state.json. Note it streams the file verbatim (no re-serialization) — preserve that to avoid altering agent-written content. state.json is written by pf_state.py (CLI used by spawned agents), NOT by this server, so mtime watching is the only change-detection signal.",
+        "risk": "medium"
+      },
+      {
+        "name": "GET /p/<pid>/api/inbox",
+        "where": "do_GET 1168-1175",
+        "what": "Reads .productflow/inbox.jsonl line-by-line, returns {messages:[obj,...]} (each line a JSON msg). Missing -> {messages:[]}. Messages appended by both this server (web-origin: explore-request, brief-request, research-request, stage-request, action-request, choice-answer, page-version-request) and by agents.",
+        "portingNotes": "WS: watch mtime of inbox.jsonl; it's append-only so a tail/incremental-push is natural (send only new lines past last offset). Many POST handlers append here — those writes should trigger the inbox channel push.",
+        "risk": "medium"
+      },
+      {
+        "name": "GET /p/<pid>/api/agent-log?phase=<phase>",
+        "where": "do_GET 1176-1199; _agent_log_path 104-108; _has_open_choice 940-950; _STAGE_RUNNING/_STAGE_RUN_LOCK 936-937",
+        "what": "Per-phase progress stream. phase param (default 'brief') maps to .productflow/agent-log-<safe>.jsonl (safe = lowercased, non [a-z0-9-] -> '-'). Returns {lines:last-50 parsed JSON lines, running, waiting}. For phase matching ^stage-(\\d+)$: running = (pid,N) in _STAGE_RUNNING (in-memory set), waiting = running AND _has_open_choice(pf,N) (reads choices.json for unanswered choice of that stage). Known phases: brief, research, search-refs, gen-heroes, collect-ref, stage-3, stage-4, stage-5, stage-6, stage-7.",
+        "portingNotes": "MOST polling-heavy channel — front-end currently polls this fast for live agent progress; prime WS-push candidate. running/waiting come from IN-MEMORY _STAGE_RUNNING (not a file) — WS layer must push status changes when the set mutates (add at run-stage/run-action POST, discard in _auto_stage/_auto_action finally blocks lines 507-508, 548-549) AND when choices.json changes (waiting flips). agent-log files are append-only -> incremental push works. Channel key is (pid, phase). Many distinct log files per project.",
+        "risk": "high"
+      },
+      {
+        "name": "GET /p/<pid>/api/canvas?stage=N",
+        "where": "do_GET 1200-1214; _CANVAS_LOCK 935",
+        "what": "Returns the per-stage cell of .productflow/canvas.json. canvas.json = {\"3\":{view,items,notes}, \"4\":{...}}. ?stage=N returns data[N]; missing/non-dict -> {view:null,items:{},notes:[]}.",
+        "portingNotes": "WS: watch canvas.json mtime; push only the changed stage cell. Note read path re-parses and slices by stage; write path (POST) is _CANVAS_LOCK-serialized read-modify-write across stages — concurrent P3/P4 save timers. WS push must send per-stage so two canvases don't clobber each other's view state on the client.",
+        "risk": "medium"
+      },
+      {
+        "name": "GET /p/<pid>/api/health",
+        "where": "do_GET 1215-1220; written by _health_sweep 1751-1784",
+        "what": "Streams .productflow/health.json raw. Missing -> {}. Content {url,ok,status,ms,checked} written by the background health loop (only for projects with deploy.json containing a url).",
+        "portingNotes": "Written ONLY by server's _health_loop (every 300s, line 1793), so mtime changes at most every 5 min — cheap WS channel. Also surfaced inside /api/projects summary, so a health write should push BOTH the per-project health channel and the global projects channel.",
+        "risk": "low"
+      },
+      {
+        "name": "GET /p/<pid>/api/pages",
+        "where": "do_GET 1221-1226",
+        "what": "Streams .productflow/pages.json raw. Missing -> {pages:[]}. pages.json = {pages:[{id,name,group,status,versions[],note}]}. Same file mutated by pf_state 'page' CLI and by POST /api/pages.",
+        "portingNotes": "WS: watch pages.json mtime. Both server (POST add/remove/gen-version) and agents (pf_state page set) write it — mtime watch covers both.",
+        "risk": "low"
+      },
+      {
+        "name": "GET /p/<pid>/api/choices",
+        "where": "do_GET 1227-1232",
+        "what": "Streams .productflow/choices.json raw. Missing -> {choices:[]}. choices.json = {choices:[{id(ch-xxxx),stage,question,options[],answer}]}. Created by pf_state 'choice ask' (agent); answered by POST /api/choice.",
+        "portingNotes": "WS: watch choices.json mtime. This drives the 'agent is waiting for your answer' UI; also feeds the 'waiting' flag in agent-log. Push must coordinate with agent-log channel (waiting recomputation).",
+        "risk": "medium"
+      },
+      {
+        "name": "GET /p/<pid>/api/deploy-creds",
+        "where": "do_GET 1233-1236; _load_deploy_creds 339-357; _mask_secret 392-397; _secrets_path 335-336",
+        "what": "Returns {keys:[{key,masked}]} — lists stored deploy-cred KEYS with masked values (only last 4 chars). Reads ~/.productflow/secrets/<pid>.env (export K=V), NOT the project's .productflow dir (secrets live outside the product git repo to avoid leakage). NEVER returns plaintext.",
+        "portingNotes": "Backing file is OUTSIDE .productflow: ~/.productflow/secrets/<pid>.env (mode 600, dir 700). WS: watch that file's mtime if live-updating the creds panel (low value — rarely changes). Critical: keep masking; never push plaintext over WS.",
+        "risk": "low"
+      },
+      {
+        "name": "GET /p/<pid>/api/explore",
+        "where": "do_GET 1237-1243",
+        "what": "Streams .productflow/explore.json raw. Missing -> {stylePrefs[],request{},refs[],selectedRefs[],styleSummary,heroes[],selectedHero}. Holds phase-2/3 visual exploration state: refs[{id,file,title,source}], heroes[{id,file,style}], selectedRefs[ids], selectedHero(file), request{search-refs|gen-heroes|collect-ref:{...}}, heroGenFailed flag, gen-records.",
+        "portingNotes": "WS: watch explore.json mtime. Heavily mutated: by POST /api/explore (web) AND by agents via pf_state explore add-ref/add-hero/done-request/set-summary/gen-record AND by server cleanup (_clear_explore_slot, _sweep_stale_explore_slots). The 'request' sub-slots drive the 'generating...' spinner — front-end polls this during gen. Prime WS channel for phases 2/3.",
+        "risk": "high"
+      },
+      {
+        "name": "GET /p/<pid>/api/brief",
+        "where": "do_GET 1244-1250",
+        "what": "Streams .productflow/brief.json raw. Missing -> {description,request:null,questions[],confirmed:false,summary:{goal,users,need,scope},ready:false}. brief.json holds the AI product-understanding summary + clarifying questions[{q,options[]}] + confirmed/ready flags + request slot (gen-summary).",
+        "portingNotes": "WS: watch brief.json mtime. Mutated by POST /api/brief (web) and by background _auto_gen_brief (server writes summary/questions/ready, line 257). The request slot drives a 'generating summary' spinner — front-end polls during gen. _clear_brief_request clears stuck slots.",
+        "risk": "medium"
+      },
+      {
+        "name": "GET /p/<pid>/api/wizard",
+        "where": "do_GET 1251-1257; _read_primary 313-320",
+        "what": "Streams .productflow/wizard.json raw. Missing -> {brief,platforms[],primary:null,priority[],stylePrefs[]}. Holds wizard-collected config: brief, platforms (PC/H5/APP), primary platform, priority. Written at /api/create (line 1350) from wizard data.",
+        "portingNotes": "WS: low priority — written once at create, rarely after. primary is read server-side by many agent spawners (_read_primary) to pick image sizes. Largely static per project.",
+        "risk": "low"
+      },
+      {
+        "name": "GET /p/<pid>/artifacts/<rel> (static artifact files)",
+        "where": "do_GET 1258-1275",
+        "what": "Serves files under <proj>/.productflow/artifacts/. Path normalized + realpath-anchored to artifacts base (403 on traversal). Content-type by ext: png/jpg/jpeg/webp/svg/html/json, else text/plain. 404 on missing/dir.",
+        "portingNotes": "This is how all generated images/HTML/analysis reach the UI (and project covers). Must remain reachable from React (img src=/p/<pid>/artifacts/...). When repointing static serving to dist/, do NOT route /p/<pid>/artifacts/ through dist — it's project data, separate base. New images appear as agents write files; WS could push 'new artifact' via state.json/explore.json mtime rather than watching the artifacts dir directly.",
+        "risk": "medium"
+      },
+      {
+        "name": "POST /api/update (global)",
+        "where": "do_POST 1294-1316; _repo_root 63-70; migrate.py",
+        "what": "Self-update: git -C <repo> pull --ff-only, then runs scripts/migrate.py if present. Returns {ok,version,restart_needed,git,migrate} or errors {not_git_checkout|git_pull_failed}. Mutates module-global _latest_version.",
+        "portingNotes": "Server-side git/subprocess; not a data channel. After update, restart_needed signals the running server is stale (VERSION read at module load). WS could push a 'restart needed' banner. No project backing file.",
+        "risk": "medium"
+      },
+      {
+        "name": "POST /api/create (global)",
+        "where": "do_POST 1317-1357; pf_state.create_project / pf_state._slug",
+        "what": "Creates a real project under ~/code/<slug> (collision -> -N suffix), calls pf_state.create_project, writes wizard.json from {brief,platforms,primary,priority}. Request {name,slug?,brief?,platforms?,primary?,priority?}. Returns {ok,id,dir}.",
+        "portingNotes": "Creates a new project dir + registry entry + state.json + wizard.json -> must trigger global /api/projects push. New per-project channels become available afterward. Slug sanitization (re.sub [^a-z0-9-]) + base ~/code must be preserved.",
+        "risk": "medium"
+      },
+      {
+        "name": "POST /api/project-remove (global)",
+        "where": "do_POST 1359-1370",
+        "what": "Request {id}. Removes ONLY the registry entry ~/.productflow/projects/<id>.json; disk project files untouched. Returns {ok}. Bad id -> 400.",
+        "portingNotes": "Mutates registry -> push global /api/projects. Disk files remain (re-discoverable). Distinguish from project-delete in UI/WS events.",
+        "risk": "low"
+      },
+      {
+        "name": "POST /api/project-delete (global)",
+        "where": "do_POST 1372-1405",
+        "what": "Request {id}. Hard delete: validates target is under $HOME, not $HOME itself, contains .productflow (unsafe_path 400 otherwise), shutil.rmtree the project dir, removes registry entry AND secrets/<id>.env. Returns {ok}.",
+        "portingNotes": "Destructive — preserve ALL safety checks verbatim. Triggers global /api/projects push and tears down per-project channels (WS must close/notify subscribers to that pid). Also deletes secrets file.",
+        "risk": "high"
+      },
+      {
+        "name": "POST /api/pending (global)",
+        "where": "do_POST 1407-1428",
+        "what": "Request {name,brief?,platforms?,primary?,priority?}. Writes ~/.productflow/pending/<UTCstamp>-<hex>.json = {name,brief,created,v:1,platforms?,primary?,priority?}. Returns {ok,file}. empty_name -> 400.",
+        "portingNotes": "A pending project (queued for an agent to pick up). Triggers global /api/projects push (pending[] section). Watch pending/ dir mtime for WS.",
+        "risk": "low"
+      },
+      {
+        "name": "POST /p/<pid>/api/inbox (generic message)",
+        "where": "do_POST 1740-1748 (fall-through after all specific sub handlers)",
+        "what": "Generic web->agent message. Request {text, ...extra}. Appends {ts,from:'web',text,...extra} to inbox.jsonl. Returns {ok}. empty text -> 400. This is the default handler for /api/inbox sub (and any sub that falls through the specific if-chain).",
+        "portingNotes": "Appends to inbox.jsonl -> push inbox channel. Note it spreads arbitrary extra keys from the request body into the message. WS client send-message maps here.",
+        "risk": "low"
+      },
+      {
+        "name": "POST /p/<pid>/api/canvas",
+        "where": "do_POST 1476-1499; _CANVAS_LOCK 935",
+        "what": "Request {stage:'3'|'4',view,items,notes}. Under _CANVAS_LOCK, read-modify-write canvas.json updating ONLY that stage cell (preserves other stages). Returns {ok}. bad_stage 400 for non 3/4.",
+        "portingNotes": "Two front-end canvases (P3/P4) auto-save concurrently -> lock is essential; keep it. After write, push canvas channel for that stage only. WS echo of own writes could cause canvas state churn — front-end may need to ignore self-originated pushes.",
+        "risk": "medium"
+      },
+      {
+        "name": "POST /p/<pid>/api/pages",
+        "where": "do_POST 1500-1548",
+        "what": "Request {action:'add'|'remove'|'gen-version', ...}. add: {name,group?} -> appends page {id:pg-<hex>,name,group,status:placeholder,versions[],note}. remove: {id}. gen-version: {id,platform:PC|H5|APP} -> appends inbox msg + spawns _auto_page_version thread (returns early, agent writes versions via pf_state). Writes pages.json (except gen-version which returns before re-write). Returns {ok} / 400 errors.",
+        "portingNotes": "gen-version spawns a background agent (claude subprocess) and appends to inbox -> push BOTH pages and inbox channels; progress shows in agent-log phase 'stage-4'. add/remove mutate pages.json -> push pages channel. Distinguish the three actions in WS event semantics.",
+        "risk": "medium"
+      },
+      {
+        "name": "POST /p/<pid>/api/explore",
+        "where": "do_POST 1549-1596; _auto_explore 746-932; _clear_explore_slot 703-717",
+        "what": "Request can set {stylePrefs,selectedRefs,selectedHero}, {removeRef:id} / {removeHero:id} (also deletes disk file via pf_state._rm_artifact_file), and {request:{kind:'search-refs'|'gen-heroes'|'collect-ref',...}}. A request is slotted into explore.json.request[kind], appends inbox 'explore-request', and spawns _auto_explore thread (claude agent doing playwright search / openai image gen). Writes explore.json. Returns {ok}.",
+        "portingNotes": "The request kinds kick off long-running bg agents whose progress streams to agent-log phases search-refs/gen-heroes/collect-ref and whose results land in explore.json (refs/heroes) + artifacts/. WS: push explore + inbox channels on write; agent progress via the agent-log channels; gen results via explore + state mtime. Stuck slots auto-cleared at thread end (line 927) -> another explore push.",
+        "risk": "high"
+      },
+      {
+        "name": "POST /p/<pid>/api/brief",
+        "where": "do_POST 1597-1630; _auto_gen_brief 211-258",
+        "what": "Request can set {description, questions[], confirmed(bool)} and {request:{kind:'gen-summary',description?}}. A gen-summary request sets ready=false, clears old questions, appends inbox 'brief-request', spawns _auto_gen_brief thread (claude summarizes -> writes summary/questions/ready/confirmed=false). Writes brief.json. Returns {ok}.",
+        "portingNotes": "gen-summary spawns bg agent; progress in agent-log phase 'brief'; result written to brief.json by server thread. WS: push brief + inbox on write; brief channel again when _auto_gen_brief finishes (or clears stuck request). 'ready' flag transition is the key UI signal.",
+        "risk": "medium"
+      },
+      {
+        "name": "POST /p/<pid>/api/research",
+        "where": "do_POST 1631-1640; _auto_research 400-433",
+        "what": "Request {instruction?}. Appends inbox 'research-request' and spawns _auto_research thread (claude runs full phase-1 market research: competitor search, screenshots, analysis; registers artifacts/steps via pf_state). Returns {ok}.",
+        "portingNotes": "No dedicated backing file beyond inbox; progress streams to agent-log phase 'research'; outputs land in state.json (phases/artifacts) + artifacts/phase-1/. WS: push inbox on accept; live progress via agent-log 'research' channel; results via state channel. NOTE: no _STAGE_RUNNING guard for research (unlike run-stage) — can be double-triggered.",
+        "risk": "medium"
+      },
+      {
+        "name": "POST /p/<pid>/api/choice",
+        "where": "do_POST 1715-1739",
+        "what": "Request {id,answer}. Sets answer on the matching choice in choices.json, appends inbox 'choice-answer' if found. Returns {ok}. This unblocks an agent waiting in pf_state 'choice wait'.",
+        "portingNotes": "Writing the answer flips the agent-log 'waiting' flag (via _has_open_choice) and unblocks the agent (which polls choices.json). WS: push choices + inbox channels, and recompute/push the relevant agent-log stage 'waiting' status. Tight coupling between choices and agent-log channels.",
+        "risk": "medium"
+      },
+      {
+        "name": "POST /p/<pid>/api/run-stage",
+        "where": "do_POST 1641-1664; _auto_stage 455-509; _STAGE_RUNNING guard",
+        "what": "Request {phase:int(4-7),instruction?}. Concurrency guard: if (pid,phase) in _STAGE_RUNNING -> 409 already_running; else add to set, append inbox 'stage-request', spawn _auto_stage thread (claude runs phase N per phase-N-*.md, may inject deploy creds for phase 7). Returns {ok} or 409/400(bad_phase).",
+        "portingNotes": "_STAGE_RUNNING is the in-memory source of truth for running/waiting in agent-log. WS must push agent-log stage-N status when the set is added here and discarded in _auto_stage finally (507-508). 409 already_running must surface in UI. Progress channel = agent-log phase 'stage-N'; results = state.json + artifacts.",
+        "risk": "high"
+      },
+      {
+        "name": "POST /p/<pid>/api/run-action",
+        "where": "do_POST 1665-1688; _auto_action 512-550",
+        "what": "Request {phase:6,action:'preview'} (only this combo valid; else bad_action 400). Shares (pid,6) _STAGE_RUNNING guard with run-stage (409 already_running). Appends inbox 'action-request', spawns _auto_action thread (build+launch product for live preview, does NOT mark phase done). Returns {ok}.",
+        "portingNotes": "Shares phase-6 concurrency guard and the 'stage-6' agent-log channel with run-stage — WS status for stage-6 covers both. Currently only preview; treat action as an enum for future. discard happens in _auto_action finally (548-549).",
+        "risk": "medium"
+      },
+      {
+        "name": "POST /p/<pid>/api/deploy-creds",
+        "where": "do_POST 1689-1714; _save_deploy_creds 360-383; _load_deploy_creds 339-357",
+        "what": "Manages ~/.productflow/secrets/<pid>.env. Modes: {clear:true} wipe all; {remove:KEY} drop one; {creds:{...},replace?:true} merge-or-replace. Keys must match CRED_KEY_RE. Returns {ok,count}. bad_creds 400 if creds not dict.",
+        "portingNotes": "Writes secrets OUTSIDE .productflow (mode 600). After write, push the deploy-creds channel (masked only!). Values shell-escaped via shlex.quote. Never echo plaintext over WS. count is the number of stored keys.",
+        "risk": "low"
+      },
+      {
+        "name": "POST /p/<pid>/api/reveal",
+        "where": "do_POST 1441-1451; _reveal_in_file_manager 273-288",
+        "what": "Request {path?}. Opens the project dir (or a traversal-checked subpath) in the OS file manager (open/explorer/xdg-open). Returns {ok,path} or {ok:false,error} 500. Local-only convenience.",
+        "portingNotes": "Side-effect only (spawns OS file manager), no data/WS channel. Pure RPC; React keeps it as a button -> POST. Path-traversal anchoring to project root must stay.",
+        "risk": "low"
+      },
+      {
+        "name": "POST /p/<pid>/api/redraw",
+        "where": "do_POST 1452-1475; _auto_redraw 614-700; _build_inpaint_mask 591-611",
+        "what": "Request {stage:3|4,file(under artifacts/),regions:list,prompt(required),platform?,pageId?}. Validates file is real & under artifacts/. Spawns _auto_redraw thread: builds inpaint mask from regions (empty regions = whole-image edit), calls edit.py (gpt-image-2) -> new image saved as a new version (stage3: explore add-hero; pageId: page add-version; else artifact 4). Returns {ok}. Errors: bad_redraw_req/bad_file 400.",
+        "portingNotes": "Long-running bg image edit; progress streams to agent-log phase 'stage-3' or 'stage-4'; result lands as new version in explore.json (hero) or pages.json (page version) or state artifacts. WS: push the matching agent-log stage channel for progress, then explore/pages/state channel when done. Requires Pillow + edit.py (PF_EDIT_PY override).",
+        "risk": "high"
+      },
+      {
+        "name": "Background loops & threading model",
+        "where": "ThreadingHTTPServer line 1841; _health_loop 1787-1793; _refresh_latest bg 1854; _sweep_stale_explore_slots 720-743/1852; _health_sweep 1751-1784",
+        "what": "ThreadingHTTPServer = one OS thread per request. Long-running work (claude/image agents) runs in detached daemon Threads, writing files that GET routes read. _health_loop sweeps all projects every 300s, writing health.json (only for projects with deploy.json+url). At startup: _sweep_stale_explore_slots clears orphan explore/brief request slots from a dead prior process; _refresh_latest pulls remote version once in bg. Module globals: _latest_version, _STAGE_RUNNING (set, guarded by _STAGE_RUN_LOCK), _CANVAS_LOCK.",
+        "portingNotes": "For WS push, two change sources: (a) FILE mtime changes (state/inbox/explore/brief/canvas/pages/choices/health.json + artifacts) written by both this server's bg threads and external pf_state CLI -> a single mtime-watcher (per-project) covers all; (b) IN-MEMORY state changes (_STAGE_RUNNING, _latest_version) that have NO file -> WS must push explicitly at mutation points. The 'working' flag in /api/projects is TIME-derived (no file event) -> needs a periodic tick. Threading model already supports a long-lived WS connection thread alongside request threads, but ThreadingHTTPServer's BaseHTTPRequestHandler does NOT speak the WS upgrade handshake — you'll need to implement Upgrade handling in do_GET or swap to an asgi/websocket-capable server. Health cadence is 300s; remote-version cadence is once-at-startup (+ on-demand refresh).",
+        "risk": "high"
+      }
+    ],
+    "notes": "Key cross-cutting facts for the WS+React rewrite:\n\n1) ROUTE SHAPE CORRECTION: the prompt lists '/api/state', '/api/inbox', '/api/canvas', etc. as if top-level, but they are ALL per-project under /p/<pid>/api/... (the 'sub' tail after P_ROUTE matches the pid). Only /, /vendor/, /api/version, /api/update-check, /api/projects, /api/update, /api/create, /api/project-remove, /api/project-delete, /api/pending are truly global. There is NO '/api/deploy-creds' top-level — it's /p/<pid>/api/deploy-creds. (Verify against console.html fetch() calls when porting.)\n\n2) BACKING FILES (all under <project>/.productflow/ unless noted):\n   - state.json  -> /api/state, /api/projects (per-proj summary)\n   - inbox.jsonl -> /api/inbox (append-only)\n   - agent-log-<phase>.jsonl -> /api/agent-log (append-only, MANY files: brief, research, search-refs, gen-heroes, collect-ref, stage-3..7)\n   - canvas.json -> /api/canvas (namespaced by stage '3'/'4')\n   - health.json -> /api/health + /api/projects (written ONLY by server health loop, 300s)\n   - pages.json  -> /api/pages\n   - choices.json-> /api/choices (also feeds agent-log 'waiting')\n   - explore.json-> /api/explore (refs/heroes/request slots)\n   - brief.json  -> /api/brief\n   - wizard.json -> /api/wizard (written at /api/create; read by many agent spawners via _read_primary)\n   - deploy.json -> NOT served via API; consumed by _health_sweep to know the URL to ping\n   - artifacts/  -> /p/<pid>/artifacts/<rel> (images/html/json), traversal-guarded\n   OUTSIDE .productflow:\n   - ~/.productflow/projects/<pid>.json  = registry (id->path,archived,created)\n   - ~/.productflow/pending/*.json       = queued projects\n   - ~/.productflow/secrets/<pid>.env    = deploy creds (mode 600), masked-only over API\n   - SKILL_DIR/VERSION                   = version source\n   - SKILL_DIR/assets/console.html       = the SPA  (REPOINT TARGET -> dist/index.html)\n   - SKILL_DIR/assets/vendor/<5 files>   = whitelisted vendor JS/CSS\n\n3) WS PER-CHANNEL CHANGE DETECTION via mtime is viable for nearly every channel because the actual writers are external (pf_state.py CLI run by spawned claude agents) — the server doesn't even mediate those writes, so polling-replacement via an mtime watcher is the clean approach. Append-only files (inbox.jsonl, agent-log-*.jsonl) support incremental tail pushes. EXCEPTIONS that have NO file event: (a) _STAGE_RUNNING running/waiting flags in /api/agent-log for stage-N (in-memory set), (b) 'working' flag in /api/projects (derived from updated-within-120s clock), (c) _latest_version for /api/update-check. These need explicit push at mutation points or a periodic tick.\n\n4) HIGHEST-FREQUENCY POLLERS (best WS payoff): /api/agent-log (live agent progress), /api/explore (gen spinner), /api/brief (summary spinner), /api/projects (dashboard). \n\n5) STATIC REPOINTING: _console() (line 1107) currently serves assets/console.html for both '/' and '/p/<pid>/' (SPA fallback already correct). To serve a built React dist: (a) point _console at dist/index.html (keep Cache-Control no-store on it), (b) add a static handler for dist's hashed JS/CSS/asset files with correct content-types (mirror the /vendor content-type dict pattern) and long-cache for hashed names, (c) keep /p/<pid>/artifacts/ as a SEPARATE base (project data, not bundle), (d) decide whether /vendor stays or vendor libs get bundled by npm.\n\n6) WS HANDSHAKE GOTCHA: BaseHTTPRequestHandler/ThreadingHTTPServer has no WebSocket upgrade support. Adding WS means either implementing the Upgrade/Sec-WebSocket-Accept handshake by hand inside do_GET (then hijacking self.connection for frame I/O on its own thread), or fronting/replacing with an ASGI server (e.g. uvicorn+websockets/starlette). Given the all-stdlib, zero-dependency design of this server (only urllib/http.server), a hand-rolled WS or the smallest possible dependency is most in keeping with the project.\n\n7) SECURITY to preserve: _host_ok (only 127.0.0.1/localhost Host), _post_origin_ok (Origin + Sec-Fetch-Site CSRF guard) — WS upgrade handler must apply the SAME checks (and validate Origin for WS). ID_RE/CRED_KEY_RE validation, artifacts/secrets path-traversal anchoring, deploy-creds masking, and the project-delete safety gates must all carry over verbatim.\n\n8) CONCURRENCY: _CANVAS_LOCK serializes canvas.json RMW; _STAGE_RUN_LOCK guards _STAGE_RUNNING. run-stage and run-action share the (pid,6) guard and the stage-6 agent-log channel. research/redraw/explore/brief/page-version spawn unguarded bg threads (only stage 4-7 via run-stage/run-action are guarded)."
+  },
+  "critic": {
+    "channels": [
+      {
+        "scope": "project",
+        "channel": "state",
+        "backingFiles": ".productflow/state.json (written by pf_state.py CLI, not the server)",
+        "consumers": "root state store -> renderBoard (#stepper,#phase-title,#steps,#gallery,#log,#product,#meta,#next-stage-btn), renderCompatBanner, selectStage/nextStage, previewSectionHtml(P6 screenshots from phases[6].artifacts), openOverview (state artifacts), briefSectionHtml(phases[1].steps). NOTE: home card data is ALSO derived per-project from state.json -> see projects channel."
+      },
+      {
+        "scope": "project",
+        "channel": "inbox",
+        "backingFiles": ".productflow/inbox.jsonl (append-only; written by server POST handlers AND agents)",
+        "consumers": "chat drawer #msgs (renderInbox), #chat-btn .has-unread dot (lastMsgCount vs chatSeen). 3 message body variants: plain, canvas-feedback(legacy ❤/comments still rendered), preview-feedback(regions). Incremental tail push viable."
+      },
+      {
+        "scope": "project",
+        "channel": "health",
+        "backingFiles": ".productflow/health.json (written ONLY by server _health_loop every 300s, for projects with deploy.json url)",
+        "consumers": "#health-line (renderHealth). Slow channel. Same data ALSO surfaces on home cards (p.health) -> one health write should push BOTH this and the projects channel."
+      },
+      {
+        "scope": "project",
+        "channel": "pages",
+        "backingFiles": ".productflow/pages.json (written by server POST add/remove/gen-version AND pf_state page CLI)",
+        "consumers": "cv.pages -> renderCanvas stage-4 page cards (pageCardHtml2: thumbnail img + PC/H5/APP platform matrix), openOverview P4 grid. FLICKER-PRONE: key by page id + version file."
+      },
+      {
+        "scope": "project",
+        "channel": "choices",
+        "backingFiles": ".productflow/choices.json (written by pf_state 'choice ask'; answered by server POST /api/choice)",
+        "consumers": "pChoices -> #choices-bar (renderChoices floating cards, per-choice c.stage label '阶段 N'). ALSO feeds agent-log:stage-<n> 'waiting' flag via _has_open_choice -> a choices write must also recompute/push the matching agent-log waiting status. Focus-guard: skip render while a bar input is focused."
+      },
+      {
+        "scope": "project",
+        "channel": "brief",
+        "backingFiles": ".productflow/brief.json (written by server POST /api/brief and bg _auto_gen_brief thread)",
+        "consumers": "pBrief -> briefSectionHtml (P1 summary ready/running/failed states, clarify question chips, confirm). Heavy local-vs-server reconciliation (confirm-lag guard, generating/failed derived from request slot presence). Keep description/clarify/answers local."
+      },
+      {
+        "scope": "project",
+        "channel": "explore",
+        "backingFiles": ".productflow/explore.json (written by server POST /api/explore, bg _auto_explore thread, pf_state explore CLI, _clear_explore_slot/_sweep_stale_explore_slots)",
+        "consumers": "pExplore -> drives THREE views: P2 refsPanelHtml (refs grid + Viewer.js), P3 canvas hero cards + #hero-dialog (heroGenLog history), openOverview. request{} per-kind in-flight slots (search-refs/collect-ref/gen-heroes) drive spinners. FLICKER-PRONE. searchFailed comes from agent-log:search-refs, not this file."
+      },
+      {
+        "scope": "project",
+        "channel": "agent-log:research",
+        "backingFiles": ".productflow/agent-log-research.jsonl (append-only)",
+        "consumers": "researchLog (P1 market research tail line + running/failed). Local field researchLog.instr must survive pushes."
+      },
+      {
+        "scope": "project",
+        "channel": "agent-log:search-refs",
+        "backingFiles": ".productflow/agent-log-search-refs.jsonl (append-only)",
+        "consumers": "pExplore.searchFailed (P2; only tail-line kind==='error' matters)."
+      },
+      {
+        "scope": "project",
+        "channel": "agent-log:gen-heroes / collect-ref",
+        "backingFiles": ".productflow/agent-log-gen-heroes.jsonl, agent-log-collect-ref.jsonl (append-only)",
+        "consumers": "NOT directly consumed by current poller dispatch (P3 hero gen state is read from explore.json request slot + heroGenFailed, not these logs) — but these log files exist server-side and back /api/agent-log?phase=gen-heroes|collect-ref. Flag: the rewrite may want them for richer progress, but parity = they are not currently surfaced. Confirm before wiring."
+      },
+      {
+        "scope": "project",
+        "channel": "agent-log:stage-<n> (n=4,5,6,7)",
+        "backingFiles": ".productflow/agent-log-stage-N.jsonl (append-only) PLUS in-memory _STAGE_RUNNING set (NO file)",
+        "consumers": "pStageRun[n] -> runStageHtml (P5/6/7 running/waiting/failed box), stagebarHtml (P4). CRITICAL: data.running/data.waiting are SERVER RUNTIME flags (from _STAGE_RUNNING + _has_open_choice), not jsonl tail — WS push MUST carry them and fire on _STAGE_RUNNING mutation (run-stage/run-action add; _auto_stage/_auto_action finally discard) AND on choices.json change. Keep pStageRun[n].instr local."
+      },
+      {
+        "scope": "project",
+        "channel": "wizard (or fetch-once)",
+        "backingFiles": ".productflow/wizard.json (written at /api/create; rarely after)",
+        "consumers": "pfWizard {primary,platforms} -> P6 preview button copy (📱模拟器/🖥本地运行/🌐本地预览) + P7 deploy button copy (分发包/部署上线). Drives button COPY only. Simplest: fetch once on mount."
+      },
+      {
+        "scope": "home",
+        "channel": "projects (global, NOT per-project)",
+        "backingFiles": "~/.productflow/projects/<pid>.json (registry) + each <proj>/.productflow/state.json + each <proj>/.productflow/health.json + ~/.productflow/pending/*.json",
+        "consumers": "homeData -> renderHome (#proj-grid projCard, #arch-grid, ghostCard pending). GOTCHA: 'working' flag is TIME-derived (state.updated within 120s) -> changes with NO file write; recompute on each push or a periodic tick. cover URL = /p/<pid>/artifacts/<rel>. FLICKER-PRONE cover img."
+      },
+      {
+        "scope": "global",
+        "channel": "system/version (low-value, may stay polled)",
+        "backingFiles": "SKILL_DIR/VERSION + in-memory _latest_version (refreshed once at startup; mutated by POST /api/update)",
+        "consumers": "#sb-ver sidebar label, #update-bar banner (loadVersion + pollUpdate). GLOBAL routes /api/version + /api/update-check (NO /p/<id> prefix). Could remain a 60s poll; not worth a per-file watcher."
+      },
+      {
+        "scope": "project",
+        "channel": "NOT a channel: canvas (keep request/response)",
+        "backingFiles": ".productflow/canvas.json (per-stage keys '3'/'4'; written by THIS client, debounced 600ms, _CANVAS_LOCK serialized)",
+        "consumers": "cv.view/cv.items/cv.notes (USER-OWNED layout). Do NOT echo client writes back as a push (fights live drag; renderCanvas bails on cvDragging/cvEditing). GET on enterCanvas + debounced POST + flushCanvasSave on leave. Two stages never share state. Server must push per-stage cell only if ever made a channel."
+      },
+      {
+        "scope": "project",
+        "channel": "NOT a channel: deploy-creds (keep request/response)",
+        "backingFiles": "~/.productflow/secrets/<pid>.env (OUTSIDE .productflow, mode 600; masked-only over API)",
+        "consumers": "pDeployCreds (P7). Mutated only by this UI's own POSTs -> optimistic update + refetch. NEVER push plaintext."
+      },
+      {
+        "scope": "global",
+        "channel": "client->server POST actions (stay POST; result flows back via matching channel)",
+        "backingFiles": "global: /api/create,/api/project-remove,/api/project-delete,/api/pending,/api/update. project: /api/inbox,/api/choice,/api/brief,/api/research,/api/explore,/api/run-stage(409),/api/run-action(409),/api/redraw,/api/pages,/api/canvas,/api/deploy-creds,/api/reveal",
+        "consumers": "All mutations remain POST; the resulting file change flows back via the matching WS channel -> enables optimistic-update-then-confirm. /api/reveal & /api/update are pure side-effect RPC (no channel). Concurrency 409 must surface as toast."
+      }
+    ],
+    "diffCheckpoints": [
+      {
+        "screen": "Home card wall (#proj-grid/#arch-grid)",
+        "compare": "Old vs new screenshot at identical viewport: card grid columns (auto-fill minmax(280px,1fr) gap18), cover img vs .ph first-letter placeholder, .pname inline badges (.badge-working '进行中', .hdot health dot + ms), .segs per-phase 5px bars (done=ink/active=dim), 'N/7 阶段 · relTime', .pcard.broken opacity .6 with '目录缺失'/'状态损坏' warntag, ghost 'CLI 待接单' cards, archive section toggle. CRITICAL: confirm covers do NOT flicker/blink on the 3s refresh (keyed imgs, stable src)."
+      },
+      {
+        "screen": "Sidebar (#sidebar) expanded vs collapsed",
+        "compare": "232px vs 64px width; labels (.name/.lbl/.meta) hidden when collapsed; .sb-collapse visible only on hover (expanded) and hidden when collapsed; logo doubles as expand affordance (collapsed click=expand, expanded click=navigate /); nav .on state (block bg + font-weight 600); 资产/设置 stub toast '即将上线'; #sb-ver dotted underline + click=checkUpdate. Diff body.collapsed descendant selectors."
+      },
+      {
+        "screen": "7-stage stepper",
+        "compare": "At wide AND @media<=1180px: .sel pill (inset ink ring + filled ink number + bold label) decoupled from .done (check icon IC_CHECK instead of number). At 1180px all pills collapse to number-only EXCEPT .sel keeps its label. step-sep 18px->8px. Selected pill auto-scrollIntoView(inline:center). Verify a pill that is both done+sel renders ring + check."
+      },
+      {
+        "screen": "P1 Brief panel (#stage-extra stage 1)",
+        "compare": "Summary box 4 states (ready 4 wz-airow / running spinner aibox / failed red-tinted #e0b4b4 / idle prompt); clarify question chips (single-select toggle) + #st-clarify; button variants (重新生成+✓确认 vs single 生成摘要); market-research card running/failed (#f0e2c8 amber). EDGE: type in #st-brief during a poll -> field must NOT reset (focus guard). Verify foldClarifications '问题澄清N/用户澄清N' folding format byte-identical."
+      },
+      {
+        "screen": "P2 Refs panel + Viewer.js",
+        "compare": "Style tag chips (STAGE_TAGS exactly: 极简/现代/玻璃拟态/暗色/暖色调/编辑风/科技感/大胆活力/柔和未来/瑞士国际), full-width .wz-ref cards true aspect, select ring + dark rbar, 🔍放大/🔗源/＋类似/✕/checkbox. Open Viewer (zoom/pan/keyboard) and confirm a background poll does NOT tear it down (refsViewerOpen guard). Refs grid must not flicker."
+      },
+      {
+        "screen": "Canvas P3 (heroes) and P4 (pages)",
+        "compare": "Dotted grid (radial #e3e3e1 1px @22px on #f7f7f6), default view {x:60,y:80,z:0.7}, zoom clamp 0.08-3, #cv-zoom % readout, controls +/- /fit, .cv-hint, #cv-empty. Pan/drag a card and verify: drag delta divided by zoom tracks cursor at any scale; wheel zoom anchors at cursor; ctrl/trackpad-pinch zooms; horizontal wheel pans. Drag mid-Agent-update must NOT yank (cvDragging guard). Hero base ring; page card aspect follows platform (PC landscape 1440/1080 vs phone 1080/2340), platform matrix on/off badges. EDGE: drag then close tab within 600ms -> currently layout LOST (no beforeunload flush)."
+      },
+      {
+        "screen": "P3 hero-generation dialog (#hero-dialog)",
+        "compare": "Right-docked 320px panel only when stage 3; '本次参考' thumbs with 图N codes in selectedRefs order, include/exclude checkbox renumbers codes; 生成记录 entries (生成/改图 blue badge, ts, ref/result counts, thumbs, prompt); collapse state. CRITICAL: insertRefCode caret position + 图N->--image N ordering byte-identical to old."
+      },
+      {
+        "screen": "Preview/redraw overlay (#pv-overlay)",
+        "compare": "Dark overlay both modes; draw a box -> normalized 0-1 toFixed(4) coords; min size 0.02 rejected; feedback mode prompts per-box text, redraw mode shared #pv-instr; numbered .pvn labels + .pvx delete; action button label flips by mode+box count. CRITICAL: the structured feedback text string '区域(左X% 上Y% 宽W% 高H%):text' and the 3 divergent redraw paths (stage3 no-box->gen-heroes baseImage; stage3 box & stage4 any->/api/redraw) byte-identical. Post-send confirm()->rerun stage6 bridge present."
+      },
+      {
+        "screen": "Artifact modal + overview + markmap",
+        "compare": "image (.full contain), html (opens new tab, no modal), text/md/json (<pre> escaped), mindmap (.box.wide 94vw/88vh, lazy d3+markmap, grayscale palette, autoFit, initialExpandLevel:-1). openOverview cross-stage aggregation ('P{id} {name} · count' headers, ★基调 marker). Esc closes modal+preview."
+      },
+      {
+        "screen": "Chat drawer / choices bar",
+        "compare": "Drawer slide-in 372px, Enter=send/Shift+Enter=newline, scroll-stick within 30px of bottom, .has-unread red dot logic. Choices bar warm #fffaf0 cards, 阶段N label, option chips + free-text reply, optimistic removal. Both: typing during a poll must not be interrupted."
+      },
+      {
+        "screen": "New-project + delete modals",
+        "compare": "New: name/slug (autoSlug + CJK random fallback, slugEdited stops auto-derive), platform picker (PC/H5/APP cards + device SVG + primary radio + draggable priority), localStorage draft restore toast. Delete: two-tier (soft remove vs hard-delete gated on exact-name typing, red btn enable). Verify draft persists across reload and clears on create."
+      },
+      {
+        "screen": "Update bar / compat banner / toast",
+        "compare": "#update-bar ink banner '🆕 有新版本 vX (当前 vY)' + 立即更新 on BOTH pages (global /api/ paths); #compat-banner red warn when phases!=7 listing the 7 stage names verbatim; #toast bottom-center pill 2.2s auto-hide, cleared on stage switch."
+      }
+    ],
+    "missed": [
+      {
+        "item": "Dead/unused CSS for an older grouped-lane canvas layout: .cv-lane-label/.cv-grouplabel/.cv-mapcap/.cv-divider, the entire .cv-page family (.cv-page/.cv-page .pthumb/.pinfo/.pn/.pmeta/.pv/.pdot/.cv-page.ph) and .cv-page-add",
+        "where": "console.html CSS lines 317-318, 357-381",
+        "why": "All four inventories describe the ACTIVE canvas card renderers (heroCardHtml/pageCardHtml2 using .cv-item / .cv-item.page-card) but none flag that this parallel set of canvas classes is defined in CSS yet NEVER emitted by any JS innerHTML (grep: 0 emissions of .cv-page/.cv-lane-label/etc). The rewrite must NOT port these as features (no lane labels, group dividers, or 150px .cv-page cards exist in the running UI). Flag-don't-assume, like the wz-log dead-code note."
+      },
+      {
+        "item": "No beforeunload/pagehide flush of the debounced canvas save",
+        "where": "console.html: cvSave debounce 1708, flushCanvasSave 1718, only caller is selectStage 1089 (canvas->board)",
+        "why": "Inventories note flushCanvasSave-on-stage-leave but none note that closing the tab / browser navigation / hard reload within the 600ms debounce window silently LOSES the last drag (no window beforeunload handler exists). Parity vs improvement decision: the rewrite should at minimum match (data loss on close) or fix it with a beforeunload flush — must be a conscious choice, not accidental."
+      },
+      {
+        "item": "No <img onerror> fallback anywhere; broken-artifact race",
+        "where": "console.html: all artifact <img> (gallery 1204, cv hero 1767, page thumb 1786, refs 1567, overview 2340, hd thumbs)",
+        "why": "Inventories cover flicker but none note there is zero onerror handling. When an artifact file is mid-regen/deleted (redraw, removeRef, gen-version), the <img> shows the browser broken-image glyph. Home cards have p.missing/p.error broken-state but per-artifact imgs do not. The React port should decide whether to add graceful fallbacks; old behavior = raw broken glyph."
+      },
+      {
+        "item": "navigator.platform-based label switching on the reveal-code button",
+        "where": "console.html:1505 (revealCode button: Mac -> '在访达打开代码' else '打开代码目录')",
+        "why": "The prompt explicitly flags 'platform-aware labels' as hard-to-port; inventories captured the wizard.primary (PC/H5/APP) button copy but missed this SEPARATE client-side navigator.platform OS sniff (Mac vs other) on the 📂 reveal button. It's a distinct code path from pfWizard."
+      },
+      {
+        "item": "pf_state.py CLI is a co-equal WRITER of nearly every backing file (not just the server)",
+        "where": "knowledge graph nodes pf_state.py + ENDPOINTS notes; state.json/pages.json/choices.json/explore.json/agent-log-*.jsonl all written by spawned agents via pf_state",
+        "why": "Dataflow/Endpoints inventories mention it in passing but it deserves first-class emphasis for the WS design: the server does NOT mediate agent writes, so an mtime-watcher (or inotify) per-project is the ONLY change-detection signal for those files. A naive 'push on my own POST' WS design would miss every agent-originated update. This is the single most load-bearing fact for channel correctness."
+      },
+      {
+        "item": "agent-log phases gen-heroes and collect-ref have backing log files but are NOT surfaced by the current poller dispatch",
+        "where": "server.py known phases include gen-heroes/collect-ref; console.html per-stage tick (2521) only calls pollExplore for P3 hero state (reads explore.json request slot + heroGenFailed), never pollAgentLog for gen-heroes/collect-ref",
+        "why": "Dataflow inventory proposes agent-log:* channels but implies symmetric usage. For parity the rewrite should know P3 hero progress is read from explore.json's request slot, NOT from agent-log-gen-heroes.jsonl. Wiring those logs would be a behavior ADDITION; flag before doing it."
+      },
+      {
+        "item": "'working' flag and home cover URL derivation are time/path-derived with no file event",
+        "where": "server.py _project_summary ~line 997 (working = updated within 120s; cover = /p/<pid>/artifacts/<rel>)",
+        "why": "Dataflow notes time-derived working in passing but it's an easy-to-drop subtlety: an mtime-only WS watcher will NOT flip 'working' false after 120s of inactivity (no write occurs). Needs a periodic tick on the projects channel, else stale '进行中' badges persist."
+      },
+      {
+        "item": "#cv-zoom percentage readout, cv-controls fit-icon, and cv.notes round-trip",
+        "where": "console.html: #cv-zoom 657/2014, cvFit 656, cv.notes load/save 1699/1712/1724/1732",
+        "why": "cv.notes is loaded, defaulted, and POSTed back on every canvas save but is NEVER rendered (no consumer) — another silent passthrough field the rewrite must preserve in the canvas.json payload (to avoid wiping agent/legacy data) even though it draws nothing. Inventories list cv.notes as state but don't flag it as render-less passthrough."
+      },
+      {
+        "item": "Markmap grayscale palette is indexed by node path depth via parseInt(node.state.path.split('.')[1])",
+        "where": "console.html:2404-2417",
+        "why": "Interactions inventory mentions 'grayscale palette by node path depth' but the exact indexing expression is load-bearing and brittle (depends on markmap's internal node.state.path format). The d3/markmap version must match the vendored one or the palette fn breaks — pin versions if bundling via npm."
+      },
+      {
+        "item": "Single-instance port detection relies on the exact {app:'productflow'} /api/version shape",
+        "where": "server.py _probe_version ~line 1796",
+        "why": "Endpoints inventory mentions it but it's worth surfacing as a migration constraint: if the React build changes /api/version response shape, the 'is an instance already running on 7717' detection (used by start scripts) breaks. Keep {app:'productflow',version} verbatim."
+      }
+    ],
+    "risks": [
+      {
+        "item": "Infinite-canvas pan/drag/zoom controller: manual Pointer Events + setPointerCapture, 3px move threshold, closest()-bail allowlist (textarea/.cv-base/.cv-page-del/.cv-del/.cv-plat/.cv-controls/#cv-stagebar/#hero-dialog), drag delta /zoom, cursor-anchored wheel zoom x=cx-(cx-x)*k",
+        "risk": "high",
+        "mitigation": "Port the transform math VERBATIM (cvApply/cvZoomAt/cvZoomBy/cvFit incl. cvFit's y-40/+320 padding asymmetry). Attach wheel via ref+addEventListener('wheel',h,{passive:false}) NOT JSX onWheel (else browser zoom/scroll leaks; ctrl+wheel=browser zoom). Model drag session as a useRef; mutate card transform imperatively during drag, commit to state only on pointerup. Replicate the closest()-bail OR give every interactive sub-element stopPropagation on pointerDown. Pause store->DOM sync while an isInteracting ref is set (replaces renderCanvas cvDragging/cvEditing bail)."
+      },
+      {
+        "item": "Annotation coordinate mapping (#pv-stage): normalized 0-1 frac() via getBoundingClientRect, toFixed(4) wire contract, min 0.02 mis-tap filter, two modes sharing the stage, structured Agent-parsed feedback text + 3 divergent redraw routing paths by stage",
+        "risk": "high",
+        "mitigation": "Keep coords normalized + toFixed(4) (Agent remaps to source pixels). Use Pointer Events + setPointerCapture + touch-action:none. Preserve the exact feedback string format and the stage3-no-box->gen-heroes-baseImage vs stage3-box/stage4->/api/redraw branching byte-for-byte. Replace window.prompt per-box with inline input but keep the per-box text model."
+      },
+      {
+        "item": "Render-on-poll focus guards become 'don't clobber drafts' under WS (renderStageExtra/renderChoices/pollBrief/pollResearch/pollStageRun + refsViewerOpen + chat scroll-stick)",
+        "risk": "high",
+        "mitigation": "Keep ALL editable/in-progress fields as LOCAL component state decoupled from channel data: description/clarify/answers, stylePrefs/selectedRefs, pStageRun[n].instr, researchLog.instr, hd textarea, choice reply inputs, pv boxes. Merge incoming pushes only into non-edited fields. Never remount a panel containing a focused field."
+      },
+      {
+        "item": "Brief confirm-lag / generating-failed state machine derived from server request-slot presence (not explicit flags)",
+        "risk": "medium",
+        "mitigation": "Port the reconciliation guards verbatim (keep local confirmed=true until server catches up; derive generating from request['gen-summary'] present, failed from slot vanished without ready). Skipping this yields 'confirm->question flashes back' and 'spinner never stops after failure' bugs."
+      },
+      {
+        "item": "Viewer.js + markmap (d3) imperative vendor libs operating on DOM/SVG nodes",
+        "risk": "medium",
+        "mitigation": "Viewer: instantiate in useEffect on a ref'd hidden gallery, destroy()+recreate when refs list changes, and SKIP list reconciliation while viewer is open (or React unmounts the node Viewer holds). Markmap: memoize ensureMarkmap promise, render empty <svg ref>, Markmap.create on open, cleanup on close, load order d3-first, PIN the vendored versions (palette fn depends on node.state.path internals)."
+      },
+      {
+        "item": "Per-stage canvas isolation + debounced save targeting the LEAVING stage; no beforeunload flush",
+        "risk": "medium",
+        "mitigation": "Capture target stage id at debounce-schedule time (closure, not current state) so an in-flight save hits the right stage cell. useEffect cleanup on stage change must flush. Add a beforeunload/pagehide flush (the old code lacks one -> drag-then-close loses layout); decide parity vs fix explicitly. Preserve _CANVAS_LOCK semantics + per-stage cell merge; do NOT echo own canvas writes back over WS."
+      },
+      {
+        "item": "agent-log:stage running/waiting come from in-memory _STAGE_RUNNING (no file) + choices.json; 409 concurrency",
+        "risk": "high",
+        "mitigation": "WS server must push stage status on _STAGE_RUNNING mutation (run-stage/run-action add; _auto_stage/_auto_action finally discard) AND on choices.json change (waiting recompute via _has_open_choice). Carry data.running/data.waiting in the push, not just the jsonl tail. Preserve double-click guard (pStageRun.running) + surface HTTP 409 already_running as toast. run-stage and run-action share the (pid,6) guard and stage-6 channel."
+      },
+      {
+        "item": "localStorage new-project draft (pf-new-project-draft) + native HTML5 drag-reorder priority + autoSlug CJK fallback",
+        "risk": "medium",
+        "mitigation": "useEffect syncing nm->localStorage on every change, load-on-open with restore toast, clear only on successful create. Keep splice-reorder semantics for priority DnD, primary auto-reselect when its platform is deselected, slugEdited flag, and the CJK->random fb slug fallback."
+      },
+      {
+        "item": "WS handshake on a stdlib ThreadingHTTPServer (BaseHTTPRequestHandler has no Upgrade support) + repointing static serving to dist/",
+        "risk": "high",
+        "mitigation": "Either hand-roll the Sec-WebSocket-Accept upgrade inside do_GET and hijack self.connection on its own thread (keeps zero-dependency design), or front with a minimal WS-capable server. Apply the SAME _host_ok (127.0.0.1 only) + _post_origin_ok (Origin/Sec-Fetch-Site) checks to the WS upgrade and validate Origin. Repoint _console() to dist/index.html (keep no-store), add a hashed-asset static handler (mirror /vendor content-type dict, long-cache hashed names), keep /p/<pid>/artifacts/ as a SEPARATE base, keep VERSION {app:'productflow'} shape, preserve ID_RE/CRED_KEY_RE + path-traversal + project-delete safety gates + creds masking."
+      },
+      {
+        "item": "FLICKER on every push: 6 sites rebuild <img> (project covers, board #gallery cache-busted ?t=, P2 refs, P3 hero+dialog thumbs, P4 page thumbs, whole #cv-world)",
+        "risk": "medium",
+        "mitigation": "Make all keyed React components (key by id + version/file), keep img src stable; only change artUrl ?t=ts when the file actually changed so React diffs instead of dropping/recreating nodes. Never rebuild #cv-world wholesale; transform on a stable container."
+      }
+    ],
+    "summary": "The four inventories are accurate and unusually complete on the documented API surface, state stores, render sites, and interaction libs — the ENDPOINTS inventory also correctly corrects the prompt's route shape (everything project-scoped is under /p/<pid>/...). Cross-checking against the real console.html (2538 lines) and server.py (1866 lines) plus the knowledge graph, the gaps are all in edge-cases and silent-passthrough/dead code rather than missing features: (1) a whole family of canvas CSS classes (.cv-lane-label/.cv-grouplabel/.cv-mapcap/.cv-divider/.cv-page*/.cv-page-add) is defined but NEVER emitted in JS — dead leftover of an older grouped-lane layout; do not port as features. (2) There is no beforeunload flush, so a drag within the 600ms canvas-save debounce is lost on tab close. (3) There is zero <img onerror> fallback — broken/mid-regen artifacts show the browser broken glyph. (4) A separate navigator.platform OS sniff (Mac vs other) drives the 📂 reveal-code button label, distinct from the wizard.primary platform copy. (5) cv.notes is loaded/POSTed but never rendered — a render-less passthrough that must be preserved. (6) The 'working' home badge and the gen-heroes/collect-ref agent-logs are time/path-derived or unsurfaced, so an mtime-only watcher will mis-handle them. The single most load-bearing channel fact: pf_state.py (the agent CLI) is a co-equal writer of state/pages/choices/explore/agent-log files that the server never mediates, so per-project mtime/inotify watching — not 'push on my own POST' — is the only correct WS trigger. I proposed 13 push channels (home/global: projects, system/version; per-project: state, inbox, health, pages, choices, brief, explore, agent-log:research/search-refs/stage-<n>, wizard) with canvas-layout and deploy-creds kept as client-owned request/response, all mutations staying POST with results flowing back via the matching channel; the highest-risk ports remain the manual pan/drag/zoom math, normalized annotation coordinates, the focus-guard-to-WS reconciliation, the in-memory _STAGE_RUNNING running/waiting flags, and the WS upgrade on the stdlib ThreadingHTTPServer."
+  }
+}

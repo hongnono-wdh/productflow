@@ -101,13 +101,19 @@ def cli_json(args, home, project=None, cwd=None):
     return json.loads(r.stdout)
 
 
-def start_server(home, port=None):
-    """Start server.py on a free port with sandboxed HOME. Returns (proc, port)."""
+def start_server(home, port=None, extra_env=None):
+    """Start server.py on a free port with sandboxed HOME. Returns (proc, port).
+
+    extra_env: optional dict merged into the server env (e.g. {"PF_UI": "legacy"}
+    to serve the legacy console.html instead of the default React dist)."""
     if port is None:
         port = free_port()
+    env = _env(home)
+    if extra_env:
+        env.update(extra_env)
     proc = subprocess.Popen(
         [sys.executable, SERVER, "--port", str(port)],
-        env=_env(home), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
     url = f"http://127.0.0.1:{port}/api/version"
     for _ in range(60):

@@ -11,7 +11,7 @@
     --line: #e7e7e7; --line-2: #ededec; --field: #e2e2e2; --dash: #d6d6d6;
     --hover: #f7f7f7; --fill: #f4f4f4;
     /* 色块布局：浅灰面 + 白色块 + 轻阴影（替代边框做分隔） */
-    --surface: #f3f3f4; --block: #ffffff; --block-sh: 0 1px 3px rgba(17,17,17,.06), 0 1px 2px rgba(17,17,17,.05);
+    --surface: #f3f3f4; --block: #ffffff; --block-sh: none;
     --canvas-bg: #f7f7f6;
     --note: #fbf6d2; --note-line: #ece2a8; --note-ink: #5c5320;
     font-size: 14px;
@@ -102,32 +102,45 @@
   .page.on { display: flex; }
 
   .topbar {
-    height: 60px; flex: none; display: flex; align-items: center; gap: 18px;
-    padding: 0 28px; background: var(--surface);
+    height: 60px; flex: none; display: flex; align-items: center; gap: 16px;
+    padding: 0 28px; background: var(--surface); min-width: 0;
   }
-  .topbar .ttl { font-weight: 800; font-size: 15px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-  .topbar .ttl .prod { color: var(--ink); }
-  .topbar .back { color: var(--dim); text-decoration: none; font-size: 13px; white-space: nowrap; }
+  .topbar .ttl { font-weight: 800; font-size: 15px; white-space: nowrap; display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; }
+  .topbar .ttl .prod { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .topbar .back { color: var(--dim); text-decoration: none; font-size: 13px; white-space: nowrap; flex: none; }
   .topbar .back:hover { color: var(--ink); }
-  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .topbar .right { margin-left: auto; flex: none; display: flex; align-items: center; gap: 12px; }
   .topbar .meta { color: var(--dim); font-size: 12px; white-space: nowrap; }
   .topbar .av-user { width: 30px; height: 30px; border-radius: 50%; background: var(--fill); color: var(--ink);
     display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; }
 
-  /* 顶部步骤胶囊条 */
-  .steps-bar { display: flex; align-items: center; gap: 4px; }
-  .step-pill { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
-  .step-pill.cur { background: var(--fill); }
+  /* 顶部步骤胶囊条：可伸缩 + 横向滚动，永不挤掉右侧按钮 */
+  .steps-bar { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0;
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .steps-bar::-webkit-scrollbar { display: none; }
+  .step-pill { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; flex: none; }
   .step-pill .num {
     width: 20px; height: 20px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
     font-size: 11px; font-weight: 700; background: var(--fill); color: var(--faint);
   }
-  .step-pill.cur .num { background: var(--ink); color: #fff; }
-  .step-pill.done .num { background: var(--fill); color: var(--ink); }
   .step-pill .lbl { font-size: 12.5px; font-weight: 500; color: var(--dim); }
-  .step-pill.cur .lbl { color: var(--ink); font-weight: 700; }
+  .step-pill.done .num { background: var(--fill); color: var(--ink); }
   .step-pill.done .lbl { color: var(--ink-2); }
+  /* 选中态：与「完成」解耦——无论该阶段已完成/进行中/待开始，当前查看的阶段始终高亮（白块 + 黑描边圈），一眼知道在第几步 */
+  .step-pill.sel { background: var(--block); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .step-pill.sel .num { background: var(--ink); color: #fff; }
+  .step-pill.sel .lbl { color: var(--ink); font-weight: 700; }
   .step-sep { width: 18px; height: 1px; background: var(--line); flex: none; }
+  /* 窄屏瘦身：阶段胶囊只留数字圆圈，仅当前阶段显示文字标签（保留上下文）；隐藏次要 meta */
+  @media (max-width: 1180px) {
+    .topbar { gap: 12px; padding: 0 18px; }
+    .topbar .meta { display: none; }
+    .step-sep { width: 8px; }
+    .step-pill { padding: 6px; gap: 0; }
+    .step-pill .lbl { display: none; }
+    .step-pill.sel { padding: 6px 12px; gap: 8px; }
+    .step-pill.sel .lbl { display: inline; }
+  }
 
   /* 按钮 */
   .btn { background: var(--ink); color: #fff; border: 0; border-radius: 10px; padding: 9px 18px;
@@ -1164,18 +1177,21 @@ function renderBoard() {
 
   // 顶部步骤胶囊条（胶囊 + 连线）——点胶囊进该阶段的视图
   $('stepper').innerHTML = state.phases.map((p, i) => {
-    const cls = p.status === 'done' ? 'done' : (p.id === selectedPhase ? 'cur' : '');
+    const cls = (p.status === 'done' ? 'done' : '') + (p.id === selectedPhase ? ' sel' : '');
     const numTxt = p.status === 'done' ? IC_CHECK : (i + 1);
     const sep = i < state.phases.length - 1 ? '<span class="step-sep"></span>' : '';
     return `<div class="step-pill ${cls}" onclick="selectStage(${p.id})">
       <span class="num">${numTxt}</span><span class="lbl">${esc(p.name)}</span></div>${sep}`;
   }).join('');
+  // 窄屏阶段条横向滚动时，把选中阶段滚入可见区，避免「不知道在第几步」
+  const selPill = $('stepper').querySelector('.step-pill.sel');
+  if (selPill) selPill.scrollIntoView({ block: 'nearest', inline: 'center' });
 
   // 顶栏「下一步」：进入下一阶段（最后一步隐藏）
   const ni = state.phases.findIndex(p => p.id === selectedPhase);
   const nextPh = state.phases[ni + 1];
   const nb = $('next-stage-btn');
-  if (nb) { nb.style.display = nextPh ? '' : 'none'; if (nextPh) nb.textContent = `下一步：${nextPh.name} →`; }
+  if (nb) { nb.style.display = nextPh ? '' : 'none'; if (nextPh) nb.textContent = `下一步`; }
 
   const ph = state.phases.find(p => p.id === selectedPhase);
   $('phase-title').innerHTML = `${esc(ph.name)} <span class="hint">${ph.status === 'done' ? '已完成' : ph.status === 'active' ? '进行中' : '待开始'}</span>`;
@@ -1446,6 +1462,14 @@ function saveDeployCreds() {
 
 // ⑤⑥⑦ 面板阶段：让 Agent 做本阶段（④页面在画布里，不在这里触发）
 let pStageRun = {};   // phase -> {line, running, failed}
+// 平台信息（来自 wizard.json 的 primary：PC 桌面 / H5 移动网页 / APP 原生移动）——决定⑥预览按钮、⑦上线按钮的形态
+let pfWizard = { primary: null, platforms: [] };
+function loadWizard() {
+  fetch(PF_BASE + '/api/wizard').then(r => r.json()).then(w => {
+    pfWizard = { primary: (w && w.primary) || null, platforms: (w && w.platforms) || [] };
+    if ([6, 7].includes(selectedPhase)) renderStageExtra();   // 平台一到位就刷新按钮文案
+  }).catch(() => {});
+}
 function runStageHtml(phase) {
   const names = { 5: '功能与数据设计', 6: '开发实现', 7: '部署上线' };
   const hints = {
@@ -1458,10 +1482,26 @@ function runStageHtml(phase) {
   const st = pStageRun[phase] || {};
   const credsCard = phase === 7 ? deployCredsHtml() : '';
   const previewCard = phase === 6 ? previewSectionHtml() : '';
+  const prim = pfWizard.primary;   // 'PC' | 'H5' | 'APP' | null
+  // ⑦主按钮文案按平台说清楚产出形态（APP→分发包；Web/桌面→部署上线）
+  let mainLabel = done ? '重做本阶段' : '让 Agent 做本阶段';
+  if (phase === 7 && !done) {
+    mainLabel = prim === 'APP' ? '构建并产出上线分发包'
+              : prim === 'PC'  ? '构建并部署上线'
+              : prim === 'H5'  ? '部署上线'
+              : '让 Agent 做本阶段';
+  }
+  // ⑥新增「预览/运行」按钮：让 Agent 把当前实现构建并起到屏幕/模拟器上实时预览（按平台自适应文案）
+  const previewBtn = (phase === 6) ? `<button class="btn ghost" ${st.running ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="doRunAction(6,'preview')" title="让 Agent 把当前已实现的产品构建起来、跑到你屏幕/模拟器上实时预览（不重做整个阶段）">${
+      prim === 'APP' ? '📱 构建并在模拟器预览'
+    : prim === 'PC'  ? '🖥 本地运行预览'
+    : prim === 'H5'  ? '🌐 本地预览'
+    : '▶ 构建并预览'}</button>` : '';
   return credsCard + previewCard + `<div class="card"><h2>${names[phase]} <span class="hint">交给 Agent 自动完成</span></h2>
     <div class="wz-hint2" style="margin:0 0 12px">${hints[phase]}<br>遇到要你拍板的（如选模板、部署目标），Agent 会在页面顶部弹出选项让你点选。产物出现在下方「产物 / 进展日志」。</div>
     ${(done && !st.running) ? `<input class="wz-input" id="st-stage-req" style="max-width:none;margin-bottom:10px" oninput="(pStageRun[${phase}]=pStageRun[${phase}]||{}).instr=this.value" value="${esc(st.instr || '')}" placeholder="重做要求（可选）：写一句你想调整的方向">` : ''}
-    <button class="btn" ${st.running ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="doRunStage(${phase})">${IC_SPARK}${done ? '重做本阶段' : '让 Agent 做本阶段'}</button>
+    <button class="btn" ${st.running ? 'disabled style="background:var(--dash);cursor:not-allowed"' : ''} onclick="doRunStage(${phase})">${IC_SPARK}${mainLabel}</button>
+    ${previewBtn}
     <button class="btn ghost" onclick="revealCode()" title="在系统文件管理器打开项目代码目录">📂 ${navigator.platform.indexOf('Mac') >= 0 ? '在访达打开代码' : '打开代码目录'}</button>
     ${st.running ? `<div class="wz-aibox" style="margin-top:14px${st.waiting ? ';border-color:#d8c98a;background:#fcf8e8;color:#7a6a1f' : ''}">${st.waiting ? '⏳ Agent 正等你回答上面弹出的选项（回答后会自动继续，别关页面）' : '✦ Agent 进行中…'}${st.line ? `<br><span style="color:var(--dim);font-size:12px">${esc(st.line)}</span>` : ''}<br><span style="color:var(--dim);font-size:12px">进度见下方步骤 / 产物 / 进展日志</span></div>` : ''}
     ${st.failed ? `<div class="wz-aibox" style="margin-top:14px;border-color:#e0b4b4;background:#fdf4f4;color:#b3403a">❌ Agent 中断了（可能 claude 未登录 / 超时 / 中途报错）。点上面按钮重试，或在💬留言说明、或在 CLI 里接手本阶段。</div>` : ''}</div>`;
@@ -1480,6 +1520,14 @@ function doRunStage(phase) {
   fetch(PF_BASE + '/api/run-stage', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phase, instruction: instr }) })
     .then(r => { if (r.status === 409) toast('本阶段 Agent 已在进行中（服务端拦截了重复触发）'); }).catch(() => {});
   toast(instr ? '已让 Agent 带要求重做本阶段' : '已让 Agent 做本阶段（进度见下方步骤/产物/日志）');
+}
+// ⑥「预览/运行」：让 Agent 聚焦地构建并起预览（复用 stage-6 进度通道与并发护栏，不重做整个阶段）
+function doRunAction(phase, action) {
+  if (pStageRun[phase] && pStageRun[phase].running) { toast('本阶段 Agent 已在进行中'); return; }
+  pStageRun[phase] = { running: true, line: '', failed: false }; renderStageExtra();
+  fetch(PF_BASE + '/api/run-action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phase, action }) })
+    .then(r => { if (r.status === 409) toast('本阶段 Agent 已在进行中（服务端拦截了重复触发）'); }).catch(() => {});
+  toast('已让 Agent 构建并起预览（进度见下方进展日志；起好后会在屏幕/模拟器看到）');
 }
 async function pollStageRun() {
   const phase = selectedPhase;
@@ -2457,6 +2505,7 @@ if (IS_PROJECT) {
   $('page-project').classList.add('on');
   $('nav-proj').classList.add('on');
   poll();   // 首次 poll → selectStage(current_phase)；画布按需在 enterCanvas 里加载
+  loadWizard();   // 拉平台信息（⑥预览 / ⑦上线按钮按平台自适应）
   pollInbox();
   pollHealth();
   pollPages();
