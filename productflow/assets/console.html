@@ -216,27 +216,15 @@
     box-shadow: 0 2px 12px rgba(0,0,0,.04); user-select: none; cursor: default; }
   .cv-item:hover { border-color: #cfcfcf; }
   .cv-item.dragging { box-shadow: 0 14px 38px rgba(0,0,0,.12); }
-  .cv-item.liked { border-color: var(--ink); box-shadow: 0 0 0 1.5px var(--ink), 0 4px 16px rgba(0,0,0,.08); }
   .cv-item img { width: 100%; display: block; pointer-events: none; }
   .cv-item .doc { height: 120px; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: var(--faint); background: #fafafa; pointer-events: none; border-bottom: 1px solid var(--line); }
   .cv-item .bar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; font-size: 12px; border-top: 1px solid var(--line); pointer-events: none; }
   .cv-item .bar .ti { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
-  .cv-heart {
-    position: absolute; top: 9px; right: 9px; z-index: 2; width: 26px; height: 26px; border-radius: 50%;
-    background: #fff; border: 1px solid var(--dash); display: flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 13px; color: var(--faint); user-select: none;
-  }
-  .cv-heart:hover { border-color: var(--ink); }
-  .cv-item.liked .cv-heart { background: var(--ink); border-color: var(--ink); color: #fff; }
-  .cv-del { position: absolute; top: 9px; right: 41px; z-index: 2; width: 26px; height: 26px; border-radius: 50%;
+  .cv-del { position: absolute; top: 9px; right: 9px; z-index: 2; width: 26px; height: 26px; border-radius: 50%;
     background: #fff; border: 1px solid var(--dash); display: flex; align-items: center; justify-content: center;
     cursor: pointer; font-size: 12px; color: var(--faint); opacity: 0; transition: opacity .12s; }
   .cv-item:hover .cv-del { opacity: 1; }
   .cv-del:hover { border-color: #c0392b; color: #c0392b; }
-  .cv-cmt { margin-left: auto; flex: none; pointer-events: auto; cursor: pointer; font-size: 13px; line-height: 1;
-    opacity: .5; user-select: none; padding: 0 2px; }
-  .cv-cmt:hover { opacity: 1; }
-  .cv-cmt.has { opacity: 1; }
   .wz-del { position: absolute; top: 6px; right: 6px; z-index: 2; width: 22px; height: 22px; border-radius: 6px;
     background: rgba(255,255,255,.92); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center;
     cursor: pointer; font-size: 11px; color: var(--dim); opacity: 0; transition: opacity .12s; }
@@ -287,10 +275,6 @@
   .hd-input .hd-go { width: 100%; margin-top: 8px; }
   .cv-lane-label { position: absolute; font-size: 13px; font-weight: 800; color: var(--ink); pointer-events: none; white-space: nowrap; display: flex; align-items: center; gap: 7px; }
   .cv-lane-label .ln { color: var(--dim); font-weight: 500; }
-  .cv-toolbar { position: absolute; left: 20px; top: 16px; display: flex; gap: 8px; z-index: 5; }
-  .cv-toolbar button { background: #fff; border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 8px 14px; font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
-  .cv-toolbar button:hover { border-color: var(--ink); }
-  .cv-toolbar button.primary { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
   .cv-controls { position: absolute; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 6px; z-index: 5;
     background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 7px; box-shadow: 0 4px 16px rgba(0,0,0,.07); align-items: center; }
   .cv-controls button { width: 34px; height: 34px; border-radius: 9px; border: 0; background: #fff; color: var(--ink); font-size: 1rem; cursor: pointer; }
@@ -308,9 +292,6 @@
   .cv-base { position: absolute; left: 10px; top: 10px; background: rgba(255,255,255,.92); border: 1px solid var(--line); border-radius: 8px;
     padding: 3px 9px; font-size: 11.5px; font-weight: 600; color: var(--ink); cursor: pointer; z-index: 2; }
   .cv-base:hover { border-color: var(--ink); }
-  .cv-redraw { position: absolute; right: 10px; top: 10px; background: rgba(255,255,255,.92); border: 1px solid var(--line); border-radius: 8px;
-    padding: 3px 8px; font-size: 12px; cursor: pointer; z-index: 2; opacity: .85; }
-  .cv-redraw:hover { border-color: var(--ink); opacity: 1; }
   .cv-item.base { box-shadow: 0 0 0 2px var(--ink); }
   .cv-item.base .cv-base { background: var(--ink); color: #fff; border-color: var(--ink); }
   .cv-item.sel { outline: 3px solid #5470c6; outline-offset: 2px; }
@@ -623,9 +604,6 @@
         <textarea id="hd-text" placeholder="描述想要的首图（点上方参考插入 图1/图2，如：主色参考 图1，布局参考 图2）；点中画布某张图=改那张…"></textarea>
         <button class="btn hd-go" id="hd-go" onclick="dialogGenerate()">✦ 生成首图</button>
       </div>
-    </div>
-    <div class="cv-toolbar">
-      <button class="primary" id="cv-send" onclick="sendCanvasFeedback()">发给 Agent ♡0</button>
     </div>
     <div class="cv-hint">拖拽空白处平移 · 滚轮缩放 · 拖动卡片摆位 · 双击预览 · 点图选中改图</div>
     <div class="cv-controls">
@@ -1669,9 +1647,6 @@ async function enterCanvas(stage) {
   renderCanvas();
 }
 
-function likedCount() {
-  return Object.values(cv.items).filter(v => v && v.liked).length;
-}
 
 // 当前阶段的卡片：P3 首图(explore.heroes)，P4 页面(pages × 平台矩阵)
 function stageCards() {
@@ -1705,11 +1680,6 @@ function heroCardHtml(c, pos) {
     <div class="bar"><span class="ti">${esc(c.title)}</span></div></div>`;
 }
 
-// 卡片上的「针对这张写一句意见」图标——有意见时高亮并把意见作为 tooltip
-function cmtIconHtml(pos) {
-  const c = (pos && pos.comment || '').trim();
-  return `<span class="cv-cmt ${c ? 'has' : ''}" title="${c ? esc(c) : '针对这张写一句意见'}">${c ? '💬' : '💭'}</span>`;
-}
 
 function pageCardHtml2(c, pos) {
   const pg = c.pg, st = pg.status || 'placeholder';
@@ -1814,10 +1784,7 @@ function renderCanvas() {
   cvAutoPlaceCards(cards);
   $('cv-stagebar').innerHTML = stagebarHtml();
   $('cv-empty').style.display = cards.length ? 'none' : 'flex';
-  // ③④ 画布都不要「喜欢/评论/发给 Agent」反馈流（③用右侧生成对话框、④用平台徽章/双击编辑迭代）
-  const tb = document.querySelector('.cv-toolbar');
-  if (tb) tb.style.display = (cvStage === 3 || cvStage === 4) ? 'none' : 'flex';
-  if (cvStage !== 3 && cvStage !== 4) { const n = likedCount(); $('cv-send').textContent = `发给 Agent ${n ? '❤' : '♡'}${n}`; }
+  // ③④ 画布只做 生成/精修(双击编辑层)/定基调，无「喜欢/评论/发给 Agent」反馈流
   const hint = document.querySelector('.cv-hint');
   if (hint) hint.textContent = (cvStage === 3)
     ? '拖拽平移 · 滚轮缩放 · 拖动摆位 · 双击图编辑（框选某块=局部重绘 / 不框写一句=整图改）· 设为基调定方向'
@@ -1844,7 +1811,6 @@ function genHeroes() {
 }
 
 /* ===== ③ 生成首图对话框 ===== */
-let heroSel = null;        // 点选要「改」的那张首图 file
 let hdCollapsed = false;
 let heroRefOff = {};       // ③ 本次生成里被取消勾选的参考 id（默认全参与）
 function refImgUrl(file) { return PF_BASE + '/artifacts/' + String(file).replace(/^artifacts\//, ''); }
@@ -1872,8 +1838,6 @@ function renderHeroDialog() {
       }).join('')
     : `<span class="none">还没选参考——可去 ② 选几张，或直接生成（按产品需求）</span>`;
   const refsHint = refs.length ? `<div class="hd-hint">点缩略图把代号插进下面文字（例：主色参考 图1，布局参考 图2）；☑ 切换是否参与本次</div>` : '';
-  const selHtml = heroSel
-    ? `<div class="hd-sel"><img src="${refImgUrl(heroSel)}"><span>正在改这张</span><span class="x" onclick="clearHeroSel()">取消 ✕</span></div>` : '';
   let logHtml = '';
   if (gen) logHtml += `<div class="hd-gen">✦ Agent 正在生成…（约 1–2 分钟，期间别重启操作台）</div>`;
   if (!log.length && !gen) logHtml += `<div class="hd-empty">${pExplore.heroGenFailed ? '上次生成未完成，可重试。' : '还没有生成记录。'}<br>在下面写想要的首图、点「生成」；每次生成会在这里记下<b>用了哪些参考 + 发了什么文字</b>。</div>`;
@@ -1884,14 +1848,13 @@ function renderHeroDialog() {
     logHtml += `<div class="hd-entry"><div class="hd-meta"><span class="hd-mode ${e.mode === 'edit' ? 'edit' : ''}">${e.mode === 'edit' ? '改图' : '生成'}</span><span>${esc(String(e.ts || '').slice(5, 16))}</span><span>· ${(e.refs || []).length} 参考 → ${(e.results || []).length} 张</span></div>
       <div class="hd-thumbs">${thumbs}</div><div class="hd-prompt">${esc(e.prompt || '')}</div></div>`;
   }
-  $('hd-body').innerHTML = `<div class="hd-sec-t">本次参考</div><div class="hd-refs">${refsHtml}</div>${refsHint}${selHtml}<div class="hd-sec-t">生成记录</div><div class="hd-log">${logHtml}</div>`;
+  $('hd-body').innerHTML = `<div class="hd-sec-t">本次参考</div><div class="hd-refs">${refsHtml}</div>${refsHint}<div class="hd-sec-t">生成记录</div><div class="hd-log">${logHtml}</div>`;
   const go = $('hd-go');
-  go.textContent = gen ? 'Agent 生成中…' : (heroSel ? '✦ 按指令改这张' : '✦ 生成首图');
+  go.textContent = gen ? 'Agent 生成中…' : '✦ 生成首图';
   go.disabled = gen;
   go.style.cssText = gen ? 'background:var(--dash);cursor:not-allowed' : '';
 }
 function toggleHeroDialog() { hdCollapsed = !hdCollapsed; renderHeroDialog(); }
-function clearHeroSel() { heroSel = null; renderHeroDialog(); renderCanvas(); }
 // 点参考缩略图 → 把它的代号（图1/图2…）插进生成文字框的光标处
 function insertRefCode(code) {
   const ta = $('hd-text'); if (!ta) return;
@@ -1907,28 +1870,20 @@ function toggleHeroRef(id) {
   if (heroRefOff[id]) delete heroRefOff[id]; else heroRefOff[id] = true;
   renderHeroDialog();
 }
-function selectHeroForEdit(file) {   // 点图选中＝准备改这张
-  heroSel = (heroSel === file) ? null : file;
-  renderHeroDialog(); renderCanvas();
-  if (heroSel) { const ta = $('hd-text'); if (ta) ta.focus(); }
-}
 function dialogGenerate() {
   if (pExplore.request && pExplore.request['gen-heroes']) { toast('正在生成，稍等'); return; }
   const ta = $('hd-text'); const instruction = (ta ? ta.value : '').trim();
-  if (heroSel && !instruction) { toast('说一句这张要怎么改'); return; }
   const usedFiles = selectedRefCards().filter(r => !heroRefOff[r.id]).map(r => r.file);
   const req = { kind: 'gen-heroes', selectedRefs: pExplore.selectedRefs };
   if (usedFiles.length) req.refFiles = usedFiles;   // 代号顺序的参考文件 → 服务端按此顺序喂 --image，图N 稳对应
   if (instruction) req.instruction = instruction;
-  if (heroSel) req.baseImage = heroSel;
   pExplore.request = Object.assign({}, pExplore.request, { 'gen-heroes': req });
   pExplore.heroGenFailed = false;
   if (ta) ta.value = '';
-  const wasEdit = !!heroSel; heroSel = null;
   renderHeroDialog();
   fetch(PF_BASE + '/api/explore', { method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ selectedRefs: pExplore.selectedRefs, request: req }) }).catch(() => {});
-  toast(wasEdit ? '已请 Agent 按指令改这张' : '已请 Agent 生成首图');
+  toast('已请 Agent 生成首图');
 }
 function removeHero(hid) {
   if (!hid) return;
@@ -1994,26 +1949,6 @@ function cvFit() {
   cvApply(); cvSave();
 }
 
-function sendCanvasFeedback() {
-  const liked = Object.entries(cv.items).filter(([, v]) => v && v.liked).map(([id]) => id);
-  // 把每张卡片上的针对意见收集成 {ref(标题), file, text}，让 Agent 知道是「哪张图的什么问题」
-  const cards = stageCards();
-  const labelOf = {}, fileOf = {};
-  for (const c of cards) { labelOf[c.id] = c.title || (c.pg && c.pg.name) || c.id; fileOf[c.id] = c.file || c.img || ''; }
-  const comments = Object.entries(cv.items)
-    .filter(([, v]) => v && v.comment && v.comment.trim())
-    .map(([id, v]) => ({ ref: labelOf[id] || id, file: fileOf[id] || '', text: v.comment.trim() }));
-  const sname = { 3: '首图设计', 4: '页面设计' }[cvStage] || '';
-  let text = `【${sname}】画布反馈：❤${liked.length} 张、${comments.length} 条针对意见`;
-  if (comments.length) text += '\n针对性意见（按卡片）：\n' + comments.map(c => `· 「${c.ref}」：${c.text}`).join('\n');
-  if (!liked.length && !comments.length) { toast('先❤选中喜欢的，或给某张卡片写一句意见'); return; }
-  fetch(PF_BASE + '/api/inbox', { method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ text, type: 'canvas-feedback', stage: cvStage, liked, comments }) })
-    .then(() => {
-      toast(`已发给 Agent：❤${liked.length} + 意见${comments.length}`);
-      pollInbox();
-    }).catch(() => {});
-}
 
 // ⑥ 成品预览：缩略图 → 圈选批注 → 把「哪张图哪块区域什么问题」发给 Agent
 function previewSectionHtml() {
@@ -2179,9 +2114,9 @@ function sendPreviewFeedback() {
 
   vp.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
-    if (e.target.closest('.cv-heart') || e.target.closest('textarea')
-        || e.target.closest('.cv-base') || e.target.closest('.cv-redraw') || e.target.closest('.cv-page-del') || e.target.closest('.cv-del') || e.target.closest('.cv-plat') || e.target.closest('.cv-cmt')
-        || e.target.closest('.cv-toolbar') || e.target.closest('.cv-controls') || e.target.closest('#cv-stagebar') || e.target.closest('#hero-dialog')) return;
+    if (e.target.closest('textarea')
+        || e.target.closest('.cv-base') || e.target.closest('.cv-page-del') || e.target.closest('.cv-del') || e.target.closest('.cv-plat')
+        || e.target.closest('.cv-controls') || e.target.closest('#cv-stagebar') || e.target.closest('#hero-dialog')) return;
     const item = e.target.closest('.cv-item');
     sx = e.clientX; sy = e.clientY; moved = false;
     if (item) {
@@ -2234,35 +2169,6 @@ function sendPreviewFeedback() {
     if (item.dataset.img) openArtifact(item.dataset.img, item.dataset.title || '', 'image');
   });
   vp.addEventListener('click', e => {
-    const h = e.target.closest('.cv-heart');
-    if (h) {
-      const id = h.closest('.cv-item').dataset.id;
-      const it = cv.items[id];
-      if (!it) return;
-      if (it.liked) delete it.liked; else it.liked = true;
-      renderCanvas(); cvSave();
-      return;
-    }
-    // 针对单张卡片写一句意见（绑定到这张图，不再是游离便签）
-    const cmt = e.target.closest('.cv-cmt');
-    if (cmt) {
-      const id = cmt.closest('.cv-item').dataset.id;
-      const it = cv.items[id];
-      if (!it) return;
-      const val = prompt('针对这张写一句意见（留空清除）：', it.comment || '');
-      if (val === null) return;
-      if (val.trim()) it.comment = val.trim(); else delete it.comment;
-      renderCanvas(); cvSave();
-      return;
-    }
-    // 框选局部重绘（③首图 / ④页面）→ 打开圈选层，框选区域+描述 → gpt-image-2 只重画选中块
-    const rd = e.target.closest('.cv-redraw');
-    if (rd) {
-      const item = rd.closest('.cv-item');
-      const title = item ? (item.dataset.title || (item.dataset.pgid ? '页面' : '设计稿')) : '设计稿';
-      openRedraw(rd.dataset.file, title, cvStage, rd.dataset.pgid || null, rd.dataset.plat || '');
-      return;
-    }
     // 设为视觉基调（P3 首图）
     const base = e.target.closest('.cv-base');
     if (base) { setHeroBase(base.dataset.file); return; }
