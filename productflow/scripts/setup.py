@@ -61,6 +61,12 @@ def main():
     # 1. Python（必需）
     check(f"Python {sys.version.split()[0]}", sys.version_info >= (3, 8), "需要 ≥ 3.8")
 
+    # 1b. claude CLI（Agent 引擎——②③④⑤⑥⑦ 各阶段靠 server 后台 spawn `claude -p` 跑）
+    claude = shutil.which("claude")
+    check("claude CLI（Agent 引擎）", bool(claude),
+          "缺则操作台「让 Agent 做本阶段」/各阶段自动化跑不起来——装 Claude Code 并确保 claude 在 PATH"
+          if not claude else "已装")
+
     # 2. 前端 vendored 库（必需——操作台离线渲染要用）
     vendor = os.path.join(SKILL_DIR, "assets", "vendor")
     need = ["d3.min.js", "markmap-lib.js", "markmap-view.js", "viewer.min.js", "viewer.min.css"]
@@ -82,13 +88,20 @@ def main():
           ("daemon 未启动" if docker and not running else ("未装：⑦可改用其它部署方式" if not docker else "可用")),
           fatal=False)
 
-    # 5. OpenAI 生图 key（③首图/④页面 AI 生图用；缺则降级为手写代码版设计，仍可走完流程）
+    # 5. 生图 skill openai-image-gen（③首图/④页面 调它的 scripts/gen.py 出图；缺则降级为手写代码版设计）
+    gen_py = os.path.expanduser("~/.claude/skills/openai-image-gen/scripts/gen.py")
+    img_skill = os.path.isfile(gen_py)
+    check("生图 skill openai-image-gen", img_skill,
+          "缺则 ③首图/④页面 无法 AI 生图，降级为手写代码版设计（流程仍走得通）——装 openai-image-gen skill"
+          if not img_skill else "已装", fatal=False)
+
+    # 5b. OpenAI 生图 key（生图 skill 还需 key 才能真出图；缺则同样降级为手写代码版设计）
     key = os.path.isfile(os.path.expanduser("~/.config/openai/env"))
     check("OpenAI 生图 key ~/.config/openai/env", key,
           "缺则 ③首图/④页面 生图降级为手写代码（流程仍走得通）" if not key else "已配置", fatal=False)
 
     # 6. 跑 ProductFlow 自己的测试套件——确认核心代码工作正常（这就是"自检工作效果"）
-    print("\n— 跑 ProductFlow 测试套件确认核心功能正常（约 20s）…")
+    print("\n— 跑 ProductFlow 测试套件确认核心功能正常（约 1 分钟；含浏览器 e2e，无 chromium 则自动跳过）…")
     run = os.path.join(SKILL_DIR, "tests", "run.sh")
     if os.path.isfile(run):
         r = subprocess.run(["sh", run], capture_output=True, text=True)
