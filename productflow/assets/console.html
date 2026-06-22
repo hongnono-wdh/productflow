@@ -43,6 +43,13 @@
   .sb-logo .name { font-weight: 800; font-size: 15px; line-height: 1.2; white-space: nowrap; }
   .sb-logo .name small { display: block; font-weight: 500; font-size: 11px; color: var(--dim); }
   body.collapsed .sb-logo .name { display: none; }
+  .sb-logo .mark .mk-exp { display: none; font-size: 20px; line-height: 1; }
+  /* 收起态：隐藏右侧浮动折叠按钮，logo 兼作展开入口——悬浮把 P 换成 ›，点一下展开 */
+  body.collapsed .sb-collapse { display: none; }
+  body.collapsed .sb-logo { cursor: pointer; }
+  body.collapsed .sb-logo:hover .mark { background: var(--ink-2); }
+  body.collapsed .sb-logo:hover .mk-logo { display: none; }
+  body.collapsed .sb-logo:hover .mk-exp { display: inline; }
   .sb-nav { display: flex; flex-direction: column; gap: 2px; }
   .sb-nav a {
     display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 10px;
@@ -507,8 +514,8 @@
 <!-- ── 左侧侧边栏（常驻） ── -->
 <aside id="sidebar">
   <button class="sb-collapse" onclick="toggleSidebar()" title="折叠/展开">‹</button>
-  <a class="sb-logo" href="/">
-    <span class="mark">P</span>
+  <a class="sb-logo" href="/" onclick="return sbLogoClick(event)" title="ProductFlow 首页（收起时点此展开）">
+    <span class="mark"><span class="mk-logo">P</span><span class="mk-exp">›</span></span>
     <span class="name">ProductFlow<small>操作台</small></span>
   </a>
   <nav class="sb-nav">
@@ -672,6 +679,11 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const artUrl = (file, ts) => PF_BASE + '/artifacts/' + file.replace(/^artifacts\//, '') + (ts ? '?t=' + encodeURIComponent(ts) : '');
 
 function toggleSidebar() { document.body.classList.toggle('collapsed'); }
+// 收起态：点 logo = 展开（拦住跳首页）；展开态：让 <a href="/"> 正常回首页
+function sbLogoClick(e) {
+  if (document.body.classList.contains('collapsed')) { e.preventDefault(); toggleSidebar(); return false; }
+  return true;
+}
 let lastMsgCount = 0, chatSeen = 0;
 function toggleChatDrawer() {
   const d = $('chat-drawer'); if (!d) return;
