@@ -296,11 +296,14 @@
    mkdir -p ~/.claude/skills
    for s in "$DIR"/*/; do [ -f "$s/SKILL.md" ] &amp;&amp; ln -sfn "${s%/}" ~/.claude/skills/"$(basename "$s")"; done
 
-3. 跑自检（查依赖 + 跑测试，确认装对/更新对了；会顺带迁移老项目数据）：
-   python3 "$DIR/productflow/scripts/setup.py"
-   自检会硬性检查（缺了报致命、挡安装）：claude 在 PATH、生图 skill openai-image-gen 已装（随本仓库软链上去）、~/.config/openai/env 里有 OpenAI key（③首图/④页面 AI 生图必需）。**没配 OpenAI key 就提醒我去配 OPENAI_API_KEY / OPENAI_BASE_URL。** Playwright（pip install playwright &amp;&amp; playwright install chromium）和 Docker 是可选项，缺了只降级不挡主流程。
+3. 一并装好 Playwright + chromium（②找参考截图、⑥端到端测试要用——建议安装时就装上，免得到时缺、体验差；装不上也没关系，相关阶段会降级）：
+   pip install playwright &amp;&amp; playwright install chromium
 
-4. 启动操作台：
+4. 跑自检（查依赖 + 跑测试，确认装对/更新对了；会顺带迁移老项目数据）：
+   python3 "$DIR/productflow/scripts/setup.py"
+   自检会硬性检查（缺了报致命、挡安装）：claude 在 PATH、生图 skill openai-image-gen 已装（随本仓库软链上去）、~/.config/openai/env 里有 OpenAI key（③首图/④页面 AI 生图必需）。**没配 OpenAI key 就提醒我去配 OPENAI_API_KEY / OPENAI_BASE_URL。** Docker 是可选项（⑦本地部署用到再装），缺了只降级不挡主流程。
+
+5. 启动操作台：
    sh "$DIR/productflow/scripts/start.sh"
    然后告诉我操作台地址 http://127.0.0.1:7717/、当前版本号，以及"以后再贴这段、或在操作台点版本号 / 跑 /productflow-update，就能再检查更新"。
 

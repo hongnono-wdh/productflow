@@ -26,11 +26,14 @@
    mkdir -p ~/.claude/skills
    for s in ~/.local/share/productflow/*/; do [ -f "$s/SKILL.md" ] && ln -sfn "${s%/}" ~/.claude/skills/"$(basename "$s")"; done
 
-3. 跑自检（查依赖 + 跑测试，确认装对了）：
-   python3 ~/.local/share/productflow/productflow/scripts/setup.py
-   自检会硬性检查（缺了报致命、挡安装）：claude 在 PATH、生图 skill openai-image-gen 已装（随仓库软链上去）、~/.config/openai/env 有 OpenAI key（③首图/④页面 AI 生图必需）。没配 OpenAI key 就提醒我去配 OPENAI_API_KEY / OPENAI_BASE_URL。Playwright（pip install playwright && playwright install chromium）/ Docker 可选，缺了只降级不挡主流程。
+3. 一并装好 Playwright + chromium（②找参考截图、⑥端到端测试要用——建议安装时就装上，免得到时缺、体验差；装不上也没关系，相关阶段会降级）：
+   pip install playwright && playwright install chromium
 
-4. 启动操作台并打开浏览器：
+4. 跑自检（查依赖 + 跑测试，确认装对了）：
+   python3 ~/.local/share/productflow/productflow/scripts/setup.py
+   自检会硬性检查（缺了报致命、挡安装）：claude 在 PATH、生图 skill openai-image-gen 已装（随仓库软链上去）、~/.config/openai/env 有 OpenAI key（③首图/④页面 AI 生图必需）。没配 OpenAI key 就提醒我去配 OPENAI_API_KEY / OPENAI_BASE_URL。Docker 可选（⑦本地部署用到再装），缺了只降级不挡主流程。
+
+5. 启动操作台并打开浏览器：
    sh ~/.local/share/productflow/productflow/scripts/start.sh
    然后告诉我操作台地址 http://127.0.0.1:7717/，以及"新开会话可用 /productflow-init、/productflow-start，或直接说想做什么产品/网站"。
 
@@ -66,7 +69,7 @@ python3 ~/.local/share/productflow/productflow/scripts/setup.py   # 自检
 | **Python 3.8+** | 必需 | 操作台 server + 状态机，仅用标准库、无需 pip 装包；前端是预编译产物，**端上零 Node** |
 | **openai-image-gen skill** | 必需 | ③首图 / ④页面 AI 生图引擎；**随本仓库一起装**（安装会自动软链，无需另装） |
 | **OpenAI 生图 key** | 必需 | 上面的生图 skill 还需 key 才能真出图，放 `~/.config/openai/env`（`OPENAI_API_KEY` / `OPENAI_BASE_URL`） |
-| Playwright + chromium | 可选 | ②找参考截图 / ⑥端到端测试用：`pip install playwright && playwright install chromium`。**用到的那一步缺了再装也行，agent 会提示** |
+| Playwright + chromium | 可选（建议装） | ②找参考截图 / ⑥端到端测试用：`pip install playwright && playwright install chromium`。**建议安装时就一并装好，免得到时缺、体验差**；真缺了相关阶段降级、agent 会提示 |
 | Docker | 可选 | ⑦部署到本地用（静态站走 `nginx:alpine`）；缺了可改 Cloudflare / 单机部署。**到 ⑦ 缺了再装也行** |
 
 **必需项**缺任意一个，`/productflow-init` 会报致命、挡安装（确保核心流程能跑）；**可选项**缺了只让相关阶段降级，用到那一步再按需装（agent 会提示），不挡主流程。**本工具不内置任何 API key，不绑定任何服务器或网关。**
