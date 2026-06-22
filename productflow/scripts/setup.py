@@ -27,6 +27,34 @@ def check(label, ok, detail="", fatal=True):
     return ok
 
 
+def _vtuple(v):
+    try:
+        return tuple(int(x) for x in str(v).strip().split("."))
+    except (ValueError, AttributeError):
+        return (0,)
+
+
+def version_status():
+    """读本地 VERSION + 拉 GitHub 上的最新版本，返回 (状态, 本地, 远端)。
+    状态：'update'=有新版 / 'latest'=已最新 / 'offline'=没连上 GitHub / None=读不到本地版本。
+    GitHub 远端版本来源与操作台 /api/update-check 一致（raw VERSION 文件）。"""
+    try:
+        with open(os.path.join(SKILL_DIR, "VERSION"), encoding="utf-8") as f:
+            local = f.read().strip() or "0.0.0"
+    except OSError:
+        return (None, None, None)
+    try:
+        import urllib.request
+        url = "https://raw.githubusercontent.com/hongnono-wdh/productflow/main/productflow/VERSION"
+        with urllib.request.urlopen(url, timeout=4) as r:   # noqa: S310 固定可信域名
+            latest = r.read().decode().strip()
+    except Exception:  # noqa: BLE001  网络不通就当查不到，不打扰、不报错
+        return ("offline", local, None)
+    if latest and _vtuple(latest) > _vtuple(local):
+        return ("update", local, latest)
+    return ("latest", local, latest or local)
+
+
 def main():
     print("ProductFlow 自检（setup / doctor）\n" + "-" * 50)
 
@@ -71,6 +99,17 @@ def main():
             print("   测试输出尾部：\n   " + "\n   ".join(out.strip().splitlines()[-6:]))
     else:
         check("测试套件 tests/run.sh", False, "缺失", fatal=False)
+
+    # 版本 + 更新提示（总是显示，离线则只显示当前版本）
+    vstate, vlocal, vlatest = version_status()
+    if vstate == "update":
+        print(f"\n{WARN} 当前 v{vlocal}，GitHub 上已有 v{vlatest} —— 建议更新："
+              "再贴一次落地页安装提示词，或在操作台点版本号 / 跑 /productflow-update"
+              "（git pull + 自动迁移，项目数据在 skill 之外、不受影响）。")
+    elif vstate == "latest":
+        print(f"\n{OK} 当前 v{vlocal}（已是最新）。")
+    elif vstate == "offline":
+        print(f"\n   当前 v{vlocal}（没连上 GitHub 查最新，跳过更新检查）。")
 
     # 汇总 + 下一步
     print("\n" + "=" * 50)
