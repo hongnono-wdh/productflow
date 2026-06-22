@@ -1,0 +1,215 @@
+{
+  "_doc": "Style preset library for openai-image-gen. Each entry: id (kebab-case, unique), category, prompt (style descriptor appended to the subject), notes (when to use). AI agents may append new styles — see SKILL.md '扩展风格库'.",
+  "styles": [
+    {
+      "id": "glassmorphism-ui",
+      "category": "web-design",
+      "prompt": "glassmorphism UI style: frosted translucent glass panels, background blur, thin light borders, soft colorful gradient backdrop, floating layered cards, subtle inner glow, modern SaaS mockup in a browser window",
+      "notes": "适合科技感 SaaS 落地页主图"
+    },
+    {
+      "id": "neumorphism-ui",
+      "category": "web-design",
+      "prompt": "neumorphism (soft UI) style: extruded soft shapes from a pale monochrome background, dual light/dark soft shadows, rounded corners, tactile buttons and toggles, minimal color accents, clean mockup presentation",
+      "notes": "适合工具类 / 健康类 App 概念"
+    },
+    {
+      "id": "brutalism-web",
+      "category": "web-design",
+      "prompt": "web brutalism style: raw bold typography, harsh black borders, flat unstyled blocks, clashing primary colors, visible grid lines, oversized headlines, anti-design energy, desktop browser frame",
+      "notes": "适合潮牌 / 创意工作室 / 个性化作品集"
+    },
+    {
+      "id": "bento-grid",
+      "category": "web-design",
+      "prompt": "bento grid layout style: modular rounded rectangular cells of varied sizes arranged in a tight grid, each cell showcasing one feature with icon and short label, soft neutral background, gentle shadows, Apple-keynote-inspired feature overview",
+      "notes": "适合功能总览区块 / keynote 风格特性页"
+    },
+    {
+      "id": "claymorphism-ui",
+      "category": "web-design",
+      "prompt": "claymorphism style: chunky 3D clay-like rounded elements, pastel colors, big soft inner and outer shadows, playful inflated buttons and icons, friendly cartoon depth, light background mockup",
+      "notes": "适合儿童 / 教育 / 趣味产品"
+    },
+    {
+      "id": "swiss-international",
+      "category": "web-design",
+      "prompt": "Swiss international typographic style: strict grid, generous whitespace, Helvetica-like neo-grotesque type, asymmetric layout, limited palette of black white and one accent red, no decoration, editorial poster-like web page",
+      "notes": "适合品牌官网 / 设计机构 / 内容站"
+    },
+    {
+      "id": "dark-luxe-saas",
+      "category": "web-design",
+      "prompt": "dark luxe SaaS style: near-black background, subtle blue-violet accent glows, thin 1px borders, glass highlights, elegant sans-serif headline, sparse star-field gradient, premium developer-tool landing page in browser window",
+      "notes": "适合开发者工具 / AI 产品落地页（Linear/Vercel 风）"
+    },
+    {
+      "id": "y2k-chrome",
+      "category": "web-design",
+      "prompt": "Y2K retro-futurism style: chrome liquid metal shapes, iridescent gradients, pixel fonts mixed with airbrush glow, bubble buttons, early-2000s cyber optimism, holographic background, web page mockup",
+      "notes": "适合潮流 / 音乐 / 亚文化产品"
+    },
+    {
+      "id": "editorial-serif",
+      "category": "web-design",
+      "prompt": "editorial serif style: large elegant serif headlines, magazine-like column layout, cream paper background, generous line spacing, thin hairline dividers, muted earthy accents, literary landing page in browser window",
+      "notes": "适合内容订阅 / 出版 / 高端服务"
+    },
+    {
+      "id": "aurora-gradient-mesh",
+      "category": "web-design",
+      "prompt": "aurora gradient mesh style: smooth flowing multicolor mesh gradients (teal, violet, peach) as hero background, white bold sans-serif headline, floating UI cards with glass effect, dreamy soft light, modern startup landing page",
+      "notes": "适合通用 startup 落地页主图"
+    },
+    {
+      "id": "minimal-flat-pastel",
+      "category": "web-design",
+      "prompt": "minimal flat pastel style: simple flat geometric illustration, soft pastel palette, plenty of whitespace, rounded sans-serif type, tiny subtle shadows, calm friendly tone, clean landing page mockup",
+      "notes": "适合冥想 / 效率 / 生活方式类产品"
+    },
+    {
+      "id": "isometric-saas",
+      "category": "web-design",
+      "prompt": "isometric SaaS style: dashboard and UI panels rendered in isometric perspective, layered floating screens, vibrant blue-white palette, soft gradient background, modern fintech branding, presentation-ready hero image",
+      "notes": "适合 B2B SaaS 营销页主图（对应提示词库 #18 技巧）"
+    },
+    {
+      "id": "saas-dashboard-mockup",
+      "category": "ui-mockup",
+      "prompt": "flat fintech SaaS dashboard mockup: line charts, KPI cards and sidebar navigation, soft gradient background, vibrant blue and white palette, isometric perspective, clean modern UI",
+      "notes": "提示词库 #18：落地页/幻灯片用仪表盘图"
+    },
+    {
+      "id": "dark-pricing-page",
+      "category": "ui-mockup",
+      "prompt": "dark mode SaaS pricing page mockup in a browser window: three pricing cards labeled 'Starter $0', 'Pro $29', 'Team $99', subtle blue-violet accents, crisp sans-serif type, modern landing page, isometric desktop view",
+      "notes": "提示词库 #20：定价页探索（文字直接写入提示词）"
+    },
+    {
+      "id": "light-marketing-hero",
+      "category": "ui-mockup",
+      "prompt": "light mode SaaS marketing hero mockup in a browser window: large centered serif headline 'Build calmer software', sans-serif subtitle below, two CTA buttons, soft cream background with subtle grid gradient, modern landing page",
+      "notes": "提示词库 #21：营销主屏（替换 headline 文案即可复用）"
+    },
+    {
+      "id": "mobile-app-concept",
+      "category": "ui-mockup",
+      "prompt": "mobile app concept mockup: single iPhone frame with soft drop shadow, minimal sans-serif type, floating rounded cards, soft pastel gradient background, clean pre-Figma concept exploration",
+      "notes": "提示词库 #19：移动端概念稿"
+    },
+    {
+      "id": "brand-style-tile",
+      "category": "ui-mockup",
+      "prompt": "brand style tile on clean white background: three logo variants, earthy color swatches, typography pairing samples, texture samples, art-direction reference page layout",
+      "notes": "提示词库 #28：品牌提案磁贴"
+    },
+    {
+      "id": "design-system-sheet",
+      "category": "ui-mockup",
+      "prompt": "design system documentation page mockup: color tokens, type scale, button variants and form components organized in clean grid sections, soft white background with subtle borders, modern Figma-style layout",
+      "notes": "提示词库 #29：设计系统页"
+    },
+    {
+      "id": "film-still",
+      "category": "art",
+      "prompt": "35mm film still: cinematic grain, natural color grading, shallow depth of field, golden hour light",
+      "notes": "写实电影感"
+    },
+    {
+      "id": "risograph-poster",
+      "category": "art",
+      "prompt": "risograph poster: two-ink overprint, visible grain, slight misregistration, bold flat shapes, retro print texture",
+      "notes": "复古印刷海报"
+    },
+    {
+      "id": "watercolor-ink",
+      "category": "art",
+      "prompt": "watercolor with ink linework: loose washes, controlled line drawing, paper texture, soft color bleeding",
+      "notes": "手绘插画感"
+    },
+    {
+      "id": "isometric-diorama",
+      "category": "art",
+      "prompt": "isometric diorama: miniature 3D scene, clay-render softness, pastel palette, studio lighting, tilt-shift charm",
+      "notes": "立体微缩场景"
+    },
+    {
+      "id": "notion-minimal",
+      "category": "web-design",
+      "prompt": "Notion-style minimal friendly UI: near-white background, black and warm gray palette with one single blue accent, heavy modern sans-serif headline with tight letter-spacing ending with a period, hand-drawn ink doodle accents and vintage stamp collage details, generous whitespace, 1px hairline dividers, large real product UI screenshot as hero centerpiece, soft diffuse shadows",
+      "notes": "源自 Notion Mail 落地页分析（2026-06）：极简亲和，单点蓝+手绘墨线"
+    },
+    {
+      "id": "dark-editorial-gold",
+      "category": "web-design",
+      "prompt": "dark editorial luxury style: near-black background, warm gold accent glow, elegant serif display headline paired with clean sans body text, magazine-like restrained left-aligned layout, very generous negative space, capsule pill buttons with subtle warm glow, calm luxurious understated mood",
+      "notes": "源自 Zero/0.email 落地页分析（2026-06）：暗色克制奢华，衬线+暖金"
+    },
+    {
+      "id": "hey-energy",
+      "category": "web-design",
+      "prompt": "HEY-style energetic personality marketing page: white background, ultra-bold geometric sans-serif headline with pink-orange-purple gradient colored words, playful anti-corporate rebellious tone, purple accent buttons as pills, large rounded screenshot cards with soft shadows, testimonial quote cards, high energy through color not decoration",
+      "notes": "源自 HEY 落地页分析（2026-06）：人格化能量，渐变大标题"
+    },
+    {
+      "id": "linear-dark",
+      "category": "web-design",
+      "prompt": "the design language of Linear.app: near-black charcoal background (#0D0E10), crisp hairline 1px borders, a single restrained violet-blue accent used sparingly, refined neo-grotesque typography with tight letter-spacing, high information density yet airy row spacing, subtle inner glows on active elements only, zero decorative noise, the polish of a world-class product design team",
+      "notes": "Linear 风暗色产品 UI，克制、精密、工程美学，dashboard 首选"
+    },
+    {
+      "id": "vercel-monochrome",
+      "category": "web-design",
+      "prompt": "the design language of Vercel / Geist: pure black and white with only gray steps, razor-sharp 1px borders, generous whitespace, small monospace type for metadata and numbers, perfect optical alignment, one tiny blue link accent at most, brutalist restraint executed with extreme refinement, museum-grade minimalism",
+      "notes": "Vercel 黑白极简，锋利克制，适合开发者工具类 UI"
+    },
+    {
+      "id": "stripe-precision",
+      "category": "web-design",
+      "prompt": "the design language of Stripe Dashboard: clean white surfaces, cool slate-gray text hierarchy, one disciplined indigo accent, soft barely-visible shadows, perfectly consistent 8px spacing system, rounded 6px corners, small crisp UI labels, data presented with quiet confidence, the feel of impeccably engineered fintech software",
+      "notes": "Stripe 风格白底精密 SaaS，专业可信，B 端通用"
+    },
+    {
+      "id": "mercury-fintech",
+      "category": "web-design",
+      "prompt": "the design language of Mercury banking: deep ink-blue and slate dark surfaces, elegant serif numerals for key figures, thin gold-beige hairlines, muted sage and cream accents, luxurious negative space, quiet-luxury fintech aesthetic, understated premium typography, feels like a private bank's internal tool",
+      "notes": "Mercury 银行风暗色金融质感，quiet luxury，高级感强"
+    },
+    {
+      "id": "notion-warm-minimal",
+      "category": "web-design",
+      "prompt": "the design language of Notion: warm off-white paper background, soft gray-brown text, minimal chrome, gentle 4px rounded corners, tiny unobtrusive icons, hover-style subtle gray fills instead of borders, calm hierarchy built purely from type weight and spacing, friendly but disciplined, zero visual noise",
+      "notes": "Notion 暖白极简，亲和安静，文档/工具类 UI"
+    },
+    {
+      "id": "muji-zen-paper",
+      "category": "web-design",
+      "prompt": "Japanese zen stationery aesthetic in the spirit of MUJI and kinari paper: warm unbleached paper tones, ink-black text, a single vermilion red hanko-like accent, hairline rules, vertical rhythm with abundant ma (negative space), humble sans-serif with wide tracking, tactile printed-matter feel, serene and precise",
+      "notes": "无印良品/和纸禅意，单一朱红点缀，留白极多，气质独特"
+    },
+    {
+      "id": "braun-functionalist",
+      "category": "web-design",
+      "prompt": "Dieter Rams Braun functionalist design: warm light-gray instrument panel surfaces, precise modular grid, one signal-orange accent for primary actions, black dot-matrix style labels, physical control-panel logic, honest materials, 'less but better' philosophy, every element earns its place, 1960s German industrial design translated to a screen",
+      "notes": "Braun/Rams 功能主义，仪器面板质感，橙色单点强调"
+    },
+    {
+      "id": "teenage-engineering",
+      "category": "web-design",
+      "prompt": "Teenage Engineering industrial-playful aesthetic: matte off-white plastic panel background, chunky dark knob-and-button style controls, signal orange and black accents, tiny engraved-looking technical labels in a condensed font, grid-perforated textures, synthesizer hardware vibe, playful yet rigorously engineered",
+      "notes": "TE 合成器硬件风，工业又俏皮，辨识度极高"
+    },
+    {
+      "id": "raycast-glass",
+      "category": "web-design",
+      "prompt": "the design language of Raycast on macOS: deep neutral dark background with very subtle translucent panel layering, soft 12px rounded corners, gentle red-orange brand accent used once, crisp SF-Pro-like typography, faint top-edge light borders, native macOS material feel, focused and fast, premium developer-tool polish",
+      "notes": "Raycast 暗色 macOS 原生质感，柔和圆角，开发者工具风"
+    },
+    {
+      "id": "ft-editorial-data",
+      "category": "web-design",
+      "prompt": "Financial Times editorial data aesthetic: signature salmon-pink paper background, austere serif headlines, dense smart hairline tables, oxblood and slate-blue data accents, newspaper column discipline, elegant numerals, the authority of a 130-year-old financial publication rendered as a modern dashboard",
+      "notes": "FT 三文鱼纸+衬线数据编辑风，权威优雅，数据看板出彩"
+    }
+  ]
+}

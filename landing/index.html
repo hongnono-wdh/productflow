@@ -64,7 +64,7 @@
   <section class="hero" aria-labelledby="hero-title">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <p class="eyebrow mono reveal">Claude Code 本地 skill · v2.7</p>
+        <p class="eyebrow mono reveal">Claude Code 本地 skill · v2.14</p>
         <h1 id="hero-title" class="reveal">把一句话想法，<br>变成一条上线的流水线。</h1>
         <p class="lede reveal">市场调研 → 找参考 → 视觉/页面设计 → 功能与数据（ER 图 / DDL / API 契约）→ 全栈开发 + TDD → 部署上线。一条流水线盖出能跑的完整互联网产品——<strong>Web 应用、iOS / Android 原生 App、PC 桌面应用都能做</strong>，落地页只是其中最简单的一种产物。</p>
         <div class="hero-cta reveal">
@@ -267,7 +267,7 @@
           <li><span class="step-n mono">3</span><div>它<strong>自动装好或更新</strong>，跟着 <code class="mono">/productflow-init</code>、<code class="mono">/productflow-start</code> 走</div></li>
         </ol>
 
-        <p class="install-note"><strong>已经装过了？</strong>再贴一次这段就会检查并更新到最新（会报告版本变化、补上新增的 skill）；或直接在操作台点版本号、跑 <code class="mono">/productflow-update</code>——都不用重装。只需 <strong>Python3</strong>，Docker / Playwright / 生图 key 都可选，缺了只降级不挡主流程。</p>
+        <p class="install-note"><strong>已经装过了？</strong>再贴一次这段就会检查并更新到最新（会报告版本变化、补上新增的 skill）；或直接在操作台点版本号、跑 <code class="mono">/productflow-update</code>——都不用重装。<strong>必需：Python3 + Claude Code + 一个 OpenAI 生图 key</strong>（③首图/④页面 AI 生图用，生图 skill <code class="mono">openai-image-gen</code> 随 ProductFlow 一起装好）；Playwright / Docker 可选，缺了只降级不挡主流程。</p>
       </div>
 
       <div class="install-code">
@@ -298,13 +298,13 @@
 
 3. 跑自检（查依赖 + 跑测试，确认装对/更新对了；会顺带迁移老项目数据）：
    python3 "$DIR/productflow/scripts/setup.py"
-   缺 Playwright 就装 pip install playwright &amp;&amp; playwright install chromium（可选）；没 Docker / 没 OpenAI 生图 key 就提醒我（都可选，缺了只降级不挡主流程）。
+   自检会硬性检查（缺了报致命、挡安装）：claude 在 PATH、生图 skill openai-image-gen 已装（随本仓库软链上去）、~/.config/openai/env 里有 OpenAI key（③首图/④页面 AI 生图必需）。**没配 OpenAI key 就提醒我去配 OPENAI_API_KEY / OPENAI_BASE_URL。** Playwright（pip install playwright &amp;&amp; playwright install chromium）和 Docker 是可选项，缺了只降级不挡主流程。
 
 4. 启动操作台：
    sh "$DIR/productflow/scripts/start.sh"
    然后告诉我操作台地址 http://127.0.0.1:7717/、当前版本号，以及"以后再贴这段、或在操作台点版本号 / 跑 /productflow-update，就能再检查更新"。
 
-只有 Python3 必需，其余可选。</code></pre>
+必需：Python3 + Claude Code + OpenAI 生图 key（openai-image-gen skill 随仓库一起装）；Playwright / Docker 可选。</code></pre>
       </div>
     </div>
   </section>
@@ -348,8 +348,8 @@
         <div class="feat reveal">
           <span class="feat-k mono">优雅降级</span>
           <div>
-            <h3>缺依赖也跑得通</h3>
-            <p>没 Playwright、没 Docker、没生图 key？相关阶段自动降级，整条流水线照样走完。</p>
+            <h3>可选依赖也跑得通</h3>
+            <p>没 Playwright、没 Docker？这些可选项缺了相关阶段自动降级，主流程照样走完。（核心三件套：Python3 / Claude Code / OpenAI 生图 key。）</p>
           </div>
         </div>
         <div class="feat reveal">
@@ -361,7 +361,7 @@
         </div>
       </div>
 
-      <p class="feat-foot mono reveal">v2.6–2.7 新增 iOS / Android 原生 App（SwiftUI+SwiftData / Compose+Room）与 PC 桌面应用（Tauri），与 Web 四端区分构建上架。v2.1 已由 3 个用户视角端到端走完 ①调研 → ⑦部署、三个项目本地 Docker 上线、<span class="e2e-badge">E2E 全绿（8/8、12/12、6/6）</span>。</p>
+      <p class="feat-foot mono reveal">v2.14 操作台重写为 React + 全局 WebSocket 实时推送（端上零 Node、直接跑编译产物、局部渲染无闪烁）。v2.6–2.7 新增 iOS / Android 原生 App（SwiftUI+SwiftData / Compose+Room）与 PC 桌面应用（Tauri），与 Web 四端区分构建上架。v2.1 已由 3 个用户视角端到端走完 ①调研 → ⑦部署、三个项目本地 Docker 上线、<span class="e2e-badge">E2E 全绿（含 React e2e 6/6）</span>。</p>
     </div>
   </section>
 

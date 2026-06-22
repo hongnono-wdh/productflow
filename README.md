@@ -22,22 +22,19 @@
 1. 克隆代码到固定位置（已存在就进目录 git pull 更新）：
    git clone https://github.com/hongnono-wdh/productflow.git ~/.local/share/productflow 2>/dev/null || (cd ~/.local/share/productflow && git pull)
 
-2. 把 4 个 skill 软链进 Claude Code 的 skills 目录：
+2. 把全部 skill 软链进 Claude Code 的 skills 目录（含随仓库一起装的 openai-image-gen 生图 skill）：
    mkdir -p ~/.claude/skills
-   ln -sfn ~/.local/share/productflow/productflow ~/.claude/skills/productflow
-   ln -sfn ~/.local/share/productflow/productflow-init ~/.claude/skills/productflow-init
-   ln -sfn ~/.local/share/productflow/productflow-start ~/.claude/skills/productflow-start
-   ln -sfn ~/.local/share/productflow/productflow-update ~/.claude/skills/productflow-update
+   for s in ~/.local/share/productflow/*/; do [ -f "$s/SKILL.md" ] && ln -sfn "${s%/}" ~/.claude/skills/"$(basename "$s")"; done
 
 3. 跑自检（查依赖 + 跑测试，确认装对了）：
    python3 ~/.local/share/productflow/productflow/scripts/setup.py
-   缺 Playwright 就装 pip install playwright && playwright install chromium（可选）；没 Docker / 没 OpenAI 生图 key 就提醒我（都可选，缺了只降级不挡主流程）。
+   自检会硬性检查（缺了报致命、挡安装）：claude 在 PATH、生图 skill openai-image-gen 已装（随仓库软链上去）、~/.config/openai/env 有 OpenAI key（③首图/④页面 AI 生图必需）。没配 OpenAI key 就提醒我去配 OPENAI_API_KEY / OPENAI_BASE_URL。Playwright（pip install playwright && playwright install chromium）/ Docker 可选，缺了只降级不挡主流程。
 
 4. 启动操作台并打开浏览器：
    sh ~/.local/share/productflow/productflow/scripts/start.sh
    然后告诉我操作台地址 http://127.0.0.1:7717/，以及"新开会话可用 /productflow-init、/productflow-start，或直接说想做什么产品/网站"。
 
-只有 Python3 必需，其余可选。
+必需：Python3 + Claude Code + OpenAI 生图 key（openai-image-gen skill 随仓库一起装）；Playwright / Docker 可选。
 ```
 
 装好后新开一个 Claude Code 会话，可用四个命令：
@@ -54,8 +51,9 @@
 ```bash
 git clone https://github.com/hongnono-wdh/productflow.git ~/.local/share/productflow
 mkdir -p ~/.claude/skills
-for s in productflow productflow-init productflow-start productflow-update; do
-  ln -sfn ~/.local/share/productflow/$s ~/.claude/skills/$s
+# 软链所有带 SKILL.md 的目录（含随仓库一起装的 openai-image-gen 生图 skill）
+for s in ~/.local/share/productflow/*/; do
+  [ -f "$s/SKILL.md" ] && ln -sfn "${s%/}" ~/.claude/skills/"$(basename "$s")"
 done
 python3 ~/.local/share/productflow/productflow/scripts/setup.py   # 自检
 ```
@@ -64,13 +62,14 @@ python3 ~/.local/share/productflow/productflow/scripts/setup.py   # 自检
 
 | 依赖 | 必需性 | 说明 |
 |------|--------|------|
-| **Claude Code** | 必需 | 这是 Claude Code 的 skill |
-| **Python 3.8+** | 必需 | 操作台 server + 状态机，仅用标准库，无需 pip 装任何包 |
-| Docker | 可选 | ⑦部署到本地用（静态站走 `nginx:alpine`） |
-| Playwright + chromium | 可选 | ②找参考截图 / ⑥端到端测试用：`pip install playwright && playwright install chromium` |
-| OpenAI 生图 key | 可选 | ③首图 / ④页面 AI 生图用，放 `~/.config/openai/env`。缺了首图自动降级为手写代码版 |
+| **Claude Code（claude）** | 必需 | 这是 Claude Code 的 skill；流水线靠 `claude -p` 跑各阶段 Agent |
+| **Python 3.8+** | 必需 | 操作台 server + 状态机，仅用标准库、无需 pip 装包；前端是预编译产物，**端上零 Node** |
+| **openai-image-gen skill** | 必需 | ③首图 / ④页面 AI 生图引擎；**随本仓库一起装**（安装会自动软链，无需另装） |
+| **OpenAI 生图 key** | 必需 | 上面的生图 skill 还需 key 才能真出图，放 `~/.config/openai/env`（`OPENAI_API_KEY` / `OPENAI_BASE_URL`） |
+| Playwright + chromium | 可选 | ②找参考截图 / ⑥端到端测试用：`pip install playwright && playwright install chromium`。**用到的那一步缺了再装也行，agent 会提示** |
+| Docker | 可选 | ⑦部署到本地用（静态站走 `nginx:alpine`）；缺了可改 Cloudflare / 单机部署。**到 ⑦ 缺了再装也行** |
 
-可选项缺了只让相关阶段降级，不挡主流程——`/productflow-init` 会告诉你缺哪个、怎么补。**本工具不内置任何 API key，不绑定任何服务器或网关。**
+**必需项**缺任意一个，`/productflow-init` 会报致命、挡安装（确保核心流程能跑）；**可选项**缺了只让相关阶段降级，用到那一步再按需装（agent 会提示），不挡主流程。**本工具不内置任何 API key，不绑定任何服务器或网关。**
 
 ## 更新
 
