@@ -88,17 +88,17 @@ def main():
           ("daemon 未启动" if docker and not running else ("未装：⑦可改用其它部署方式" if not docker else "可用")),
           fatal=False)
 
-    # 5. 生图 skill openai-image-gen（③首图/④页面 调它的 scripts/gen.py 出图；缺则降级为手写代码版设计）
+    # 5. 生图 skill openai-image-gen（③首图/④页面 调它的 scripts/gen.py 出图——必需，缺则核心设计阶段无法工作）
     gen_py = os.path.expanduser("~/.claude/skills/openai-image-gen/scripts/gen.py")
     img_skill = os.path.isfile(gen_py)
     check("生图 skill openai-image-gen", img_skill,
-          "缺则 ③首图/④页面 无法 AI 生图，降级为手写代码版设计（流程仍走得通）——装 openai-image-gen skill"
-          if not img_skill else "已装", fatal=False)
+          "③首图/④页面 AI 生图必需——装 openai-image-gen skill（~/.claude/skills/openai-image-gen）"
+          if not img_skill else "已装")
 
-    # 5b. OpenAI 生图 key（生图 skill 还需 key 才能真出图；缺则同样降级为手写代码版设计）
+    # 5b. OpenAI 生图 key（生图 skill 还需 key 才能真出图——必需）
     key = os.path.isfile(os.path.expanduser("~/.config/openai/env"))
     check("OpenAI 生图 key ~/.config/openai/env", key,
-          "缺则 ③首图/④页面 生图降级为手写代码（流程仍走得通）" if not key else "已配置", fatal=False)
+          "③首图/④页面 AI 生图必需——在 ~/.config/openai/env 配 OPENAI_API_KEY / OPENAI_BASE_URL" if not key else "已配置")
 
     # 6. 跑 ProductFlow 自己的测试套件——确认核心代码工作正常（这就是"自检工作效果"）
     print("\n— 跑 ProductFlow 测试套件确认核心功能正常（约 1 分钟；含浏览器 e2e，无 chromium 则自动跳过）…")
