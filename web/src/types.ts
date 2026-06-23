@@ -167,6 +167,12 @@ export interface ExploreRef {
   file: string
   title?: string
   source?: string
+  desc?: string
+}
+export interface SearchPlan {
+  keywords?: string[]
+  basis?: string
+  ts?: string
 }
 export interface ExploreHero {
   id: string
@@ -184,6 +190,7 @@ export interface ExplorePayload {
   selectedHero?: string
   heroGenFailed?: boolean
   heroGenLog?: unknown[]
+  searchPlan?: SearchPlan | null
 }
 
 // ── pages channel ──

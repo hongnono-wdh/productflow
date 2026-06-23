@@ -777,9 +777,12 @@ def _auto_explore(pf: str, req: dict) -> None:
         keywords = req.get("keywords")
         seed = req.get("seedRef") if isinstance(req.get("seedRef"), dict) else None
         # 零输入：用户没给关键词 → 让 agent 读 brief 自己推断
-        kw_line = (f"风格关键词：{keywords}\n" if keywords else
-                   "用户没给风格关键词（零输入）——先读 .productflow/brief.json 理解产品定位/目标用户/核心需求，"
-                   "自己推断 2-3 个贴切的风格/品类关键词再搜，别空手搜。\n")
+        kw_line = (
+            "★关键词必须来自【市场调研结果】、不是凭空想：先读 artifacts/phase-1/replicate-notes.md（风格方向候选 + 推荐信息架构）、"
+            "artifacts/phase-1/positioning.md 与 .productflow/brief.json（产品类型/定位/目标用户）、artifacts/phase-1/competitors.md（竞品风格关键词，若有）——"
+            "据此**先判断这是什么产品、核心界面是什么**（如任务工具→看板/列表/详情界面；数据产品→仪表盘；社交→feed/资料页；电商→商品列表/详情/结算；纯落地页类→营销首页），"
+            "再定本轮关键词（**产品类型/界面词** + 调研得到的风格方向词 + 平台词）。"
+            + (f"用户还额外给了风格标签 {keywords}，融合进去。\n" if keywords else "用户没给额外标签，就完全以调研结果为准。\n"))
         # 找更多类似这张：以用户选中的一张图为种子，结合需求做下一轮精炼搜索
         seed_line = ""
         if seed and seed.get("file"):
@@ -807,32 +810,33 @@ def _auto_explore(pf: str, req: dict) -> None:
                 "再从剩下的新结果里取 6-9 张下载。**别只取第 1 页前几个**——那正是上几轮抓过的。\n")
         prompt = (
             "你是 ProductFlow 找参考 Agent（阶段②），headless 运行，必须用工具实际完成任务（不要只输出描述）。\n"
-            "任务：去 Dribbble 找落地页/UI 设计参考，**下载高清原图**（不是缩略图截图，要让用户能放大看细节）。\n"
+            "任务：**先依据市场调研结果判断这是什么产品**（工具/SaaS、仪表盘/数据、社交、内容、电商、纯落地页/官网…），"
+            "再去 Dribbble 找**该产品类型的真实界面 / 应用 UI 设计参考**——**落地页只是产品里最简单的一类，不要一律去找营销落地页**；"
+            "做的是 App / Web 应用就找它的产品界面（看板/列表/详情/仪表盘/资料页等）。**下载高清原图**（不是缩略图截图，要能放大看细节）。\n"
             f"做法见手册：{design_doc} 的「找参考协作」节。\n"
             + kw_line + seed_line + dedup_line +
             f"产品：{req.get('product')}\n"
-            "📱 **必须区分设备**：先读 `.productflow/wizard.json` 看 `platforms` 与主平台 `primary`——"
-            "PC=桌面 web 落地页、H5=移动 web、APP=App UI。按**主平台**调整搜索词和筛选，"
-            "桌面端就搜「landing page / web design」这类、移动端就搜「mobile app UI / mobile landing / app screen」这类，"
-            "**别给移动端产品找一堆桌面 web 落地页，反之亦然**。多平台项目优先按 primary，必要时各平台都找几张并在 title 里标注「(PC)/(移动)」。\n"
-            "⚠️ 浏览器工具（重要，别浪费步骤）：你在 headless 后台运行，**没有任何浏览器 MCP**——"
-            "playwright MCP、claude-in-chrome 都不可用。**不要**去 ToolSearch 找 playwright MCP、不要试 claude-in-chrome MCP。"
-            "本机已装 **Python Playwright（chromium headless）**：直接 `from playwright.sync_api import sync_playwright` 写个小脚本抓取，"
-            "这是验证过最快可行的路径（需要交互式浏览也可用 `playwright-cli` skill，但批量下图直接写脚本最省事）。\n"
-            "重要执行约束：每个 Bash 工具调用都是独立 shell，登记命令必须每次写完整 `python3 <绝对路径> --dir <绝对路径> ...`，"
-            "禁止用 $PF 之类 shell 变量缩写（否则登记全部失效）。\n"
-            "步骤（用 Python Playwright 脚本完成 1-2）：\n"
-            "1. 打开 https://dribbble.com/search/<关键词>（URL 编码、空格转 -），等加载，收集结果里每个作品的**详情页链接**（/shots/...）。\n"
-            "2. 取前 6-9 个详情页：逐个打开，读详情页主图 <img> 的真实 src（一般是 cdn.dribbble.com 的高清原图 URL），"
+            "📱 **产品类型 + 平台一起定搜索词**：先读 `.productflow/wizard.json` 的 `primary`（PC=桌面 web、H5=移动 web、APP=原生 App）+ 上面判断的产品类型，"
+            "搜该产品**真实界面**的设计：工具/SaaS→「<品类> dashboard / web app UI / app UI」、社交→「social app UI」、电商→「ecommerce app/web UI」、"
+            "内容→「<品类> app UI」、**确实是纯落地页/官网的产品**才搜「landing page」。移动端搜 mobile app UI、桌面端搜 web app/dashboard UI；"
+            "**别给做 App / Web 应用的产品只找一堆营销落地页**。多平台优先 primary，必要时各端都找几张并在 title 标「(PC)/(移动)」。\n"
+            "🦊 浏览器：**优先用 camoufox**（反检测 Firefox，Dribbble 更不易挡）——若 `python3 -c \"import camoufox\"` 能导入，"
+            "就用 `from camoufox.sync_api import Camoufox`（`with Camoufox(headless=True) as b: page=b.new_page()`，API 与 Playwright Page 一致）；"
+            "导入失败再退回本机 **Python Playwright（chromium headless）**。你在 headless 后台、**没有任何浏览器 MCP**，别去 ToolSearch 找 MCP。\n"
+            "重要执行约束：每个 Bash 调用都是独立 shell，登记命令必须每次写完整 `python3 <绝对路径> --dir <绝对路径> ...`，禁止 $PF 缩写（否则登记失效）。\n"
+            "步骤：\n"
+            "0. **先呈现关键词、再搜**：把本轮关键词清单 + 一句话依据写进状态（前端会先显示给用户，再开始搜）：\n"
+            f"   python3 {pf_state} --dir {project_root} explore set-search-plan --keyword <词1> --keyword <词2> [--keyword …] --basis \"<依据，如：SaaS 工具型 + 冷色玻璃拟态(取自调研风格候选A) + 桌面落地页>\"\n"
+            "1. 用上面的浏览器打开 https://dribbble.com/search/<关键词>（URL 编码、空格转 -），等加载，收集结果里每个作品的**详情页链接**（/shots/...）。\n"
+            "2. 取前 6-9 个详情页：逐个打开，读详情页主图 <img> 的真实 src（cdn.dribbble.com 高清原图 URL），"
             f"用 urllib/requests 下载这张**高清原图**到 {refs_dir}/<n>.png（先 mkdir -p）。\n"
-            "   ⚠️ **不要用截图兜底**：某张取不到真实高清图 URL 就直接跳过它（宁可少几张，也不存模糊截图/空白图）；"
-            "如果整体访问失败（打不开 Dribbble、一张真图都没拿到），**不要 done-request**、不要登记任何东西，直接结束并在最后一句明确说「访问失败」——前端会提示用户重试。\n"
-            "3. 关键：每下载一张就立刻登记一次，不要攒到最后（前端实时显示进度）。source 填该作品**详情页 URL**（用户可点开看原帖）：\n"
-            f"   python3 {pf_state} --dir {project_root} explore add-ref artifacts/phase-2/refs/<n>.png --title \"<一句话风格描述>\" --source \"<该作品详情页 URL>\"\n"
+            "   ⚠️ **不要用截图兜底**：取不到真实高清图就跳过它；整体访问失败（打不开 Dribbble、一张真图都没拿到）就**不要 done-request**、不登记任何东西，直接结束并在最后一句明确说「访问失败」——前端会提示重试。\n"
+            "3. 每下载一张立刻登记（不要攒到最后）。登记前**用 Read 打开这张图**，写一句它的**风格/品类/含哪些区块**作为 --desc（图片解析描述，供用户和③首图判断）。source 填该作品详情页 URL：\n"
+            f"   python3 {pf_state} --dir {project_root} explore add-ref artifacts/phase-2/refs/<n>.png --title \"<一句话风格亮点>\" --source \"<详情页 URL>\" --desc \"<如：深色玻璃拟态 SaaS 落地页，hero+logo墙+价格表，冷蓝主色>\"\n"
             f"4. 全部登记完执行：python3 {pf_state} --dir {project_root} explore done-request --kind search-refs\n"
             "只做这件事，完成即停。参考仅供风格判断，不抄袭、不进最终产品。"
         )
-        timeout = 600
+        timeout = 900
     elif kind == "gen-heroes":
         design_doc = os.path.join(SKILL_DIR, "references", "phase-3-hero.md")
         heroes_dir = os.path.join(pf, "artifacts", "phase-3", "heroes")
@@ -1880,6 +1884,28 @@ class Handler(BaseHTTPRequestHandler):
                 # 直接 spawn claude -p 当完整 agent 跑（playwright 截图 / openai-image-gen 生图），前端轮询拿结果
                 if isinstance(req, dict) and req.get("kind") in ("search-refs", "gen-heroes", "collect-ref"):
                     threading.Thread(target=_auto_explore, args=(pf, req), daemon=True).start()
+            # 用户粘贴/拖入图片手动加参考（直接存盘 + 登记，不经 agent）——人工加速、注入品味
+            up = data.get("uploadRef")
+            if isinstance(up, dict) and isinstance(up.get("dataUrl"), str):
+                import base64 as _b64
+                import re as _re
+                m = _re.match(r"data:image/(png|jpe?g|webp|gif);base64,(.+)$", up["dataUrl"], _re.S)
+                if m:
+                    ext = "jpg" if m.group(1) in ("jpeg", "jpg") else m.group(1)
+                    try:
+                        raw = _b64.b64decode(m.group(2))
+                    except Exception:  # noqa: BLE001
+                        raw = b""
+                    if 0 < len(raw) <= 12 * 1024 * 1024:   # ≤12MB
+                        rel = f"artifacts/phase-2/refs/upload-{os.urandom(4).hex()}.{ext}"
+                        dst = os.path.join(pf, rel)
+                        os.makedirs(os.path.dirname(dst), exist_ok=True)
+                        with open(dst, "wb") as _f:
+                            _f.write(raw)
+                        ex.setdefault("refs", []).append({
+                            "id": "ref-" + os.urandom(3).hex(), "file": rel,
+                            "title": (up.get("title") or "我加的参考"), "source": "",
+                            "desc": (up.get("desc") or "用户手动粘贴/拖入的参考")})
             _atomic_write_json(ex_path, ex)
             self._json({"ok": True})
             return

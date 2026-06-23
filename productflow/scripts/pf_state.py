@@ -485,7 +485,7 @@ def _load_explore(d: str) -> dict:
     # request 按 kind 分槽：{"search-refs": {...}, "gen-heroes": {...}}——
     # P2 找参考与 P3 首图是两个阶段，单槽会互相覆盖、done-request 清错槽。
     base = {"stylePrefs": [], "request": {}, "refs": [], "selectedRefs": [],
-            "styleSummary": "", "heroes": [], "selectedHero": "", "heroGenLog": []}
+            "styleSummary": "", "heroes": [], "selectedHero": "", "heroGenLog": [], "searchPlan": None}
     try:
         with open(_explore_path(d), encoding="utf-8") as f:
             data = json.load(f)
@@ -537,7 +537,11 @@ def cmd_explore(args) -> None:
             print(f"explore add-ref skipped（重复，未登记）: file={args.file} source={src or '-'}")
             return
         e["refs"].append({"id": "ref-" + os.urandom(3).hex(), "file": args.file,
-                          "title": args.title or "", "source": args.source or ""})
+                          "title": args.title or "", "source": args.source or "",
+                          "desc": (getattr(args, "desc", "") or "")})
+    elif args.eaction == "set-search-plan":   # 写「即将搜索的关键词清单 + 依据」，前端先呈现再搜
+        kws = [k.strip() for k in (args.keyword or []) if k and k.strip()]
+        e["searchPlan"] = {"keywords": kws, "basis": (args.basis or ""), "ts": _now()}
     elif args.eaction == "add-hero":
         e["heroes"].append({"id": "hero-" + os.urandom(3).hex(), "file": args.file,
                            "style": args.style or ""})
@@ -810,6 +814,10 @@ def main(argv: list[str]) -> int:
     er.add_argument("file", help="参考图路径，相对 .productflow/（如 artifacts/phase-2/refs/x.png）")
     er.add_argument("--title")
     er.add_argument("--source", help="来源 URL")
+    er.add_argument("--desc", help="图片解析后的文本描述（风格/品类/含什么），供用户和③首图参考")
+    esp = esub.add_parser("set-search-plan", help="写本轮即将搜索的关键词清单+依据（前端先呈现再搜）")
+    esp.add_argument("--keyword", action="append", help="搜索关键词，可重复")
+    esp.add_argument("--basis", help="一句话依据（来自市场调研：产品类型/风格方向等）")
     eh = esub.add_parser("add-hero", help="登记一张生成的首图")
     eh.add_argument("file")
     eh.add_argument("--style", help="该首图的风格名/描述")

@@ -3,7 +3,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { useChannel, toast } from '../store'
 import { PF_BASE, post, loadScript } from '../lib'
-import type { ExplorePayload, ExploreRef, ExploreHero, AgentLogPayload } from '../types'
+import type { ExplorePayload, ExploreRef, ExploreHero, AgentLogPayload, SearchPlan } from '../types'
 
 const STAGE_TAGS = ['极简', '现代', '玻璃拟态', '暗色', '暖色调', '编辑风', '科技感', '大胆活力', '柔和未来', '瑞士国际']
 
@@ -17,6 +17,7 @@ interface PE {
   selectedHero: string
   heroGenFailed: boolean
   heroGenLog: unknown[]
+  searchPlan: SearchPlan | null
 }
 type ViewerInst = { view: (i: number) => void; destroy: () => void }
 type ViewerCtor = new (el: Element, opts: Record<string, unknown>) => ViewerInst
@@ -29,8 +30,35 @@ export function RefsPanel() {
   const e = useChannel<ExplorePayload>('explore')
   const searchLog = useChannel<AgentLogPayload>('agent-log:search-refs')
   const [, force] = useReducer((x: number) => x + 1, 0)
-  const peRef = useRef<PE>({ stylePrefs: [], request: {}, refs: [], selectedRefs: [], styleSummary: '', heroes: [], selectedHero: '', heroGenFailed: false, heroGenLog: [] })
+  const peRef = useRef<PE>({ stylePrefs: [], request: {}, refs: [], selectedRefs: [], styleSummary: '', heroes: [], selectedHero: '', heroGenFailed: false, heroGenLog: [], searchPlan: null })
   const [collectUrl, setCollectUrl] = useState('')
+  const [dragOver, setDragOver] = useState(false)
+
+  // 粘贴/拖入图片 → 直接存盘 + 登记成参考（人工加速、注入品味）；结果经 WS 回流刷新
+  const uploadFiles = (files: File[]) => {
+    const imgs = files.filter((f) => f.type.startsWith('image/'))
+    if (!imgs.length) return
+    imgs.forEach((f) => {
+      const rd = new FileReader()
+      rd.onload = () => post('/api/explore', { uploadRef: { dataUrl: String(rd.result), title: (f.name || '').replace(/\.[^.]+$/, '') || '我加的参考' } })
+      rd.readAsDataURL(f)
+    })
+    toast(`已添加 ${imgs.length} 张参考`)
+  }
+  // 全局粘贴：在找参考页 ⌘/Ctrl+V 直接贴图（忽略输入框里的粘贴）
+  useEffect(() => {
+    const onPaste = (ev: ClipboardEvent) => {
+      const t = ev.target as HTMLElement | null
+      if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return
+      const fs = Array.from(ev.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'))
+      if (fs.length) {
+        ev.preventDefault()
+        uploadFiles(fs)
+      }
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [])
 
   useEffect(() => {
     if (!e) return
@@ -42,6 +70,7 @@ export function RefsPanel() {
     pe.styleSummary = e.styleSummary || ''
     pe.heroGenFailed = !!e.heroGenFailed
     pe.heroGenLog = e.heroGenLog || []
+    pe.searchPlan = e.searchPlan || null
     let req: Record<string, unknown> = (e.request as Record<string, unknown>) || {}
     if (req.kind) req = { [req.kind as string]: req }
     pe.request = req
@@ -175,6 +204,17 @@ export function RefsPanel() {
           已选 {pe.selectedRefs.length}
         </span>
       )}
+      {pe.searchPlan?.keywords?.length ? (
+        <div className="wz-aibox" style={{ marginTop: 12 }}>
+          <b>本轮搜索关键词</b>（依据市场调研、按产品类型找界面参考）：
+          <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 6, marginLeft: 6, verticalAlign: 'middle' }}>
+            {pe.searchPlan.keywords.map((k) => (
+              <span key={k} className="wz-tag on" style={{ cursor: 'default' }}>{k}</span>
+            ))}
+          </span>
+          {pe.searchPlan.basis && <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 6 }}>依据：{pe.searchPlan.basis}</div>}
+        </div>
+      ) : null}
       <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           className="wz-input"
@@ -186,6 +226,14 @@ export function RefsPanel() {
         <button className="btn ghost" style={{ whiteSpace: 'nowrap', ...(disStyle(collecting) || {}) }} disabled={collecting} onClick={collectRef}>
           ＋ 采集链接
         </button>
+      </div>
+      <div
+        className={'wz-drop' + (dragOver ? ' over' : '')}
+        onDragOver={(ev) => { ev.preventDefault(); setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(ev) => { ev.preventDefault(); setDragOver(false); uploadFiles(Array.from(ev.dataTransfer.files)) }}
+      >
+        🖼️ 把图片拖到这里，或在本页 ⌘/Ctrl+V 粘贴 —— 手动加参考（加速 & 注入你的品味）
       </div>
       {collecting && <div className="wz-aibox" style={{ marginTop: 10 }}>✦ Agent 正在打开并采集你贴的链接…</div>}
       {searchFailed && (
@@ -200,14 +248,14 @@ export function RefsPanel() {
               const on = pe.selectedRefs.includes(r.id)
               return (
                 <div key={r.id} className={'wz-ref' + (on ? ' on' : '')} onClick={() => toggleRef(r.id)}>
-                  <div className="wz-check" title="点卡片选中（喂给③首图）">✓</div>
+                  {on && <div className="rpick on" title="已选（点卡片可取消）">✓ 已选</div>}
                   <div className="wz-del" title="删除这张参考" onClick={(ev) => { ev.stopPropagation(); removeRef(r.id) }}>✕</div>
                   <div className="rthumb">
                     <img src={refUrl(r.file)} loading="lazy" />
                   </div>
                   <div className="rbar">
-                    <span className="rcap">{r.title || '参考'}</span>
-                    {on && <span className="rsel">✓ 已选</span>}
+                    <span className="rcap" title={r.desc || r.title || ''}>{r.title || '参考'}</span>
+                    {r.desc && <span className="rdesc" title={r.desc}>{r.desc}</span>}
                     <span className="ract">
                       <button className="rbtn" title="放大查阅（缩放 / 平移 / 上一张下一张）" onClick={(ev) => { ev.stopPropagation(); zoomRef(r.id) }}>
                         🔍 放大

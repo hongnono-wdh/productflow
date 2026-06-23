@@ -80,6 +80,10 @@ def main():
         caches = ["~/Library/Caches/ms-playwright", "~/.cache/ms-playwright"]
         chromium = any(glob.glob(os.path.expanduser(c) + "/chromium*") for c in caches)
         check("Playwright chromium", chromium, "playwright install chromium" if not chromium else "已装", fatal=False)
+    cam = importlib.util.find_spec("camoufox") is not None
+    check("camoufox（②找参考反爬浏览器，可选）", cam,
+          "缺则找参考用普通 Playwright（可能被 Dribbble 拦/少图）：pip install camoufox[geoip] && python3 -m camoufox fetch"
+          if not cam else "已装（找参考优先用它，更不易被反爬挡）", fatal=False)
 
     # 4. Docker（⑦部署本地 Docker 用；缺只影响部署阶段）
     docker = shutil.which("docker")
