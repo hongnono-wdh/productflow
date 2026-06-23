@@ -33,6 +33,8 @@ export function RefsPanel() {
   const peRef = useRef<PE>({ stylePrefs: [], request: {}, refs: [], selectedRefs: [], styleSummary: '', heroes: [], selectedHero: '', heroGenFailed: false, heroGenLog: [], searchPlan: null })
   const [collectUrl, setCollectUrl] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  const [kwInput, setKwInput] = useState('')
+  const suggestedRef = useRef(false)
 
   // 粘贴/拖入图片 → 直接存盘 + 登记成参考（人工加速、注入品味）；结果经 WS 回流刷新
   const uploadFiles = (files: File[]) => {
@@ -75,10 +77,30 @@ export function RefsPanel() {
     if (req.kind) req = { [req.kind as string]: req }
     pe.request = req
     if (!pe.stylePrefs.length && Array.isArray(e.stylePrefs)) pe.stylePrefs = e.stylePrefs
+    // 进入②若还没关键词、也没参考 → 自动请 agent 据市场调研拟几个预设关键词（只触发一次）
+    if (!suggestedRef.current && !(pe.searchPlan?.keywords?.length) && !pe.refs.length
+        && !pe.request['suggest-keywords'] && !pe.request['search-refs']) {
+      suggestedRef.current = true
+      post('/api/explore', { request: { kind: 'suggest-keywords' } })
+    }
     force()
   }, [e])
 
   const pe = peRef.current
+  const planKw = pe.searchPlan?.keywords || []
+  const suggesting = !!pe.request['suggest-keywords']
+  const saveKw = (kws: string[]) => {
+    pe.searchPlan = { ...(pe.searchPlan || {}), keywords: kws }
+    force()
+    post('/api/explore', { setSearchPlan: { keywords: kws } })
+  }
+  const addKw = (w: string) => {
+    const v = w.trim()
+    setKwInput('')
+    if (!v || planKw.includes(v)) return
+    saveKw([...planKw, v])
+  }
+  const removeKw = (w: string) => saveKw(planKw.filter((k) => k !== w))
   const searching = !!pe.request['search-refs']
   const collecting = !!pe.request['collect-ref']
   const slines = searchLog?.lines || []
@@ -124,13 +146,6 @@ export function RefsPanel() {
     }
   }, [refsSig])
 
-  const toggleTag = (t: string) => {
-    const i = pe.stylePrefs.indexOf(t)
-    if (i >= 0) pe.stylePrefs.splice(i, 1)
-    else pe.stylePrefs.push(t)
-    post('/api/explore', { stylePrefs: pe.stylePrefs })
-    force()
-  }
   const toggleRef = (id: string) => {
     const i = pe.selectedRefs.indexOf(id)
     if (i >= 0) pe.selectedRefs.splice(i, 1)
@@ -147,7 +162,8 @@ export function RefsPanel() {
   }
   const searchRefs = () => {
     pe.request = { ...pe.request, 'search-refs': { kind: 'search-refs' } }
-    post('/api/explore', { stylePrefs: pe.stylePrefs, request: { kind: 'search-refs', keywords: pe.stylePrefs, product: '' } })
+    const kws = pe.searchPlan?.keywords?.length ? pe.searchPlan.keywords : pe.stylePrefs
+    post('/api/explore', { request: { kind: 'search-refs', keywords: kws, product: '' } })
     toast(pe.stylePrefs.length ? '已请 Agent 去 Dribbble 找参考（累积）' : '已请 Agent 按产品需求自己定方向找参考')
     force()
   }
@@ -189,32 +205,40 @@ export function RefsPanel() {
       <h2>
         找参考 <span className="hint">Agent 找 / 你贴链接 → 挑选（喂给③首图）</span>
       </h2>
-      <div className="wz-tags">
-        {STAGE_TAGS.map((t) => (
-          <span key={t} className={'wz-tag' + (pe.stylePrefs.includes(t) ? ' on' : '')} onClick={() => toggleTag(t)}>
-            {t}
-          </span>
-        ))}
+      {/* 搜索关键词：始终可见、可编辑；进入②时 AI 据市场调研自动拟几个预设，用户可增删 */}
+      <div className="kw-box">
+        <div className="kw-head">
+          <b>搜索关键词</b>
+          <span className="hint">据市场调研生成、可自由增删——就是用来找参考的词；不知填啥就等 AI 自动拟</span>
+        </div>
+        <div className="kw-chips">
+          {planKw.map((k) => (
+            <span key={k} className="kw-chip">{k}<i onClick={() => removeKw(k)} title="移除">×</i></span>
+          ))}
+          <input
+            className="kw-input"
+            value={kwInput}
+            onChange={(ev) => setKwInput(ev.target.value)}
+            onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); addKw(kwInput) } }}
+            onBlur={() => addKw(kwInput)}
+            placeholder={planKw.length ? '+ 加关键词，回车' : (suggesting ? 'AI 正在据调研拟关键词…' : '+ 输入关键词，回车（或等 AI 据调研自动拟）')}
+          />
+        </div>
+        {pe.searchPlan?.basis && <div className="kw-basis">依据：{pe.searchPlan.basis}</div>}
+        <div className="wz-tags" style={{ marginTop: 8 }}>
+          {STAGE_TAGS.map((t) => (
+            <span key={t} className={'wz-tag' + (planKw.includes(t) ? ' on' : '')} onClick={() => (planKw.includes(t) ? removeKw(t) : addKw(t))}>
+              {t}
+            </span>
+          ))}
+        </div>
       </div>
       <button className="btn" style={{ marginTop: 14, ...(disStyle(searching) || {}) }} disabled={searching} onClick={searchRefs}>
-        🔍 {pe.refs.length ? '再找一批（累积）' : '让 Agent 找参考'}
+        🔍 {pe.refs.length ? '按这些关键词再找一批' : '按这些关键词找参考'}
       </button>
       {pe.refs.length > 0 && (
-        <span className="hint" style={{ marginLeft: 10 }}>
-          已选 {pe.selectedRefs.length}
-        </span>
+        <span className="hint" style={{ marginLeft: 10 }}>已选 {pe.selectedRefs.length}</span>
       )}
-      {pe.searchPlan?.keywords?.length ? (
-        <div className="wz-aibox" style={{ marginTop: 12 }}>
-          <b>本轮搜索关键词</b>（依据市场调研、按产品类型找界面参考）：
-          <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 6, marginLeft: 6, verticalAlign: 'middle' }}>
-            {pe.searchPlan.keywords.map((k) => (
-              <span key={k} className="wz-tag on" style={{ cursor: 'default' }}>{k}</span>
-            ))}
-          </span>
-          {pe.searchPlan.basis && <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 6 }}>依据：{pe.searchPlan.basis}</div>}
-        </div>
-      ) : null}
       <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           className="wz-input"

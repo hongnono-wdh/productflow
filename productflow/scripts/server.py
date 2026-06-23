@@ -778,11 +778,12 @@ def _auto_explore(pf: str, req: dict) -> None:
         seed = req.get("seedRef") if isinstance(req.get("seedRef"), dict) else None
         # 零输入：用户没给关键词 → 让 agent 读 brief 自己推断
         kw_line = (
-            "★关键词必须来自【市场调研结果】、不是凭空想：先读 artifacts/phase-1/replicate-notes.md（风格方向候选 + 推荐信息架构）、"
-            "artifacts/phase-1/positioning.md 与 .productflow/brief.json（产品类型/定位/目标用户）、artifacts/phase-1/competitors.md（竞品风格关键词，若有）——"
-            "据此**先判断这是什么产品、核心界面是什么**（如任务工具→看板/列表/详情界面；数据产品→仪表盘；社交→feed/资料页；电商→商品列表/详情/结算；纯落地页类→营销首页），"
-            "再定本轮关键词（**产品类型/界面词** + 调研得到的风格方向词 + 平台词）。"
-            + (f"用户还额外给了风格标签 {keywords}，融合进去。\n" if keywords else "用户没给额外标签，就完全以调研结果为准。\n"))
+            (f"★本轮搜索关键词（已在找参考面板据市场调研生成、可能经用户编辑——**以这些为准**去搜，按主平台/产品类型微调措辞即可）：{keywords}\n"
+             if keywords else
+             "★关键词必须来自【市场调研结果】、不是凭空想：先读 artifacts/phase-1/replicate-notes.md（风格方向候选 + 推荐信息架构）、"
+             "artifacts/phase-1/positioning.md 与 .productflow/brief.json（产品类型/定位/目标用户）、artifacts/phase-1/competitors.md（竞品风格关键词，若有）——"
+             "据此**先判断这是什么产品、核心界面是什么**（任务工具→看板/列表/详情；数据产品→仪表盘；社交→feed/资料页；电商→商品/结算；纯落地页类→营销首页），"
+             "再定本轮关键词（产品类型/界面词 + 调研风格方向词 + 平台词）。\n"))
         # 找更多类似这张：以用户选中的一张图为种子，结合需求做下一轮精炼搜索
         seed_line = ""
         if seed and seed.get("file"):
@@ -934,14 +935,27 @@ def _auto_explore(pf: str, req: dict) -> None:
             "只采集这一个链接，完成即停。版权红线：只供风格判断，不抄文案、不盗图。"
         )
         timeout = 300
+    elif kind == "suggest-keywords":
+        # 进入②时据市场调研先给几个预设关键词（只建议、不搜不下图），前端把它们当可编辑的搜索词显示
+        prompt = (
+            "你是 ProductFlow 找参考 Agent（阶段②）。任务：**只**据市场调研结果给本轮找参考的预设关键词——不要搜、不要下任何图。\n"
+            f"读 {project_root}/.productflow/artifacts/phase-1/replicate-notes.md、artifacts/phase-1/positioning.md、"
+            f"{project_root}/.productflow/brief.json、artifacts/phase-1/competitors.md（有什么读什么）、`.productflow/wizard.json` 的 primary，"
+            "判断这是什么产品、核心界面是什么（工具→看板/列表/仪表盘；社交→feed/资料页；电商→商品/结算；纯落地页类→营销首页），"
+            "给 **4-6 个搜索关键词**（产品类型/界面词 + 调研风格方向词 + 平台词，英文为主便于 Dribbble 搜；**别一律 landing page**），写进状态：\n"
+            f"  python3 {pf_state} --dir {project_root} explore set-search-plan --keyword <词1> --keyword <词2> [--keyword …] --basis \"<一句话：什么产品 + 风格方向 + 平台>\"\n"
+            f"然后：python3 {pf_state} --dir {project_root} explore done-request --kind suggest-keywords\n"
+            "只做这件事，不要搜参考、不要下图，完成即停。"
+        )
+        timeout = 180
     else:
         return
     env = dict(os.environ)
     env["PF_PROJECT"] = project_root
     _inject_openai_env(env)
     phase = kind  # "search-refs" | "gen-heroes" | "collect-ref"
-    _log_reset(pf, phase, "开始" + {"search-refs": "找参考截图", "gen-heroes": "生成首图",
-                                    "collect-ref": "采集参考链接"}.get(kind, ""))
+    _log_reset(pf, phase, "开始" + {"search-refs": "找参考", "gen-heroes": "生成首图",
+                                    "collect-ref": "采集参考链接", "suggest-keywords": "据调研建议关键词"}.get(kind, ""))
     _run_claude_streaming(pf, phase, prompt, project_root, env=env, timeout=timeout)
     # 进程已退出：若 request 槽还在（agent 没 done-request，多半 claude 挂了/未登录/超时/没跑完），
     # 自动清掉卡住的槽，让前端「生成中」复位、按钮恢复可重试（error 行已在 agent-log 里可见）。
@@ -1882,7 +1896,7 @@ class Handler(BaseHTTPRequestHandler):
                                         "text": f"视觉探索请求：{kind}", "request": req},
                                        ensure_ascii=False) + "\n")
                 # 直接 spawn claude -p 当完整 agent 跑（playwright 截图 / openai-image-gen 生图），前端轮询拿结果
-                if isinstance(req, dict) and req.get("kind") in ("search-refs", "gen-heroes", "collect-ref"):
+                if isinstance(req, dict) and req.get("kind") in ("search-refs", "gen-heroes", "collect-ref", "suggest-keywords"):
                     threading.Thread(target=_auto_explore, args=(pf, req), daemon=True).start()
             # 用户粘贴/拖入图片手动加参考（直接存盘 + 登记，不经 agent）——人工加速、注入品味
             up = data.get("uploadRef")
@@ -1906,6 +1920,13 @@ class Handler(BaseHTTPRequestHandler):
                             "id": "ref-" + os.urandom(3).hex(), "file": rel,
                             "title": (up.get("title") or "我加的参考"), "source": "",
                             "desc": (up.get("desc") or "用户手动粘贴/拖入的参考")})
+            # 用户在面板编辑了搜索关键词 → 持久化（前端始终可见可改；找参考时以这些为准）
+            sp = data.get("setSearchPlan")
+            if isinstance(sp, dict) and isinstance(sp.get("keywords"), list):
+                kws = [str(k).strip() for k in sp["keywords"] if str(k).strip()][:20]
+                prev = ex.get("searchPlan") if isinstance(ex.get("searchPlan"), dict) else {}
+                ex["searchPlan"] = {"keywords": kws, "basis": (sp.get("basis") or prev.get("basis") or "用户填写"),
+                                    "ts": _now(), "source": "user"}
             _atomic_write_json(ex_path, ex)
             self._json({"ok": True})
             return
