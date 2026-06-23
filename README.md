@@ -40,7 +40,7 @@
 必需：Python3 + Claude Code + OpenAI 生图 key（openai-image-gen skill 随仓库一起装）；Playwright / Docker 可选。
 ```
 
-装好后新开一个 Claude Code 会话，可用五个命令：
+装好后新开一个 Claude Code 会话，可用六个命令：
 
 | 命令 | 作用 |
 |------|------|
@@ -49,6 +49,7 @@
 | `/productflow-start` | 启动操作台并打开浏览器 |
 | `/productflow-update` | 升级到最新版（git pull + 数据迁移 + 重启，数据不丢） |
 | `/productflow-adversarial-e2e` | 启动「对抗式 e2e 双 loop」：8 个用户 persona 持续找问题 + 定时自动修复（多实例隔离、不碰你的操作台） |
+| `/productflow-doctor` | 深度自检/体检：依赖 + 测试 + 代码完整性 + **真调生图批量出 2 张**，装完确认真能用 |
 
 ## 手动安装（不想用提示词时）
 
@@ -90,6 +91,7 @@ productflow-init/     /productflow-init 自检命令
 productflow-start/    /productflow-start 启动命令
 productflow-update/   /productflow-update 更新命令
 productflow-adversarial-e2e/  /productflow-adversarial-e2e 对抗式 e2e 双 loop 验证
+productflow-doctor/   /productflow-doctor 深度自检（依赖 + 完整性 + 真出图批量）
 openai-image-gen/     ③④ AI 生图引擎（随仓库一起装）
 web/                  React+TS 操作台源码（构建产物提交在 productflow/assets/dist，端上零 Node）
 landing/              本工具的落地页（index.html，纯静态，部署在 pf.gjs.ink）
