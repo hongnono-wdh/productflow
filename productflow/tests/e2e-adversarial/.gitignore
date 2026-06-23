@@ -1,0 +1,8 @@
+# runtime artifacts (findings accumulate per-machine; not part of the shipped tool)
+findings/findings.jsonl
+findings/*.png
+findings/*.log
+findings/.stop
+findings/.run-counter
+
+findings/.lock
