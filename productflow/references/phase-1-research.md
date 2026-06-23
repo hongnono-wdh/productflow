@@ -26,7 +26,8 @@ python3 "$SKILL_DIR/scripts/pf_state.py" log "Phase 1 市场调研启动"
 ```
 artifacts/phase-1/
 ├── positioning.md          # 产品定位对齐结果
-├── analysis/<域名>.md      # 单竞品分析卡片（实地浏览竞品 URL 后写，不截图）
+├── appstore/<app>/*.png    # 仅 APP 项目：竞品商店官方截图（唯一保留的截图）
+├── analysis/<域名>.md      # 单竞品分析卡片（实地浏览竞品 URL 后写，官网不截图）
 ├── core-analysis.mm.md     # 核心矛盾分析导图（markmap 源，面板可交互渲染）
 ├── competitors.md          # 竞品矩阵（阶段汇总产物之一）
 └── replicate-notes.md      # 复刻要点（阶段汇总产物之二，Phase 2 直接消费）
@@ -105,7 +106,27 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 1 search-competitors --status acti
 
 把候选 **3-6 个竞品的 URL + 一句话入选理由**列成清单——**这就是本阶段最核心的交付：用户能直接点开 URL 自己看**。写进 competitors.md 草稿（URL 列）。
 
-> **本阶段不截图**：竞品只列网址 + 文字分析（实地打开页面浏览即可），不再做整页截图——这样更快、也不会留一堆低清截图。需要视觉参考留到 **③首图**：用户会在那里给参考图。**APP 项目**同理，把竞品的 **App Store / Google Play 上架页 URL** 列进来即可（不抓商店截图）。
+> **竞品官网不做整页截图**：只列网址 + 文字分析（实地打开页面浏览即可）——更快、也不会留一堆低清截图。官网的视觉参考留到 **③首图**：用户会在那里给参考图。
+
+### APP 类项目：补抓 App Store / Google Play 官方特色截图（唯一保留的截图）
+
+**仅当主平台是 APP**（读 `wizard.json` 的 `primary`，或 `platforms` 以 APP 为主；CLI 项目从产品定位判断）才做——APP 竞品的"落地页"其实是商店上架页，开发者上传的截图就是这个 App 最核心的几屏**真实界面**，比官网直观得多，留作 ②找参考 / ③首图 的真实界面参考来源。用本 skill 自带脚本抓官方截图（免鉴权：iOS 走 iTunes API、Android 抓 Play 上架页）：
+
+```bash
+python3 "$SKILL_DIR/scripts/appstore_shots.py" --platform both \
+  --term "<产品品类英文词，如 habit tracker / budgeting app>" \
+  --out artifacts/phase-1/appstore --limit 3 --max-shots 6
+# 已知某竞品 App 时更准：iOS 用数字 trackId、Android 用包名
+#   --platform ios --id 1234567890     /   --platform android --id com.foo.bar
+```
+
+脚本把每个 App 的截图存进 `artifacts/phase-1/appstore/<ios|android>-<app>/` 并写 `manifest.json`。逐张登记成产物（操作台画廊能看，且作为后续设计的真实界面参考）：
+
+```bash
+python3 "$SKILL_DIR/scripts/pf_state.py" artifact 1 artifacts/phase-1/appstore/<子目录>/<n>.png --title "<App名> 商店截图 N"
+```
+
+iOS（iTunes API）稳定可靠；Android（抓 Play 页 HTML）best-effort，可能因地区/反爬少抓或抓空——抓不到就跳过、别卡住，其余竞品分析照常。这些截图仅供学习界面结构与卖点呈现，**不抄袭、不进最终产品**。
 
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" step 1 search-competitors --status done

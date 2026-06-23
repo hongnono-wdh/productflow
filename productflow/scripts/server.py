@@ -422,16 +422,22 @@ def _auto_research(pf: str, instruction: str = "") -> None:
     instruction：用户对本次（重）做的额外要求，注入 prompt——避免重做还是无脑跑一样的东西。"""
     project_root = os.path.dirname(pf)
     ps = os.path.join(SKILL_DIR, "scripts", "pf_state.py")
+    appstore = os.path.join(SKILL_DIR, "scripts", "appstore_shots.py")
     doc = os.path.join(SKILL_DIR, "references", "phase-1-research.md")
     prompt = (
         "你是 ProductFlow 市场调研 Agent（阶段①），headless 运行，必须用工具实际完成任务（不要只输出描述）。\n"
         f"完整做法见手册：{doc}——先读它，再执行阶段①全部步骤。\n"
         f"项目目录：{project_root}（产品定位/需求见 .productflow/brief.json 与 wizard.json，先读了解要做什么产品）。\n"
         "重要：每个 Bash 调用都是独立 shell，登记命令必须每次写完整 `python3 <绝对路径> --dir <绝对路径> ...`，禁止用 $PF 等 shell 变量缩写（否则登记全部失效）。\n"
-        "★本阶段不做任何截图——产物只要竞品网址 + 文字分析；需要视觉参考留到 ③首图（用户会在那里给参考图）。\n"
+        "★竞品官网不要整页截图——产物只列竞品网址 + 文字分析；官网视觉参考留到 ③首图（用户会在那里给参考图）。"
+        "唯一保留的截图是下面的【APP 商店官方截图】（真实 App 界面，非 APP 项目不涉及）。\n"
         "按下面步骤做，完成一步就登记一步（不要攒到最后，前端实时显示进度）：\n"
         "1. WebSearch 找 3-6 个同品类竞品的落地页 URL（APP 项目就找 App Store / Google Play 上架页 URL）。\n"
-        "2. 逐个**打开 URL 实地浏览**分析竞品风格/卖点（看真实页面，不截图），写 artifacts/phase-1/analysis/<域名>.md。\n"
+        "1b. 【仅当主平台=APP】读 .productflow/wizard.json 的 primary；若是 APP，用脚本抓商店官方特色截图（开发者上传的真实 App 界面，比官网直观；免鉴权 iOS iTunes API / Android Play 页）：\n"
+        f"    python3 {appstore} --platform both --term \"<品类英文词>\" --out artifacts/phase-1/appstore --limit 3 --max-shots 6\n"
+        f"    然后按生成的 manifest.json 逐张登记：python3 {ps} --dir {project_root} artifact 1 artifacts/phase-1/appstore/<子目录>/<n>.png --title \"<App名> 商店截图\"\n"
+        "    （iOS 稳；Android best-effort，抓不到就跳过、别卡住。非 APP 项目跳过本步。）\n"
+        "2. 逐个**打开 URL 实地浏览**分析竞品风格/卖点（看真实页面，不截图官网），写 artifacts/phase-1/analysis/<域名>.md。\n"
         "3. 做核心矛盾分析，写 artifacts/phase-1/core-analysis.mm.md（markmap 导图源）。\n"
         "4. 汇总 artifacts/phase-1/competitors.md（竞品矩阵，**必须含每个竞品的 URL 列**，方便用户直接点开看）+ artifacts/phase-1/replicate-notes.md（复刻要点，供后续设计阶段用）。\n"
         f"每产出一个文件就登记：python3 {ps} --dir {project_root} artifact 1 artifacts/phase-1/<文件> --title \"<标题>\"\n"
