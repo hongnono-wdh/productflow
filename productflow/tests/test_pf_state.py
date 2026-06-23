@@ -206,26 +206,27 @@ class TestArtifactLog(PfStateBase):
         self.assertEqual(arts[0]["title"], "v2")  # 留的是最新那条
         self.assertGreaterEqual(arts[0]["ts"], ts1)
 
-    def test_artifact_version_increments_per_title(self):
-        # 同标题、不同路径 = 同一逻辑产物的多版本：v1/v2/v3（重做不丢历史，前端据此分版展示）
-        a = self._make_file("artifacts/phase-1/report-1.md")
-        b = self._make_file("artifacts/phase-1/report-2.md")
-        c = self._make_file("artifacts/phase-1/report-3.md")
-        self.run_ok(["artifact", "1", a, "--title", "竞品报告"])
-        self.run_ok(["artifact", "1", b, "--title", "竞品报告"])
-        r = self.run_ok(["artifact", "1", c, "--title", "竞品报告"])
-        self.assertIn("(v3)", r.stdout)
+    def test_artifact_version_tracks_phase_generation(self):
+        # 版本 = 本阶段「第几代」：每次重做（phase→active）后登记的产物号 +1，老批留痕可对比。
+        a = self._make_file("artifacts/phase-1/r1.md")
+        self.run_ok(["phase", "1", "--status", "active"])          # 第 1 代
+        r = self.run_ok(["artifact", "1", a, "--title", "竞品报告"])
+        self.assertIn("(v1)", r.stdout)
+        self.run_ok(["phase", "1", "--status", "done"])
+        self.run_ok(["phase", "1", "--status", "active"])          # 重做 → 第 2 代
+        b = self._make_file("artifacts/phase-1/r2.md")
+        r = self.run_ok(["artifact", "1", b, "--title", "竞品矩阵"])
+        self.assertIn("(v2)", r.stdout)
+        c = self._make_file("artifacts/phase-1/r3.md")
+        self.run_ok(["artifact", "1", c, "--title", "核心矛盾"])    # 同一代里再登记仍是 v2
         arts = next(p for p in read_state(self.dir)["phases"] if p["id"] == 1)["artifacts"]
-        self.assertEqual([x["version"] for x in arts], [1, 2, 3])
-        # 不同标题各自从 v1 起
-        d = self._make_file("artifacts/phase-1/other.md")
-        self.run_ok(["artifact", "1", d, "--title", "其它"])
+        self.assertEqual({x["file"]: x["version"] for x in arts}, {a: 1, b: 2, c: 2})
+        # active→active 不重复 +1（同一代内多次设 active 不抖版本号）
+        self.run_ok(["phase", "1", "--status", "active"])
+        d = self._make_file("artifacts/phase-1/r4.md")
+        self.run_ok(["artifact", "1", d, "--title", "报告"])
         arts = next(p for p in read_state(self.dir)["phases"] if p["id"] == 1)["artifacts"]
-        self.assertEqual(next(x for x in arts if x["title"] == "其它")["version"], 1)
-        # 同路径重登记：版本不变（同一份产物刷新，不是新一版）
-        self.run_ok(["artifact", "1", a, "--title", "竞品报告"])
-        arts = next(p for p in read_state(self.dir)["phases"] if p["id"] == 1)["artifacts"]
-        self.assertEqual(next(x for x in arts if x["file"] == a)["version"], 1)
+        self.assertEqual(next(x for x in arts if x["file"] == d)["version"], 2)
 
     def test_artifact_rm_unregisters_and_deletes(self):
         rel = self._make_file("artifacts/phase-6/preview-home.png")

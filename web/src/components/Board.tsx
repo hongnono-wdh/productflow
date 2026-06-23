@@ -1,7 +1,7 @@
 // view-board: health line + steps + artifacts gallery + log. Driven by `state` (+ `health`).
 import type { ReactNode } from 'react'
 import { useChannel, openArtifact } from '../store'
-import { artUrl, artifactVersions } from '../lib'
+import { artUrl } from '../lib'
 import type { StateChannel, StatePhase, HealthPayload } from '../types'
 import { DocIcon } from './DocIcon'
 
@@ -48,22 +48,19 @@ export function Board({ phase, state, stageExtra }: { phase: StatePhase; state: 
             </h2>
             <div className="gallery" id="gallery">
               {phase.artifacts.length ? (
-                (() => {
-                  const { ver, total } = artifactVersions(phase.artifacts)
-                  return phase.artifacts.map((a, i) => (
-                    <div key={i} className="art" onClick={() => openArtifact(artUrl(a.file, a.ts), a.title, a.type)}>
-                      {total[a.title] > 1 && <span className="art-ver" title={`「${a.title}」第 ${ver[i]} 版`}>v{ver[i]}</span>}
-                      {a.type === 'image' ? (
-                        <img src={artUrl(a.file, a.ts)} loading="lazy" />
-                      ) : (
-                        <div className="ic">
-                          <DocIcon type={a.type} />
-                        </div>
-                      )}
-                      <div className="cap">{a.title}</div>
-                    </div>
-                  ))
-                })()
+                phase.artifacts.map((a, i) => (
+                  <div key={i} className="art" onClick={() => openArtifact(artUrl(a.file, a.ts), a.title, a.type)}>
+                    <span className="art-ver" title={`第 ${a.version || 1} 版（每次重做本阶段 +1）`}>v{a.version || 1}</span>
+                    {a.type === 'image' ? (
+                      <img src={artUrl(a.file, a.ts)} loading="lazy" />
+                    ) : (
+                      <div className="ic">
+                        <DocIcon type={a.type} />
+                      </div>
+                    )}
+                    <div className="cap">{a.title}</div>
+                  </div>
+                ))
               ) : (
                 <div className="empty">本阶段还没有产物。</div>
               )}

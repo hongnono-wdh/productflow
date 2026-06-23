@@ -268,6 +268,10 @@ def cmd_status(args) -> None:
 def cmd_phase(args) -> None:
     s = _load(args.dir)
     ph = _phase(s, args.n)
+    # 每次（重新）进入本阶段 = 新「一代」：之后登记的产物都带这个版本号，
+    # 这样重做后产物画廊一眼看出哪批是哪一版（老批留痕、可对比）。只在 pending/done→active 时 +1。
+    if args.status == "active" and ph.get("status") != "active":
+        ph["gen"] = ph.get("gen", 0) + 1
     ph["status"] = args.status
     if args.status == "active":
         s["current_phase"] = args.n
@@ -302,16 +306,10 @@ def cmd_artifact(args) -> None:
         atype = "mindmap"
     else:
         atype = ARTIFACT_TYPES.get(os.path.splitext(rel)[1].lower(), "file")
-    # 版本号：同一「标题」的产物按登记先后排 v1/v2/v3…（重做某产物 = 新一版，老的留着可对比）。
-    # 同路径重登记 = 同一份产物刷新，版本不变；新路径 = 该标题的下一版。
-    existing = ph["artifacts"]
-    prev = next((a for a in existing if a["file"] == rel), None)
-    if prev and isinstance(prev.get("version"), int):
-        version = prev["version"]
-    else:
-        same_title = [a.get("version", 0) for a in existing if a.get("title") == args.title and a["file"] != rel]
-        version = (max(same_title) if same_title else 0) + 1
-    ph["artifacts"] = [a for a in existing if a["file"] != rel]
+    # 版本号 = 本阶段「第几代」（每次重做阶段 +1，见 cmd_phase）。同一代里登记的产物同号；
+    # 重做后新登记的产物号 +1，老产物留痕——产物画廊据此分辨哪批是哪一版。未激活/老数据默认 v1。
+    version = ph.get("gen") or 1
+    ph["artifacts"] = [a for a in ph["artifacts"] if a["file"] != rel]
     ph["artifacts"].append({"file": rel, "title": args.title, "type": atype, "ts": _now(), "version": version})
     s["log"].append({"ts": _now(), "msg": f"P{args.n} 产物：{args.title}（v{version}）"})
     _save(args.dir, s)
