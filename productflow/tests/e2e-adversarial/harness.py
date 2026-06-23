@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+import time
 import traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -279,6 +280,112 @@ def j_modals(ctx: Ctx, pid, pdir):
         ctx.record("modal", "*", "cosmetic", "Esc 未关闭 modal", ["开 modal 按 Esc"], "modal 仍在", "Esc 关闭")
 
 
+def j_multitab(ctx: Ctx, pid, pdir):
+    """多标签：同项目开第二个 context，A 发留言，验 B 经 WS 收敛（多客户端推送）。"""
+    b2 = ctx.browser.new_context()
+    p2 = b2.new_page()
+    try:
+        p2.goto(ctx.url(f"/p/{pid}/"), wait_until="networkidle")
+        p2.wait_for_timeout(2000)
+        pg = ctx.page
+        pg.click("#chat-btn")
+        pg.wait_for_selector("#chat-drawer.open", timeout=6000)
+        token = "sync-probe-%d" % int(time.time())
+        pg.fill("#chat-input", token)
+        pg.click("#chat-form button[type='submit']")
+        pg.wait_for_timeout(400)
+        try:
+            pg.click("#chat-drawer >> text=收起", timeout=2000)
+        except Exception:
+            pass
+        p2.click("#chat-btn")
+        p2.wait_for_timeout(300)
+        ok = False
+        for _ in range(10):
+            if token in (p2.eval_on_selector("#msgs", "e=>e.textContent") or ""):
+                ok = True
+                break
+            p2.wait_for_timeout(500)
+        if not ok:
+            ctx.record("multitab", "*", "broken", "第二标签页未经 WS 收到另一 tab 的留言",
+                       [f"A 发 {token}，B 开聊天等 WS"], "B 的 #msgs 无该消息", "≤5s 内 WS 同步过来")
+    finally:
+        try:
+            b2.close()
+        except Exception:
+            pass
+
+
+def j_injection(ctx: Ctx, pid, pdir):
+    """注入/转义：brief & chat 塞 <img onerror>/<script>，验被转义成文本、不执行。"""
+    pg = ctx.page
+    pg.click("#stepper .step-pill >> nth=0")
+    try:
+        pg.wait_for_selector("#stage-extra textarea", timeout=8000)
+        pg.eval_on_selector("#stage-extra textarea", "e=>{e.value='';}")
+        pg.fill("#stage-extra textarea", "<img src=x onerror=window.__xss=1>注入测试")
+        pg.wait_for_timeout(400)
+        if pg.evaluate("() => window.__xss === 1"):
+            ctx.record("injection", "P1", "crash", "brief 输入触发 XSS 执行", ["①brief 填 <img onerror>"], "window.__xss 被置位", "输入转义为纯文本")
+    except Exception:
+        pass
+    if pg.query_selector("#chat-btn"):
+        try:
+            pg.click("#chat-btn")
+            pg.wait_for_selector("#chat-drawer.open", timeout=4000)
+            pg.fill("#chat-input", "<script>window.__xss2=1</script>注入")
+            pg.click("#chat-form button[type='submit']")
+            pg.wait_for_timeout(500)
+            if pg.evaluate("() => window.__xss2 === 1"):
+                ctx.record("injection", "*", "crash", "聊天输入触发 XSS 执行", ["chat 发 <script>"], "window.__xss2 被置位", "转义为文本")
+            pg.click("#chat-drawer >> text=收起", timeout=2000)
+        except Exception:
+            pass
+
+
+def j_choices_race(ctx: Ctx, pid, pdir):
+    """choices 竞态：server 抛 choice → 浮条出现 → 连点同一选项 → 验单次答复、不崩。"""
+    h.cli(["choice", "ask", "--stage", "5", "--question", "竞态测试用哪个？", "--option", "A选项", "--option", "B选项"], ctx.home, project=pdir)
+    pg = ctx.page
+    pg.click("#stepper .step-pill >> nth=4")
+    try:
+        pg.wait_for_selector("#choices-bar.show .choice-card", timeout=8000)
+    except Exception:
+        ctx.record("choices", "*", "broken", "choice 抛出后 choices-bar 未出现", ["cli choice ask"], "无 .choice-card", "浮条显示待确认问题")
+        return
+    for _ in range(3):
+        try:
+            pg.click("#choices-bar .copt >> text=A选项", timeout=600)
+        except Exception:
+            pass
+    pg.wait_for_timeout(500)
+    cf = os.path.join(pdir, ".productflow", "choices.json")
+    answered = []
+    if os.path.isfile(cf):
+        try:
+            answered = [c for c in json.load(open(cf))["choices"] if c.get("answer")]
+        except Exception:
+            answered = []
+    if not any(c.get("answer") == "A选项" for c in answered):
+        ctx.record("choices", "*", "broken", "快速连点选项未记录答复", ["choice 出现后连点 A 选项 3 次"], "choices.json 无 A 答复", "记录单次答复、不崩")
+
+
+def j_reload_mid_run(ctx: Ctx, pid, pdir):
+    """断网/重载韧性：触发 run-stage 后 reload，验 WS 重连 + 项目视图恢复。"""
+    pg = ctx.page
+    pg.click("#stepper .step-pill >> nth=4")
+    try:
+        pg.wait_for_selector("#stage-extra button:has-text('让 Agent 做本阶段')", timeout=8000)
+    except Exception:
+        return
+    pg.click("#stage-extra button:has-text('让 Agent 做本阶段')")
+    pg.wait_for_timeout(300)
+    pg.reload(wait_until="networkidle")
+    pg.wait_for_timeout(2500)
+    if not pg.query_selector("#stepper .step-pill"):
+        ctx.record("reload", "P5", "broken", "run-stage 后 reload 项目视图未恢复", ["run-stage→reload"], "无 stepper", "WS 重连 + 视图恢复")
+
+
 def _reset_ui(ctx: Ctx):
     """Clean shared-page state between journeys (close overlays) so one journey's
     leftover (open drawer/modal) doesn't break the next — keeps findings attributable."""
@@ -313,7 +420,8 @@ def run(persona: str):
         created = j_create(ctx)
         if created:
             pid, pdir = created
-            for jfn in (j_navigate, j_brief_focus_guard, j_canvas, j_run_stage_concurrency, j_chat, j_modals):
+            for jfn in (j_navigate, j_brief_focus_guard, j_canvas, j_run_stage_concurrency, j_chat, j_modals,
+                        j_multitab, j_injection, j_choices_race, j_reload_mid_run):
                 try:
                     _reset_ui(ctx)
                     ctx.console.clear()  # clean slate so this journey's console errors attribute correctly
