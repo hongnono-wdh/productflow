@@ -151,12 +151,12 @@ class TestPhaseStep(PfStateBase):
 
     def test_step_status_active_and_skipped(self):
         self.run_ok(["step", "1", "search-competitors", "--status", "active"])
-        self.run_ok(["step", "1", "capture-screenshots", "--status", "skipped"])
+        self.run_ok(["step", "1", "analyze-style", "--status", "skipped"])
         s = read_state(self.dir)
         ph1 = next(p for p in s["phases"] if p["id"] == 1)
         statuses = {x["id"]: x["status"] for x in ph1["steps"]}
         self.assertEqual(statuses["search-competitors"], "active")
-        self.assertEqual(statuses["capture-screenshots"], "skipped")
+        self.assertEqual(statuses["analyze-style"], "skipped")
 
     def test_step_unknown_id_fails(self):
         r = cli(["step", "1", "no-such-step", "--status", "done"], self.home, project=self.dir)

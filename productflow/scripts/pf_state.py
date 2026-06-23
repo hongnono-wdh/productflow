@@ -22,8 +22,7 @@ PHASES = [
         "name": "市场调研",
         "steps": [
             ("define-product", "明确产品与目标用户"),
-            ("search-competitors", "竞品搜索与筛选"),
-            ("capture-screenshots", "浏览器截图采集"),
+            ("search-competitors", "竞品搜索与罗列网址"),
             ("analyze-style", "风格与卖点分析"),
             ("core-analysis", "核心矛盾分析"),
             ("replicate-report", "复刻要点报告"),

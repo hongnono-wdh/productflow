@@ -1,6 +1,6 @@
 ---
 name: productflow
-version: 2.16.4
+version: 2.16.5
 description: 完整互联网产品全自动生产操作台。启动 localhost 控制台 + 7 阶段流水线：市场调研 → 找参考 → 首图设计 → 页面设计 → 功能与数据设计(ER/数据层/接口) → 开发实现(前后端全栈 / 原生 App + 测试) → 部署上线（Web：CF Pages/Workers 或单机；iOS：TestFlight；Android：Google Play 内部测试；PC 桌面应用：Tauri 打包安装包/可选上架商店）。从落地页/官网/waitlist，到带数据库与后端的功能性 Web 应用，再到原生移动 App（iOS：SwiftUI+SwiftData / Android：Kotlin+Compose+Room）与 PC 桌面应用（Tauri）都能做（落地页只是最简单的一种）。只要用户想"做一个网站/Web 产品/应用/落地页/官网/waitlist/小工具"、"做一个 iOS App / Android 安卓 App / 原生移动应用"、"做一个 PC 桌面应用 / Windows / Mac 客户端"、"做一个带后端和数据库的产品"、"复刻某产品"、"从调研到上线"、提到 ProductFlow / 操作台 / landing page pipeline，或要求"启动产品项目"，就使用本 skill——即使他们没说出 skill 名字。
 ---
 
@@ -94,10 +94,10 @@ init 输出里有项目 id；告知用户项目地址 `http://127.0.0.1:7717/p/<
 ```bash
 PF="python3 $SKILL_DIR/scripts/pf_state.py"   # 已 export PF_PROJECT，命令免带 --dir
 $PF phase 1 --status active          # 阶段开始/结束（active|done）
-$PF step 1 capture-screenshots --status done   # 步骤状态（active|done|skipped）
+$PF step 1 search-competitors --status done   # 步骤状态（active|done|skipped）
 $PF artifact 1 artifacts/phase-1/competitors.md --title "竞品矩阵"   # 登记产物（同路径重登记=按路径去重+刷新时间戳，操作台只显示最新、自动绕过浏览器缓存）
 $PF artifact-rm 6 artifacts/phase-6/preview-home.png                 # 撤销登记并删文件（重做/作废某张截图、或页面被删时用，避免画廊残留旧图混淆）
-$PF log "已完成 4 个竞品截图"        # 一句话进展（显示在操作台日志流）
+$PF log "已列出 4 个竞品网址"        # 一句话进展（显示在操作台日志流）
 $PF inbox                            # 读取网页端用户留言（读完推进已读游标）
 $PF reply "已按留言调整配色"         # 回应网页端留言（追加进对话流，网页端即时可见）
 $PF choice ask --stage 5 --question "技术栈预设确认？" --option "T2 静态+API" --option "T3 单机全栈" --option "换栈：____"  # 抛待确认问题（输出一个 ch-xxxx id；选项随平台/预设而定，预设是默认不是锁死）
@@ -125,7 +125,7 @@ $PF status                           # 总览
 
 | 阶段 | 手册 | 一句话 |
 |------|------|--------|
-| ① 市场调研 | `references/phase-1-research.md` | 写产品需求 brief → 竞品搜索 → Playwright 截图 → 竞品分析（多竞品可并行，无并行能力则串行）→ **核心矛盾分析导图**（用户动作拆解+打点→真问题→傻瓜式路径，.mm.md 面板可交互渲染）→ 复刻要点报告 |
+| ① 市场调研 | `references/phase-1-research.md` | 写产品需求 brief → 竞品搜索（**只罗列网址、不截图**）→ 实地浏览竞品分析（多竞品可并行，无并行能力则串行）→ **核心矛盾分析导图**（用户动作拆解+打点→真问题→傻瓜式路径，.mm.md 面板可交互渲染）→ 复刻要点报告（需要视觉参考留到③首图给参考图） |
 | ② 找参考 | `references/phase-2-refs.md` | 去 Dribbble 等收集参考截图 → 存 `artifacts/phase-2/refs/` → `explore add-ref` 逐张登记 → 用户选稿（selectedRefs） |
 | ③ 首图设计 | `references/phase-3-hero.md` | 读 selectedRefs 总结风格 → openai-image-gen 批量多风格生图 → 存 `artifacts/phase-3/heroes/` → `explore add-hero` 逐张登记，**首图画布**上对比定稿 |
 | ④ 页面设计 | `references/phase-4-pages.md` | 三入口：直接生成（design-taste-frontend）/ 参考图改风格 / 画布（canvas-design）→ **页面画布**按页面×平台铺稿 → direction.md 定稿 |
@@ -145,7 +145,7 @@ $PF status                           # 总览
 |------|------|-------------|
 | Python 3 | 必需 | 硬前提，无则 server/状态机跑不了 |
 | Node.js + npm | 视项目 | 仅 T2/T3 项目要；纯静态 T1 不需要 |
-| Playwright | 强烈建议 | 竞品截图(P1)、成品预览与 E2E 旅程测试(P6)都靠它。装：`pip install playwright && python3 -m playwright install chromium`，或 `npm i -D @playwright/test && npx playwright install chromium` |
+| Playwright | 强烈建议 | ②找参考抓图、成品预览与 E2E 旅程测试(P6)都靠它（①市场调研已不截图）。装：`pip install playwright && python3 -m playwright install chromium`，或 `npm i -D @playwright/test && npx playwright install chromium` |
 | design-taste-frontend | 增强 | Phase 4 页面设计入口 A。缺失→用 frontend-design / ui-ux-pro-max；再缺→按 direction.md 直接手写 HTML/CSS |
 | openai-image-gen | 增强 | Phase 3 首图设计批量多风格生图（还需图像 API key）。缺失→跳过 AI 生图，改用 Phase 2 参考图直接定方向 |
 | database-schema-designer | 增强 | 缺失→按 phase-5 手册内置的 SQLite 约定直接设计，照样能出 ER/DDL |

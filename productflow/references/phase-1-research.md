@@ -1,4 +1,4 @@
-# Phase 1 — 市场调研与截图复刻
+# Phase 1 — 市场调研
 
 > 何时读本文件：用户提出新产品需求、流水线即将进入或正处于 Phase 1（市场调研）时，先通读本文再动手。
 
@@ -26,8 +26,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" log "Phase 1 市场调研启动"
 ```
 artifacts/phase-1/
 ├── positioning.md          # 产品定位对齐结果
-├── screenshots/<域名>.png  # 竞品整页截图
-├── analysis/<域名>.md      # 单竞品分析卡片
+├── analysis/<域名>.md      # 单竞品分析卡片（实地浏览竞品 URL 后写，不截图）
 ├── core-analysis.mm.md     # 核心矛盾分析导图（markmap 源，面板可交互渲染）
 ├── competitors.md          # 竞品矩阵（阶段汇总产物之一）
 └── replicate-notes.md      # 复刻要点（阶段汇总产物之二，Phase 2 直接消费）
@@ -104,73 +103,23 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 1 search-competitors --status acti
 - 落地页本身设计质量过关——分析烂页面学不到东西；
 - 风格之间有差异，避免选出 5 个长得一样的，后面给不出风格候选。
 
-把候选 URL 列表 + 一句话入选理由记下来（可直接写入后面的 competitors.md 草稿），然后：
+把候选 **3-6 个竞品的 URL + 一句话入选理由**列成清单——**这就是本阶段最核心的交付：用户能直接点开 URL 自己看**。写进 competitors.md 草稿（URL 列）。
+
+> **本阶段不截图**：竞品只列网址 + 文字分析（实地打开页面浏览即可），不再做整页截图——这样更快、也不会留一堆低清截图。需要视觉参考留到 **③首图**：用户会在那里给参考图。**APP 项目**同理，把竞品的 **App Store / Google Play 上架页 URL** 列进来即可（不抓商店截图）。
 
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" step 1 search-competitors --status done
 ```
 
-## Step 3: capture-screenshots — 截图采集
-
-```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" step 1 capture-screenshots --status active
-```
-
-用 **webapp-testing** 或 **playwright-cli** skill（headless）逐个打开竞品 URL，做**整页截图**（full-page，不是首屏），保存为：
-
-```
-artifacts/phase-1/screenshots/<域名>.png    # 如 screenshots/linear-app.png，域名中的点换成连字符
-```
-
-采集要点：
-
-- 桌面视口（1440 宽左右）截整页；整页截图是后续分析版式结构的依据，首屏截图看不到区块顺序。
-- 等待页面完全加载（懒加载图片、动画入场）再截，否则截到一半空白。
-- 某个 URL 打不开或反爬：换下一个候选竞品补位，不要在单个站上耗超过 2 次重试。
-
-**每张截图逐个登记**——操作台靠 artifact 索引展示图片，漏登记用户就看不到：
-
-```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" artifact 1 artifacts/phase-1/screenshots/<域名>.png --title "竞品截图 - <产品名>"
-```
-
-全部截完：
-
-```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" step 1 capture-screenshots --status done
-python3 "$SKILL_DIR/scripts/pf_state.py" log "已采集 N 个竞品整页截图"
-```
-
-### APP 类项目：补抓 App Store / Google Play 官方特色截图
-
-**仅当主平台是 APP**（读 `wizard.json` 的 `primary`，或 `platforms` 以 APP 为主；CLI 项目从产品定位判断）才做这一步——APP 竞品的"落地页"其实是商店上架页，开发者上传的截图就是这个 App 最核心的几屏真实界面，比竞品官网直观得多。用本 skill 自带脚本抓官方截图（免鉴权：iOS 走 iTunes API、Android 抓 Play 上架页）：
-
-```bash
-python3 "$SKILL_DIR/scripts/appstore_shots.py" --platform both \
-  --term "<产品品类英文词，如 habit tracker / budgeting app>" \
-  --out artifacts/phase-1/appstore --limit 3 --max-shots 6
-# 已知某竞品 App 时更准：iOS 用数字 trackId、Android 用包名
-#   --platform ios --id 1234567890     /   --platform android --id com.foo.bar
-```
-
-脚本把每个 App 的截图存进 `artifacts/phase-1/appstore/<ios|android>-<app>/`，并写 `manifest.json`。逐个登记成产物（这样操作台画廊能看、且会作为 ② 找参考的**真实 App 界面参考**来源）：
-
-```bash
-# 按 manifest.json 列出的文件逐张登记
-python3 "$SKILL_DIR/scripts/pf_state.py" artifact 1 artifacts/phase-1/appstore/<子目录>/<n>.png --title "<App名> 商店截图 N"
-```
-
-注意：iOS（iTunes API）稳定可靠；Android（抓 Play 页 HTML）best-effort，可能因地区/反爬少抓或抓空——抓不到就跳过、别卡住，桌面/官网竞品分析照常进行。截图仅供学习界面结构与卖点呈现，**不抄袭、不进最终产品**。
-
-## Step 4: analyze-style — 多竞品分析
+## Step 3: analyze-style — 多竞品分析
 
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" step 1 analyze-style --status active
 ```
 
-每个竞品都按下面的四维度独立分析（各读各的截图）。**默认串行逐个做即可**——竞品分析互相独立，串行结果和并行一样，只是慢些。
+每个竞品都按下面的四维度独立分析——**逐个打开竞品 URL 实地浏览**（看真实页面的版式/风格/文案骨架，不依赖截图）。**默认串行逐个做即可**——竞品分析互相独立，串行结果和并行一样，只是慢些。
 
-**可选加速**：若你的 agent 支持并行子代理（如 Claude Code 的 Agent Teams `TeamCreate`），且竞品 ≥ 3 个，可每个子代理分 1-2 个竞品并行分析，完后清理（`TeamDelete`）。spawn 子代理时给足上下文：产品定位（positioning.md 内容）、分到的截图绝对路径、输出文件路径、四维度模板——子代理不继承对话历史，少给一项就只能瞎编。**没有并行能力就串行，不要去调用不存在的工具**。
+**可选加速**：若你的 agent 支持并行子代理（如 Claude Code 的 Agent Teams `TeamCreate`），且竞品 ≥ 3 个，可每个子代理分 1-2 个竞品并行分析，完后清理（`TeamDelete`）。spawn 子代理时给足上下文：产品定位（positioning.md 内容）、分到的**竞品 URL**、输出文件路径、四维度模板——子代理不继承对话历史，少给一项就只能瞎编。**没有并行能力就串行，不要去调用不存在的工具**。
 
 每个竞品输出一张分析卡片 `artifacts/phase-1/analysis/<域名>.md`，固定四个维度：
 
@@ -186,7 +135,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 1 artifacts/phase-1/analysis/<
 python3 "$SKILL_DIR/scripts/pf_state.py" step 1 analyze-style --status done
 ```
 
-## Step 5: core-analysis — 核心矛盾分析
+## Step 4: core-analysis — 核心矛盾分析
 
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" step 1 core-analysis --status active
@@ -224,7 +173,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 1 artifacts/phase-1/core-analy
 python3 "$SKILL_DIR/scripts/pf_state.py" step 1 core-analysis --status done
 ```
 
-## Step 6: replicate-report — 汇总产物
+## Step 5: replicate-report — 汇总产物
 
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" step 1 replicate-report --status active
@@ -237,7 +186,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 1 replicate-report --status active
 **`artifacts/phase-1/replicate-notes.md` — 复刻要点**（设计阶段的直接输入，见 phase-2-refs.md 起）：
 
 - **推荐信息架构**：结合产品定位与竞品共性，给出本产品落地页应有的区块清单与顺序，每个区块一句话说明放什么、为什么。hero 区块必须直接回应 core-analysis.mm.md 里的"真问题"，傻瓜式 1-3 步就是 how-it-works 区块的骨架。
-- **风格方向候选 2-3 个**：每个候选给名字 + 风格描述 + 引用哪些竞品截图作参照 + 适配理由。给 2-3 个而不是 1 个，是为了让用户在 Phase 2 有真实选择权而非被动接受。
+- **风格方向候选 2-3 个**：每个候选给名字 + 风格描述 + 引用哪些竞品（URL）作参照 + 适配理由。给 2-3 个而不是 1 个，是为了让用户在 Phase 2 有真实选择权而非被动接受。
 - **转化设计建议**：CTA 策略、信任要素清单。
 
 两份都登记：
@@ -250,7 +199,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 1 replicate-report --status done
 
 ## 版权红线
 
-复刻竞品只学**布局结构、信息架构、风格思路**。不抄文案（连改写一两词也不行）、不下载/盗用竞品图片素材、不复制 logo 或品牌元素。截图仅作内部分析参照，不进入最终产品。分析卡片里描述文案"骨架"（结构与逻辑），不摘录原句。
+复刻竞品只学**布局结构、信息架构、风格思路**。不抄文案（连改写一两词也不行）、不下载/盗用竞品图片素材、不复制 logo 或品牌元素。竞品页面仅作内部分析参照，不进入最终产品。分析卡片里描述文案"骨架"（结构与逻辑），不摘录原句。
 
 ## 检查点
 
