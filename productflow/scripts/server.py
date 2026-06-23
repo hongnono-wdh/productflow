@@ -160,7 +160,8 @@ def _distill_event(pf: str, phase: str, evt: dict) -> None:
 def _run_claude_streaming(pf: str, phase: str, prompt: str, cwd: str,
                           env: dict | None = None, timeout: int = 600) -> str:
     """用 Popen 跑 claude -p stream-json，逐行解析进度写进 agent-log，返回完整 result 文本。
-    超时/异常时写 error 并返回已收集的文本。"""
+    超时用墙钟看门狗线程：到 timeout 秒无条件 kill 进程——不依赖 stdout 是否还有新行，
+    所以即使 agent 卡在一个无输出的长工具调用里（如某竞品站 Playwright 截图挂死）也能准时杀、准时报错。"""
     cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions",
            "--output-format", "stream-json", "--verbose"]
     result_text = ""
@@ -170,13 +171,21 @@ def _run_claude_streaming(pf: str, phase: str, prompt: str, cwd: str,
     except (FileNotFoundError, OSError) as e:
         _log_line(pf, phase, "error", "❌ 启动 claude 失败: " + _clip(e, 80))
         return result_text
-    deadline = time.monotonic() + timeout
+    # 墙钟看门狗：到点无条件杀，不管进程当下有没有在吐 stdout（修"静默卡死不被超时砍"的缺陷）
+    timed_out = {"v": False}
+
+    def _watchdog() -> None:
+        timed_out["v"] = True
+        try:
+            proc.kill()
+        except Exception:  # noqa: BLE001
+            pass
+
+    wd = threading.Timer(timeout, _watchdog)
+    wd.daemon = True
+    wd.start()
     try:
         for line in proc.stdout:
-            if time.monotonic() > deadline:
-                proc.kill()
-                _log_line(pf, phase, "error", "❌ 超时终止")
-                break
             line = line.strip()
             if not line:
                 continue
@@ -189,12 +198,13 @@ def _run_claude_streaming(pf: str, phase: str, prompt: str, cwd: str,
             if evt.get("type") == "result" and isinstance(evt.get("result"), str):
                 result_text = evt["result"]
             _distill_event(pf, phase, evt)
-        proc.wait(timeout=max(1, int(deadline - time.monotonic())))
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        _log_line(pf, phase, "error", "❌ 超时终止")
+        proc.wait()
     except Exception as e:  # noqa: BLE001  流式读不该让整个线程崩
         _log_line(pf, phase, "error", "❌ 异常: " + _clip(e, 80))
+    finally:
+        wd.cancel()
+    if timed_out["v"]:
+        _log_line(pf, phase, "error", "❌ 超时终止")
     return result_text
 
 
@@ -431,7 +441,7 @@ def _auto_research(pf: str, instruction: str = "") -> None:
     if instruction:
         prompt += f"\n\n★用户对这次市场调研的额外要求（务必优先遵循，不要无视）：{instruction}"
     _log_reset(pf, "research", "开始市场调研")
-    _run_claude_streaming(pf, "research", prompt, project_root, timeout=1200)
+    _run_claude_streaming(pf, "research", prompt, project_root, timeout=1800)   # 30 分钟：调研含多站整页截图，比其它阶段更重
     print("[research] 结束", file=sys.stderr)
 
 
