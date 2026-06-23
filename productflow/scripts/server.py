@@ -266,8 +266,14 @@ def _auto_gen_brief(pf: str, description: str) -> None:
     br["request"] = None
     br["ready"] = True
     br["confirmed"] = False   # 新生成的摘要（可能带新问题）→ 重置确认态，等用户确认
+    # 追加一版历史（手风琴「第 N 版本」用）：每次重新生成都留痕，可回看/对比，不丢历史
+    hist = br.get("history")
+    if not isinstance(hist, list):
+        hist = []
+    hist.append({"ts": _now(), "summary": br["summary"], "questions": questions, "description": description})
+    br["history"] = hist[-20:]
     _atomic_write_json(br_path, br)
-    print(f"[brief] 自动生成摘要完成 → {br_path}", file=sys.stderr)
+    print(f"[brief] 自动生成摘要完成（第 {len(br['history'])} 版）→ {br_path}", file=sys.stderr)
 
 
 def _inject_openai_env(env: dict) -> None:
@@ -1130,7 +1136,8 @@ def _ws_channel_payload(pf: str, pid: str, channel: str):
         return _read_json_or(pf, "choices.json", {"choices": []})
     if channel == "brief":
         return _read_json_or(pf, "brief.json", {"description": "", "request": None, "questions": [],
-                             "confirmed": False, "summary": {"goal": "", "users": "", "need": "", "scope": ""}, "ready": False})
+                             "confirmed": False, "summary": {"goal": "", "users": "", "need": "", "scope": ""},
+                             "ready": False, "history": []})
     if channel == "explore":
         return _read_json_or(pf, "explore.json", {"stylePrefs": [], "request": {}, "refs": [], "selectedRefs": [],
                              "styleSummary": "", "heroes": [], "selectedHero": ""})
@@ -1526,7 +1533,8 @@ class Handler(BaseHTTPRequestHandler):
                         self._send(200, f.read().encode(), "application/json; charset=utf-8")
                 except FileNotFoundError:
                     self._json({"description": "", "request": None, "questions": [], "confirmed": False,
-                                "summary": {"goal": "", "users": "", "need": "", "scope": ""}, "ready": False})
+                                "summary": {"goal": "", "users": "", "need": "", "scope": ""},
+                                "ready": False, "history": []})
             elif sub == "/api/wizard":
                 try:
                     with open(os.path.join(pf, "wizard.json"), encoding="utf-8") as f:

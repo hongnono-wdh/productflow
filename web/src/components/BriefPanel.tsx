@@ -5,7 +5,7 @@ import { useEffect, useReducer, useRef } from 'react'
 import { useChannel, toast } from '../store'
 import { post } from '../lib'
 import { IcSpark } from '../icons'
-import type { BriefPayload, BriefQuestion, BriefSummary, AgentLogPayload, StatePhase } from '../types'
+import type { BriefPayload, BriefQuestion, BriefSummary, BriefVersion, AgentLogPayload, StatePhase } from '../types'
 
 interface PB {
   description: string
@@ -20,6 +20,9 @@ interface PB {
   confirmed: boolean
   _serverGen: boolean
   _inited: boolean
+  history: BriefVersion[]
+  _histLen: number
+  openVers: Record<number, boolean>
 }
 
 function fold(pb: PB): string {
@@ -48,6 +51,7 @@ export function BriefPanel({ phase }: { phase: StatePhase }) {
   const pbRef = useRef<PB>({
     description: '', summary: { goal: '', users: '', need: '', scope: '' }, ready: false, generating: false,
     failed: false, request: {}, clarify: '', questions: [], answers: {}, confirmed: false, _serverGen: false, _inited: false,
+    history: [], _histLen: -1, openVers: {},
   })
   const researchInstrRef = useRef('')
   const focusedRef = useRef(false)
@@ -71,11 +75,37 @@ export function BriefPanel({ phase }: { phase: StatePhase }) {
     if (serverGen) pb.failed = false
     pb._serverGen = serverGen
     if (!serverGen) pb.generating = false
+    // 版本历史：history 变长 = 新一版落地 → 兜底强制刷新摘要 + 恢复按钮（保证每轮都更新、按钮不卡）
+    const hist = Array.isArray(brief.history) ? brief.history : pb.history
+    const prevLen = pb._histLen
+    pb.history = hist
+    pb._histLen = hist.length
+    if (prevLen >= 0 && hist.length > prevLen) {
+      pb.ready = true
+      pb.generating = false
+      pb.failed = false
+      pb.request = {}
+    }
     force()
   }, [brief])
 
   const pb = pbRef.current
   const running = pb.generating || pb.request?.kind === 'gen-summary'
+
+  // 安全兜底：生成态卡住超过 ~3.5 分钟（后端 180s + 余量）仍无结果 → 解卡、恢复按钮、提示可重试
+  useEffect(() => {
+    if (!running) return
+    const t = setTimeout(() => {
+      const p = pbRef.current
+      if (p.generating || p.request?.kind === 'gen-summary') {
+        p.generating = false
+        p.request = {}
+        p.failed = true
+        force()
+      }
+    }, 215000)
+    return () => clearTimeout(t)
+  }, [running])
 
   const genSummary = () => {
     const acc = fold(pb)
@@ -207,7 +237,7 @@ export function BriefPanel({ phase }: { phase: StatePhase }) {
         {hasQs ? (
           <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center' }}>
             <button className="btn ghost" disabled={running} style={dis} onClick={genSummary}>
-              ↻ 重新生成摘要
+              ↻ 重新生成一版
             </button>
             <button className="btn" disabled={running} style={dis} onClick={confirmBrief}>
               ✓ 确认需求
@@ -217,10 +247,41 @@ export function BriefPanel({ phase }: { phase: StatePhase }) {
         ) : (
           <>
             <button className="btn" style={{ marginTop: 14, ...(dis || {}) }} disabled={running} onClick={genSummary}>
-              {pb.ready ? '↻ 重新生成摘要' : '✦ 生成摘要'}
+              {pb.ready ? '↻ 重新生成一版' : '✦ 生成摘要'}
             </button>
             {pb.confirmed && <span className="hint" style={{ marginLeft: 10, color: '#2e7d52' }}>✓ 已确认产品需求</span>}
           </>
+        )}
+        {pb.history.length > 0 && (
+          <div style={{ marginTop: 18, borderTop: '1px dashed var(--line)', paddingTop: 12 }}>
+            <div className="wz-label" style={{ fontSize: 12.5, color: 'var(--dim)' }}>历史版本（{pb.history.length}）—— 每次重新生成留一版，可展开对比</div>
+            {pb.history.map((v, i) => {
+              const open = !!pb.openVers[i]
+              const cur = i === pb.history.length - 1
+              return (
+                <div key={i} style={{ border: '1px solid var(--line)', borderRadius: 8, marginTop: 8, overflow: 'hidden' }}>
+                  <div
+                    onClick={() => { pb.openVers[i] = !open; force() }}
+                    style={{ padding: '9px 12px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, background: cur ? '#f3f8f4' : '#fafafa' }}
+                  >
+                    <span style={{ fontWeight: 600 }}>第 {i + 1} 版本{cur ? ' · 当前' : ''}</span>
+                    <span style={{ color: 'var(--dim)', fontSize: 11.5 }}>{v.ts || ''} &nbsp;{open ? '▲' : '▼'}</span>
+                  </div>
+                  {open && (
+                    <div style={{ padding: '4px 12px 10px' }}>
+                      {([['产品目标', v.summary?.goal], ['目标用户', v.summary?.users], ['核心需求', v.summary?.need], ['输出范围', v.summary?.scope]] as [string, string | undefined][]).map(([k, val]) => (
+                        <div className="wz-airow" key={k}>
+                          <span className="ak">{k}</span>
+                          <span className="av">{val || '—'}</span>
+                        </div>
+                      ))}
+                      {v.description && <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--dim)', whiteSpace: 'pre-wrap' }}>输入：{v.description}</div>}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
 

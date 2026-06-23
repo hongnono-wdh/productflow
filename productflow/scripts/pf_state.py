@@ -665,7 +665,7 @@ def _brief_path(d: str) -> str:
 
 def _load_brief(d: str) -> dict:
     base = {"description": "", "request": None, "questions": [], "confirmed": False,
-            "summary": {"goal": "", "users": "", "need": "", "scope": ""}, "ready": False}
+            "summary": {"goal": "", "users": "", "need": "", "scope": ""}, "ready": False, "history": []}
     try:
         with open(_brief_path(d), encoding="utf-8") as f:
             data = json.load(f)

@@ -247,7 +247,7 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(brief, {
             "description": "", "request": None, "questions": [], "confirmed": False,
             "summary": {"goal": "", "users": "", "need": "", "scope": ""},
-            "ready": False,
+            "ready": False, "history": [],
         })
 
     def test_brief_confirm_persists_without_spawn(self):
@@ -717,6 +717,56 @@ class ServerTest(unittest.TestCase):
         self.assertTrue(body["ok"])
         status, inbox = h.http(self.port, f"/p/{pid}/api/inbox")
         self.assertIn("research-request", [m.get("type") for m in inbox["messages"]])
+
+
+class BriefHistoryTest(unittest.TestCase):
+    """重新生成摘要：每轮都覆盖 summary、清 request（前端按钮恢复）、追加一版 history。
+    用「真出 JSON 的 claude 桩」（计数器 → 每轮 goal 不同）驱动多轮，验证不丢历史、每轮都更新。"""
+
+    def setUp(self):
+        self.home = h.make_home()
+        stub = os.path.join(self.home, "bin", "claude")
+        with open(stub, "w") as f:
+            f.write(
+                "#!/usr/bin/env python3\n"
+                "import os, json\n"
+                "c = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.n')\n"
+                "try: n = int(open(c).read()) + 1\n"
+                "except Exception: n = 1\n"
+                "open(c, 'w').write(str(n))\n"
+                "s = {'goal': 'G%d' % n, 'users': 'U', 'need': 'N', 'scope': 'S', 'questions': []}\n"
+                "print(json.dumps({'type': 'result', 'result': json.dumps(s)}))\n"
+            )
+        os.chmod(stub, 0o755)
+        self.proc, self.port = h.start_server(self.home)
+
+    def tearDown(self):
+        h.stop_server(self.proc)
+        h.rm_home(self.home)
+
+    def test_regenerate_updates_summary_and_appends_history(self):
+        cp = h.create_project(self.port, "Brief History", slug="brief-hist")
+        pid, pdir = cp["id"], cp["dir"]
+        bp = os.path.join(pdir, ".productflow", "brief.json")
+        br = {}
+        for rnd in (1, 2, 3):
+            h.http(self.port, f"/p/{pid}/api/brief", method="POST",
+                   body={"description": f"d{rnd}", "confirmed": False,
+                         "request": {"kind": "gen-summary", "description": f"d{rnd}"}})
+            for _ in range(80):
+                try:
+                    with open(bp) as f:
+                        br = json.load(f)
+                except (FileNotFoundError, json.JSONDecodeError):
+                    br = {}
+                if len(br.get("history", [])) >= rnd and br.get("ready") and br.get("request") is None:
+                    break
+                time.sleep(0.2)
+            self.assertEqual(len(br.get("history", [])), rnd, f"round {rnd}: history should grow")
+            self.assertEqual(br["summary"]["goal"], "G%d" % rnd, f"round {rnd}: summary must update")
+            self.assertIsNone(br["request"], f"round {rnd}: request cleared → 前端按钮恢复")
+            self.assertTrue(br["ready"], f"round {rnd}: ready")
+        self.assertEqual([v["summary"]["goal"] for v in br["history"]], ["G1", "G2", "G3"])
 
 
 if __name__ == "__main__":

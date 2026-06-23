@@ -135,6 +135,12 @@ export interface BriefSummary {
   need?: string
   scope?: string
 }
+export interface BriefVersion {
+  ts?: string
+  summary?: BriefSummary
+  questions?: BriefQuestion[]
+  description?: string
+}
 export interface BriefPayload {
   description?: string
   request?: { kind?: string } | null
@@ -142,6 +148,7 @@ export interface BriefPayload {
   confirmed?: boolean
   summary?: BriefSummary
   ready?: boolean
+  history?: BriefVersion[]
 }
 
 // ── wizard channel ──
