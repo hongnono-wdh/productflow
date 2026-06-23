@@ -4,7 +4,7 @@
 // flush on stage-change/unmount/beforeunload (the last is NEW — fixes the old drag-then-close loss).
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { useChannel, toast, openArtifact, openRedraw } from '../store'
-import { PF_BASE, post, artUrl } from '../lib'
+import { PF_BASE, post, artUrl, loadScript } from '../lib'
 import { IcSpark } from '../icons'
 import type { ExplorePayload, ExploreRef, ExploreHero, PagesPayload, Page, CanvasCell, HeroGenLogEntry, AgentLogPayload } from '../types'
 
@@ -15,7 +15,7 @@ const heroImg = (file: string) => PF_BASE + '/artifacts/' + String(file).replace
 
 interface Card {
   id: string
-  kind: 'hero' | 'page'
+  kind: 'hero' | 'page' | 'ref'
   img?: string
   title?: string
   file?: string
@@ -36,7 +36,6 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
   const interacting = useRef(false)
   const vpRef = useRef<HTMLDivElement>(null)
   const worldRef = useRef<HTMLDivElement>(null)
-  const heroRefOff = useRef<Record<string, boolean>>({})
   const hdText = useRef<HTMLTextAreaElement>(null)
   const hdCollapsed = useRef(false)
 
@@ -50,10 +49,33 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
   const selectedRefs = explore?.selectedRefs || []
   const refs: ExploreRef[] = explore?.refs || []
   const selectedHero = explore?.selectedHero || ''
-  const styleSummary = explore?.styleSummary || ''
-  const heroGenFailed = !!explore?.heroGenFailed
   const pages: Page[] = pagesCh?.pages || []
   const genHero = !!exReq['gen-heroes']
+
+  // ② 选中的参考（摆到首图画布上 + 作为「本次参考」默认候选）
+  const selRefList: ExploreRef[] = (() => {
+    const byId: Record<string, ExploreRef> = {}
+    refs.forEach((r) => (byId[r.id] = r))
+    return selectedRefs.map((id) => byId[id]).filter(Boolean) as ExploreRef[]
+  })()
+  // 「本次参考」= 画布上点选、要喂给本次生成的图（文件路径集合）；默认 = ② 选中的参考
+  const roundRef = useRef<Set<string> | null>(null)
+  if (roundRef.current === null && selRefList.length) roundRef.current = new Set(selRefList.map((r) => r.file))
+  const roundSet = roundRef.current || new Set<string>()
+  const toggleRound = (file: string) => {
+    if (!file) return
+    if (!roundRef.current) roundRef.current = new Set()
+    if (roundRef.current.has(file)) roundRef.current.delete(file)
+    else roundRef.current.add(file)
+    force()
+  }
+  const roundRefCards = (): { file: string; img: string; title: string }[] =>
+    Array.from(roundSet).map((file) => {
+      const r = refs.find((x) => x.file === file)
+      if (r) return { file, img: heroImg(file), title: r.title || '参考' }
+      const h = heroes.find((x) => x.file === file)
+      return { file, img: heroImg(file), title: h ? h.style || '首图' : '图' }
+    })
 
   // ---- persistence ----
   const apply = () => {
@@ -119,7 +141,10 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
   // ---- cards ----
   const cards: Card[] =
     stage === 3
-      ? heroes.map((h) => ({ id: 'hero:' + h.id, kind: 'hero' as const, img: heroImg(h.file), title: h.style || '首图', file: h.file, base: selectedHero === h.file }))
+      ? [
+          ...selRefList.map((r) => ({ id: 'ref:' + r.id, kind: 'ref' as const, img: heroImg(r.file), title: r.title || '参考', file: r.file })),
+          ...heroes.map((h) => ({ id: 'hero:' + h.id, kind: 'hero' as const, img: heroImg(h.file), title: h.style || '首图', file: h.file, base: selectedHero === h.file })),
+        ]
       : pages.map((pg) => ({ id: 'page:' + pg.id, kind: 'page' as const, pg }))
 
   // auto-place new cards (after layout loaded; skip while dragging)
@@ -154,7 +179,7 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0) return
       const t = e.target as Element
-      if (t.closest('textarea') || t.closest('.cv-base') || t.closest('.cv-page-del') || t.closest('.cv-del') || t.closest('.cv-plat') || t.closest('.cv-controls') || t.closest('#cv-stagebar') || t.closest('#hero-dialog')) return
+      if (t.closest('textarea') || t.closest('.cv-base') || t.closest('.cv-roundref') || t.closest('.cv-page-del') || t.closest('.cv-del') || t.closest('.cv-plat') || t.closest('.cv-controls') || t.closest('#cv-stagebar') || t.closest('#hero-dialog')) return
       const item = t.closest('.cv-item') as HTMLElement | null
       sx = e.clientX; sy = e.clientY; moved = false
       if (item) {
@@ -274,10 +299,6 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
   }
 
   // ---- stagebar actions ----
-  const genHeroes = () => {
-    post('/api/explore', { selectedRefs, request: { kind: 'gen-heroes', selectedRefs } })
-    toast(selectedRefs.length ? '已请 Agent 按选中参考生成首图（累积）' : '已请 Agent 按产品需求生成首图（累积）')
-  }
   const stage4Running = !!stage4Log?.running
   const s4last = (stage4Log?.lines || []).slice(-1)[0]
   const stage4Fail = !stage4Running && !!s4last && s4last.kind === 'error'
@@ -314,11 +335,6 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
   }
 
   // ---- hero dialog ----
-  const selectedRefCards = (): ExploreRef[] => {
-    const byId: Record<string, ExploreRef> = {}
-    refs.forEach((r) => (byId[r.id] = r))
-    return selectedRefs.map((id) => byId[id]).filter(Boolean)
-  }
   const insertRefCode = (code: string) => {
     const ta = hdText.current
     if (!ta) return
@@ -332,7 +348,7 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
   const dialogGenerate = () => {
     if (genHero) { toast('正在生成，稍等'); return }
     const instruction = (hdText.current?.value || '').trim()
-    const usedFiles = selectedRefCards().filter((r) => !heroRefOff.current[r.id]).map((r) => r.file)
+    const usedFiles = Array.from(roundSet)
     const req: Record<string, unknown> = { kind: 'gen-heroes', selectedRefs }
     if (usedFiles.length) req.refFiles = usedFiles
     if (instruction) req.instruction = instruction
@@ -353,11 +369,29 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
         {cards.map((c) => {
           const pos = cv.current.items[c.id]
           if (!pos) return null
+          if (c.kind === 'ref') {
+            const on = !!c.file && roundSet.has(c.file)
+            return (
+              <div key={c.id} className="cv-item ref" data-id={c.id} style={{ left: pos.x, top: pos.y }}>
+                <img src={c.img} loading="lazy" />
+                <div className={'cv-roundref' + (on ? ' on' : '')} title="加入/移出『本次参考』（喂给生成首图）" onClick={() => toggleRound(c.file!)}>
+                  {on ? '✓ 本次参考' : '+ 本次参考'}
+                </div>
+                <div className="bar">
+                  <span className="ti">参考 · {c.title}</span>
+                </div>
+              </div>
+            )
+          }
           if (c.kind === 'hero') {
+            const on = !!c.file && roundSet.has(c.file)
             return (
               <div key={c.id} className={'cv-item' + (c.base ? ' base' : '')} data-id={c.id} style={{ left: pos.x, top: pos.y }} onDoubleClick={() => dblEdit(c)}>
                 <img src={c.img} loading="lazy" />
                 <div className="cv-del" title="删除这张首图" onClick={() => removeHero(c.id.replace(/^hero:/, ''))}>✕</div>
+                <div className={'cv-roundref' + (on ? ' on' : '')} title="把这张已生成首图加入『本次参考』生成变体" onClick={() => toggleRound(c.file!)}>
+                  {on ? '✓ 本次参考' : '+ 本次参考'}
+                </div>
                 <div className="cv-base" title="设为视觉基调" onClick={() => c.file && setHeroBase(c.file)}>
                   {c.base ? '★ 基调' : '设为基调'}
                 </div>
@@ -403,27 +437,8 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
         })}
       </div>
 
-      <div id="cv-stagebar">
-        {stage === 3 ? (
-          <>
-            <button className="btn" disabled={genHero} style={genHero ? { background: 'var(--dash)', cursor: 'not-allowed' } : undefined} onClick={genHeroes}>
-              <IcSpark />
-              {genHero ? 'Agent 正在生成首图…' : heroes.length ? '再生成一批首图（累积）' : '生成首图'}
-            </button>
-            {genHero ? (
-              <span className="sb-guide">✦ Agent 正在生成首图，约 1–2 分钟（期间别重启操作台，会中断生成）…</span>
-            ) : heroGenFailed && !heroes.length ? (
-              <span className="sb-guide" style={{ color: '#b3403a' }}>❌ 上次生成未完成（被中断或失败），点上面「生成首图」重试</span>
-            ) : selectedRefs.length ? (
-              <span className="sb-sum">依据 {selectedRefs.length} 张选中参考{styleSummary ? '　·　风格：' + styleSummary : ''}</span>
-            ) : (
-              <span className="sb-guide">
-                没选参考也能生成（Agent 按产品需求来）；想更贴合就去 ② 选几张{' '}
-                <button className="btn ghost sm" onClick={() => { location.hash = '#s2' }}>去 ② 找参考</button>
-              </span>
-            )}
-          </>
-        ) : (
+      <div id="cv-stagebar" style={stage === 3 ? { display: 'none' } : undefined}>
+        {stage === 3 ? null : (
           <>
             <button className="btn" disabled={stage4Running} style={stage4Running ? { background: 'var(--dash)', cursor: 'not-allowed' } : undefined} onClick={runPageMap}>
               <IcSpark />
@@ -455,7 +470,7 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
 
       {empty && <div id="cv-empty">画布还是空的 — 产物登记后会自动出现在这里</div>}
 
-      {stage === 3 && <HeroDialog refsCards={selectedRefCards()} heroRefOff={heroRefOff} hdText={hdText} hdCollapsed={hdCollapsed} gen={genHero} genFailed={!!explore?.heroGenFailed} log={(explore?.heroGenLog as HeroGenLogEntry[]) || []} insertRefCode={insertRefCode} dialogGenerate={dialogGenerate} force={force} />}
+      {stage === 3 && <HeroDialog roundRefs={roundRefCards()} toggleRound={toggleRound} hdText={hdText} hdCollapsed={hdCollapsed} gen={genHero} genFailed={!!explore?.heroGenFailed} log={(explore?.heroGenLog as HeroGenLogEntry[]) || []} insertRefCode={insertRefCode} dialogGenerate={dialogGenerate} force={force} />}
 
       <div className="cv-hint">{hint}</div>
       <div className="cv-controls">
@@ -475,9 +490,12 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
 }
 
 // ---- ③ hero-generation dialog (right-docked) ----
+type ViewerInst = { view: (i: number) => void; destroy: () => void }
+type ViewerCtor = new (el: Element, opts: Record<string, unknown>) => ViewerInst
+
 function HeroDialog(props: {
-  refsCards: ExploreRef[]
-  heroRefOff: React.MutableRefObject<Record<string, boolean>>
+  roundRefs: { file: string; img: string; title: string }[]
+  toggleRound: (file: string) => void
   hdText: React.RefObject<HTMLTextAreaElement | null>
   hdCollapsed: React.MutableRefObject<boolean>
   gen: boolean
@@ -487,38 +505,49 @@ function HeroDialog(props: {
   dialogGenerate: () => void
   force: () => void
 }) {
-  const { refsCards, heroRefOff, hdText, hdCollapsed, gen, genFailed, log, insertRefCode, dialogGenerate, force } = props
-  let codeN = 0
+  const { roundRefs, toggleRound, hdText, hdCollapsed, gen, genFailed, log, insertRefCode, dialogGenerate, force } = props
+  // Viewer.js on a hidden gallery → 缩略图「🔍 放大」缩放/平移/翻页
+  const galleryRef = useRef<HTMLDivElement>(null)
+  const viewerRef = useRef<ViewerInst | null>(null)
+  const openRef = useRef(false)
+  const sig = roundRefs.map((r) => r.file).join(',')
+  useEffect(() => {
+    if (openRef.current) return
+    let cancelled = false
+    loadScript('/vendor/viewer.min.js').then(() => {
+      if (cancelled || !galleryRef.current) return
+      const W = window as unknown as { Viewer?: ViewerCtor }
+      if (!W.Viewer) return
+      if (viewerRef.current) { try { viewerRef.current.destroy() } catch { /* noop */ } viewerRef.current = null }
+      viewerRef.current = new W.Viewer(galleryRef.current, { navbar: true, title: false, transition: false, keyboard: true, shown() { openRef.current = true }, hidden() { openRef.current = false } })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [sig])
   return (
     <div id="hero-dialog" className={'on' + (hdCollapsed.current ? ' collapsed' : '')}>
       <div className="hd-head" onClick={() => { hdCollapsed.current = !hdCollapsed.current; force() }}>
         <IcSpark /> 生成首图 <button className="hd-x" title="折叠/展开">—</button>
       </div>
       <div className="hd-body">
-        <div className="hd-sec-t">本次参考</div>
+        <div className="hd-sec-t">本次参考 <span className="hd-sec-hint">在画布点图片的「+ 本次参考」加入</span></div>
         <div className="hd-refs">
-          {refsCards.length ? (
-            refsCards.map((r) => {
-              const off = !!heroRefOff.current[r.id]
-              const code = off ? '' : '图' + ++codeN
+          {roundRefs.length ? (
+            roundRefs.map((r, i) => {
+              const code = '图' + (i + 1)
               return (
-                <div key={r.id} className={'hd-ref' + (off ? ' off' : '')}>
-                  <img src={PF_BASE + '/artifacts/' + r.file.replace(/^artifacts\//, '')} title={off ? '已排除·点右上勾选框加回本次' : '点把「' + code + '」插进文字'} onClick={off ? undefined : () => insertRefCode(code)} />
-                  <span className="hd-rcode">{off ? '排除' : code}</span>
-                  <span className="hd-rck" title="是否参与本次生成" onClick={() => { if (heroRefOff.current[r.id]) delete heroRefOff.current[r.id]; else heroRefOff.current[r.id] = true; force() }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="18" height="18" x="3" y="3" rx="2" />
-                      {!off && <path d="m9 12 2 2 4-4" />}
-                    </svg>
-                  </span>
+                <div key={r.file} className="hd-ref">
+                  <img src={r.img} title={'点把「' + code + '」插进文字（×移出 / 🔍放大）'} onClick={() => insertRefCode(code)} />
+                  <span className="hd-rcode">{code}</span>
+                  <span className="hd-rzoom" title="放大查看（缩放/平移/翻页）" onClick={(ev) => { ev.stopPropagation(); viewerRef.current?.view(i) }}>🔍</span>
+                  <span className="hd-rdel" title="移出本次参考" onClick={(ev) => { ev.stopPropagation(); toggleRound(r.file) }}>×</span>
                 </div>
               )
             })
           ) : (
-            <span className="none">还没选参考——可去 ② 选几张，或直接生成（按产品需求）</span>
+            <span className="none">在画布上点图片的「+ 本次参考」加入（② 选的参考已自动摆到画布）；不选也能直接生成（按产品需求）</span>
           )}
         </div>
-        {refsCards.length > 0 && <div className="hd-hint">点缩略图把代号插进下面文字（例：主色参考 图1，布局参考 图2）；点缩略图右上的勾选框切换是否参与本次</div>}
+        {roundRefs.length > 0 && <div className="hd-hint">点缩略图把代号插进下面文字（例：主色参考 图1，布局参考 图2）；🔍 放大看、× 移出本次参考</div>}
         <div className="hd-sec-t">生成记录</div>
         <div className="hd-log">
           {gen && <div className="hd-gen">✦ Agent 正在生成…（约 1–2 分钟，期间别重启操作台）</div>}
@@ -554,6 +583,11 @@ function HeroDialog(props: {
           <IcSpark />
           {gen ? 'Agent 生成中…' : '生成首图'}
         </button>
+      </div>
+      <div ref={galleryRef} style={{ display: 'none' }}>
+        {roundRefs.map((r) => (
+          <img key={r.file} src={r.img} alt={r.title} />
+        ))}
       </div>
     </div>
   )
