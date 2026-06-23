@@ -2,7 +2,7 @@
 // markmap + overview ported to parity (P4⑥). html opens a new tab (handled in openArtifact).
 import { useEffect, useState } from 'react'
 import { useModal, useChannel, closeModal, openArtifact } from '../store'
-import { PF_BASE, artUrl, loadScript } from '../lib'
+import { PF_BASE, artUrl, loadScript, artifactVersions } from '../lib'
 import { IcX } from '../icons'
 import { DocIcon } from './DocIcon'
 import type { StateChannel, BriefPayload, ExplorePayload, PagesPayload } from '../types'
@@ -60,7 +60,13 @@ function Overview() {
     if (ph.id === 2 && ex) for (const r of ex.refs || []) cards.push(<OvImg key={'r' + r.id} file={r.file} label={r.title || '参考'} />)
     if (ph.id === 3 && ex) for (const h of ex.heroes || []) cards.push(<OvImg key={'h' + h.id} file={h.file} label={(h.style || '首图') + (ex.selectedHero === h.file ? ' ★基调' : '')} />)
     if (ph.id === 4 && pgs) for (const pg of pgs.pages || []) for (const v of pg.versions || []) if (v.file) cards.push(<OvImg key={'p' + pg.id + (v.platform || '')} file={v.file} label={`${pg.name}·${v.platform || ''}`} />)
-    for (const a of ph.artifacts || []) cards.push(a.type === 'image' ? <OvImg key={'a' + a.file} file={a.file} label={a.title} /> : <OvDoc key={'a' + a.file} file={a.file} label={a.title} type={a.type} />)
+    const av = artifactVersions(ph.artifacts || [])
+    ;(ph.artifacts || []).forEach((a, ai) => {
+      const lbl = av.total[a.title] > 1 ? `${a.title} · v${av.ver[ai]}` : a.title
+      cards.push(a.type === 'image'
+        ? <OvImg key={'a' + a.file} file={a.file} label={lbl} />
+        : <OvDoc key={'a' + a.file} file={a.file} label={lbl} type={a.type} />)
+    })
     if (!cards.length) continue
     blocks.push(
       <div key={ph.id}>

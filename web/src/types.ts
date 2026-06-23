@@ -60,6 +60,7 @@ export interface Artifact {
   title: string
   type: string
   ts?: string | number
+  version?: number
 }
 export interface StatePhase {
   id: number

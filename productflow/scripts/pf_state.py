@@ -302,11 +302,20 @@ def cmd_artifact(args) -> None:
         atype = "mindmap"
     else:
         atype = ARTIFACT_TYPES.get(os.path.splitext(rel)[1].lower(), "file")
-    ph["artifacts"] = [a for a in ph["artifacts"] if a["file"] != rel]
-    ph["artifacts"].append({"file": rel, "title": args.title, "type": atype, "ts": _now()})
-    s["log"].append({"ts": _now(), "msg": f"P{args.n} 产物：{args.title}"})
+    # 版本号：同一「标题」的产物按登记先后排 v1/v2/v3…（重做某产物 = 新一版，老的留着可对比）。
+    # 同路径重登记 = 同一份产物刷新，版本不变；新路径 = 该标题的下一版。
+    existing = ph["artifacts"]
+    prev = next((a for a in existing if a["file"] == rel), None)
+    if prev and isinstance(prev.get("version"), int):
+        version = prev["version"]
+    else:
+        same_title = [a.get("version", 0) for a in existing if a.get("title") == args.title and a["file"] != rel]
+        version = (max(same_title) if same_title else 0) + 1
+    ph["artifacts"] = [a for a in existing if a["file"] != rel]
+    ph["artifacts"].append({"file": rel, "title": args.title, "type": atype, "ts": _now(), "version": version})
+    s["log"].append({"ts": _now(), "msg": f"P{args.n} 产物：{args.title}（v{version}）"})
     _save(args.dir, s)
-    print(f"registered {rel}")
+    print(f"registered {rel} (v{version})")
 
 
 def cmd_artifact_rm(args) -> None:

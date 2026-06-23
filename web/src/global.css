@@ -213,7 +213,8 @@
   @keyframes pulse { 50% { opacity: .35; } }
   .steps .st-title.done { color: var(--dim); }
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-  .art { border-radius: 12px; overflow: hidden; background: var(--block); cursor: pointer; box-shadow: var(--block-sh); transition: box-shadow .15s, transform .15s; }
+  .art { position: relative; border-radius: 12px; overflow: hidden; background: var(--block); cursor: pointer; box-shadow: var(--block-sh); transition: box-shadow .15s, transform .15s; }
+  .art-ver { position: absolute; top: 6px; left: 6px; z-index: 1; background: rgba(17,17,17,.72); color: #fff; font-size: 10px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 999px; letter-spacing: .03em; }
   .art:hover { box-shadow: 0 6px 18px rgba(17,17,17,.09); transform: translateY(-1px); }
   .art img { width: 100%; height: 100px; object-fit: cover; display: block; }
   .art .ic { height: 100px; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: var(--faint); background: #fafafa; }

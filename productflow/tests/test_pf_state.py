@@ -181,7 +181,7 @@ class TestArtifactLog(PfStateBase):
     def test_artifact_registered_with_inferred_type(self):
         rel = self._make_file("artifacts/phase-1/shot.png")
         r = self.run_ok(["artifact", "1", rel, "--title", "Shot"])
-        self.assertEqual(r.stdout.strip(), f"registered {rel}")
+        self.assertEqual(r.stdout.strip(), f"registered {rel} (v1)")
         ph1 = next(p for p in read_state(self.dir)["phases"] if p["id"] == 1)
         self.assertEqual(len(ph1["artifacts"]), 1)
         a = ph1["artifacts"][0]
@@ -205,6 +205,27 @@ class TestArtifactLog(PfStateBase):
         self.assertEqual(len(arts), 1)            # 没堆成两条
         self.assertEqual(arts[0]["title"], "v2")  # 留的是最新那条
         self.assertGreaterEqual(arts[0]["ts"], ts1)
+
+    def test_artifact_version_increments_per_title(self):
+        # 同标题、不同路径 = 同一逻辑产物的多版本：v1/v2/v3（重做不丢历史，前端据此分版展示）
+        a = self._make_file("artifacts/phase-1/report-1.md")
+        b = self._make_file("artifacts/phase-1/report-2.md")
+        c = self._make_file("artifacts/phase-1/report-3.md")
+        self.run_ok(["artifact", "1", a, "--title", "竞品报告"])
+        self.run_ok(["artifact", "1", b, "--title", "竞品报告"])
+        r = self.run_ok(["artifact", "1", c, "--title", "竞品报告"])
+        self.assertIn("(v3)", r.stdout)
+        arts = next(p for p in read_state(self.dir)["phases"] if p["id"] == 1)["artifacts"]
+        self.assertEqual([x["version"] for x in arts], [1, 2, 3])
+        # 不同标题各自从 v1 起
+        d = self._make_file("artifacts/phase-1/other.md")
+        self.run_ok(["artifact", "1", d, "--title", "其它"])
+        arts = next(p for p in read_state(self.dir)["phases"] if p["id"] == 1)["artifacts"]
+        self.assertEqual(next(x for x in arts if x["title"] == "其它")["version"], 1)
+        # 同路径重登记：版本不变（同一份产物刷新，不是新一版）
+        self.run_ok(["artifact", "1", a, "--title", "竞品报告"])
+        arts = next(p for p in read_state(self.dir)["phases"] if p["id"] == 1)["artifacts"]
+        self.assertEqual(next(x for x in arts if x["file"] == a)["version"], 1)
 
     def test_artifact_rm_unregisters_and_deletes(self):
         rel = self._make_file("artifacts/phase-6/preview-home.png")
