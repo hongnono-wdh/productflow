@@ -1740,7 +1740,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         pid, sub = m.group(1), m.group(2) or ""
         root = _resolve(pid)
-        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/run-action", "/api/deploy-creds", "/api/reveal", "/api/redraw"):
+        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/run-action", "/api/deploy-creds", "/api/reveal", "/api/redraw", "/api/stage"):
             self._send(404, b"not found", "text/plain")
             return
         pf = os.path.join(root, ".productflow")
@@ -1962,6 +1962,24 @@ class Handler(BaseHTTPRequestHandler):
                     if desc:
                         threading.Thread(target=_auto_gen_brief, args=(pf, desc), daemon=True).start()
             _atomic_write_json(br_path, br)
+            self._json({"ok": True})
+            return
+        if sub == "/api/stage":
+            # 网页侧把某阶段标完成/进行中（顶部步骤条打勾）——用户在操作台自己推进流水线
+            try:
+                n = int(data.get("n"))
+            except (TypeError, ValueError):
+                self._json({"ok": False, "error": "bad n"}); return
+            status = data.get("status") if data.get("status") in ("active", "done", "pending") else "done"
+            s = pf_state._load(root)
+            ph = pf_state._phase(s, n)
+            if status == "active" and ph.get("status") != "active":
+                ph["gen"] = ph.get("gen", 0) + 1
+            ph["status"] = status
+            if status == "active":
+                s["current_phase"] = n
+            s["log"].append({"ts": _now(), "msg": f"P{n} {ph.get('name','')} → {status}（网页）"})
+            pf_state._save(root, s)
             self._json({"ok": True})
             return
         if sub == "/api/research":

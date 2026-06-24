@@ -11,6 +11,7 @@ import { BriefPanel } from './BriefPanel'
 import { RefsPanel } from './RefsPanel'
 import { Canvas } from './Canvas'
 import { IcBack } from '../icons'
+import { post } from '../lib'
 import type { StateChannel, InboxPayload } from '../types'
 
 const CANVAS_STAGES = [3, 4]
@@ -113,10 +114,24 @@ export function Project() {
           <span className="meta" id="meta">
             {done}/{phases.length} 完成
           </span>
-          {nextPh && (
-            <button className="btn sm" id="next-stage-btn" onClick={() => selectStage(nextPh.id)}>
-              下一步
+          {nextPh ? (
+            <button
+              className="btn sm"
+              id="next-stage-btn"
+              title="完成本阶段（顶部打勾）并进入下一步"
+              onClick={() => {
+                if (sel != null) { post('/api/stage', { n: sel, status: 'done' }); toast('已完成「' + phase.name + '」') }
+                selectStage(nextPh.id)
+              }}
+            >
+              完成 · 下一步
             </button>
+          ) : (
+            phase.status !== 'done' && (
+              <button className="btn sm" title="标记本阶段完成（顶部打勾）" onClick={() => { if (sel != null) { post('/api/stage', { n: sel, status: 'done' }); toast('已完成「' + phase.name + '」') } }}>
+                ✓ 完成本阶段
+              </button>
+            )
           )}
         </div>
       </div>
