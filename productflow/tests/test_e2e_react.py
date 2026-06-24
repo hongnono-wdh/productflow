@@ -180,8 +180,9 @@ class TestE2EReact(unittest.TestCase):
               await fetch(location.pathname.replace(/\\/$/,'')+'/api/explore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selectedRefs:[r.refs[0].id]})});
             }""")
             self._stage(page, 3)
-            page.wait_for_selector("#cv-stagebar", timeout=10000)
-            page.click("#cv-stagebar button:has-text('生成首图')")
+            # 首图生成入口现在在右侧「生成首图」对话框（顶部 stagebar 已去掉「再生成一批」）
+            page.wait_for_selector("#hero-dialog .hd-go", timeout=10000)
+            page.click("#hero-dialog .hd-go")
             page.wait_for_timeout(250)
             self.assertIn("视觉探索", h.cli(["inbox"], self.home, project=pdir).stdout)
             for i in range(2):
