@@ -168,13 +168,8 @@ export function PreviewOverlay() {
     <div id="pv-overlay" className="show">
       <div className="pv-head">
         <span id="pv-title">{(pv.mode === 'redraw' ? '编辑这张 · ' : '圈选反馈 · ') + pv.title}</span>
-        <span>
-          <button className="btn sm" id="pv-action-btn" onClick={pvSend}>
-            {actionLabel}
-          </button>
-          <span className="x" onClick={closePreview}>
-            <IcX /> 关闭
-          </span>
+        <span className="x" onClick={closePreview}>
+          <IcX /> 关闭
         </span>
       </div>
       <div className="pv-wrap">
@@ -194,7 +189,10 @@ export function PreviewOverlay() {
           <div id="pv-draft" className="pv-draft" ref={draftRef} />
         </div>
       </div>
-      <textarea id="pv-instr" className={'pv-instr' + (pv.mode === 'redraw' ? ' show' : '')} placeholder="写一句要改成什么…" value={instr} onChange={(e) => setInstr(e.target.value)} />
+      <div className="pv-foot">
+        <textarea id="pv-instr" className={'pv-instr' + (pv.mode === 'redraw' ? ' show' : '')} placeholder="写一句要改成什么…" value={instr} onChange={(e) => setInstr(e.target.value)} />
+        <button className="btn pv-go" id="pv-action-btn" onClick={pvSend}>{actionLabel}</button>
+      </div>
       <div className="pv-hint" id="pv-hint">{hint}</div>
     </div>
   )
