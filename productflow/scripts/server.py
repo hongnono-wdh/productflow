@@ -631,9 +631,56 @@ def _build_inpaint_mask(src_path: str, regions: list, out_path: str) -> tuple[in
     return w, h
 
 
+def _inpaint_once(edit_py, src, regions, text, out_dir, env, project_root, phase_key, pf, label=""):
+    """对 src 做一次局部 inpaint：regions（分数坐标）框选区按 text 重绘、其余保留。返回新图绝对路径或 None。
+    用源图自身尺寸做 --size（输入/蒙版/输出对齐，避免网关 resize 挪动未框区域）。"""
+    try:
+        from PIL import Image
+        with Image.open(src) as _im:
+            dims = _im.size
+    except ImportError:
+        _log_line(pf, phase_key, "error", "❌ 缺 Pillow（pip install pillow 后重试）")
+        return None
+    except Exception as e:  # noqa: BLE001
+        _log_line(pf, phase_key, "error", "❌ 读图失败：" + _clip(e, 80))
+        return None
+    size = f"{dims[0]}x{dims[1]}" if dims and dims[0] and dims[1] else "1024x1024"
+    mask_path = os.path.join(out_dir, f".redraw-mask-{os.urandom(3).hex()}.png")
+    try:
+        try:
+            _build_inpaint_mask(src, regions, mask_path)
+        except Exception as e:  # noqa: BLE001
+            _log_line(pf, phase_key, "error", "❌ 生成蒙版失败：" + _clip(e, 80))
+            return None
+        prompt = (
+            "在这张 UI 设计稿上做局部修改：只在蒙版透明区域内重绘，"
+            "严格保持与画面其余部分一致的配色/字体/字号/间距/圆角/风格，让改动无缝融入、看不出拼接痕迹。\n"
+            f"本次诉求：{text}\n" + _PURE_UI_RULES
+        )
+        cmd = ["python3", edit_py, "--image", src, "--mask", mask_path, "--prompt", prompt,
+               "--size", size, "--count", "1", "--model", "gpt-image-2", "--out-dir", out_dir]
+        _log_line(pf, phase_key, "tool", f"🎨 局部重绘{label}（{len(regions)} 处）：{_clip(text, 36)}")
+        try:
+            proc = subprocess.run(cmd, cwd=project_root, env=env, capture_output=True, text=True, timeout=300)
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            _log_line(pf, phase_key, "error", "❌ 重绘调用失败：" + _clip(e, 80))
+            return None
+    finally:
+        try:
+            os.remove(mask_path)
+        except OSError:
+            pass
+    wrote = re.findall(r"wrote (\S+\.png)", proc.stdout or "")
+    if proc.returncode != 0 or not wrote:
+        tail = (proc.stderr or proc.stdout or "")[-200:]
+        _log_line(pf, phase_key, "error", "❌ 局部重绘失败：" + _clip(tail, 140))
+        return None
+    return os.path.join(out_dir, wrote[-1])
+
+
 def _auto_redraw(pf: str, payload: dict) -> None:
-    """③首图/④页面：框选局部 inpaint 重绘。用框选区域生成蒙版 → edit.py --mask 走 gpt-image-2 只重画选中区域，
-    其余像素保留 → 结果作为新版本并存（③ add-hero / ④ page add-version），原图不动，可对比/回退。"""
+    """③首图/④页面：框选局部 inpaint 重绘。每个框可带独立描述——同句的框合一张蒙版、不同句**顺序逐块重绘**
+    （在上一块结果上继续改）→ 结果作为新版本并存（③ add-hero / ④ page add-version），原图不动，可对比/回退。"""
     stage = payload.get("stage")
     rel = str(payload.get("file") or "").lstrip("/")
     regions = payload.get("regions") or []
@@ -649,36 +696,47 @@ def _auto_redraw(pf: str, payload: dict) -> None:
     src = os.path.join(pf, rel)
     out_dir = os.path.join(pf, "artifacts", f"phase-{stage}")
     _log_reset(pf, phase_key, "局部重绘选中区域")
-    mask_path = os.path.join(out_dir, f".redraw-mask-{os.urandom(3).hex()}.png")
+    env = dict(os.environ)
+    env["PF_PROJECT"] = project_root
+    _inject_openai_env(env)
     try:
         os.makedirs(out_dir, exist_ok=True)
-        has_regions = bool(regions)
-        try:
-            if has_regions:
-                dims = _build_inpaint_mask(src, regions, mask_path)   # 局部：框选区透明=重画
-            else:
-                from PIL import Image                                 # 整图改：不造蒙版，只取源图尺寸
+        if regions:
+            # 按「区域描述」分组：同一句的框合一张蒙版；不同句 → **顺序逐块重绘**（在上一块结果上继续改）
+            order, bytext = [], {}
+            for r in regions:
+                t = (str(r.get("text") or "").strip() or user_req)
+                if not t:
+                    continue
+                if t not in bytext:
+                    bytext[t] = []
+                    order.append(t)
+                bytext[t].append(r)
+            if not order:
+                _log_line(pf, phase_key, "error", "❌ 没有要改的诉求（每个框写一句，或在下面写一句通用的）")
+                return
+            cur, final = src, None
+            for i, t in enumerate(order):
+                label = f" 第{i + 1}/{len(order)} 块" if len(order) > 1 else ""
+                final = _inpaint_once(edit_py, cur, bytext[t], t, out_dir, env, project_root, phase_key, pf, label)
+                if not final:
+                    return   # 某块失败已 log，整体中止（已完成的块不回滚，但不登记半成品）
+                cur = final
+            new_rel = f"artifacts/phase-{stage}/{os.path.basename(final)}"
+            kind_label = "局部重绘" if len(order) == 1 else f"分区重绘×{len(order)}"
+        else:
+            # 整图改：不造蒙版，按一句诉求整体改
+            try:
+                from PIL import Image
                 with Image.open(src) as _im:
                     dims = _im.size
-        except ImportError:
-            _log_line(pf, phase_key, "error", "❌ 缺 Pillow（pip install pillow 后重试）")
-            return
-        except Exception as e:  # noqa: BLE001
-            _log_line(pf, phase_key, "error", "❌ 读图/生成蒙版失败：" + _clip(e, 80))
-            return
-        # 用源图自身尺寸做 --size：输入/蒙版/输出对齐，避免网关 resize 挪动未框区域；拿不到才退平台规格
-        size = f"{dims[0]}x{dims[1]}" if dims and dims[0] and dims[1] else _platform_ui_spec(platform)[2]
-        kind_label = "局部重绘" if has_regions else "整图改"
-        if has_regions:
-            prompt = (
-                "在这张 UI 设计稿上做局部修改：只在蒙版透明区域内重绘，"
-                "严格保持与画面其余部分一致的配色/字体/字号/间距/圆角/风格，让改动无缝融入、看不出拼接痕迹。\n"
-                f"本次诉求：{user_req}\n" + _PURE_UI_RULES
-            )
-            cmd = ["python3", edit_py, "--image", src, "--mask", mask_path, "--prompt", prompt,
-                   "--size", size, "--count", "1", "--model", "gpt-image-2", "--out-dir", out_dir]
-            _log_line(pf, phase_key, "tool", f"🎨 调用 gpt-image-2 局部重绘（{len(regions)} 处框选）…")
-        else:
+            except ImportError:
+                _log_line(pf, phase_key, "error", "❌ 缺 Pillow（pip install pillow 后重试）")
+                return
+            except Exception as e:  # noqa: BLE001
+                _log_line(pf, phase_key, "error", "❌ 读图失败：" + _clip(e, 80))
+                return
+            size = f"{dims[0]}x{dims[1]}" if dims and dims[0] and dims[1] else _platform_ui_spec(platform)[2]
             prompt = (
                 "在这张 UI 设计稿基础上**整体按诉求改**：延续同一个页面/产品的设计语言"
                 "（配色气质、字体、整体布局结构尽量保留），不是从零换一套设计；按下面诉求调整。\n"
@@ -687,21 +745,19 @@ def _auto_redraw(pf: str, payload: dict) -> None:
             cmd = ["python3", edit_py, "--image", src, "--prompt", prompt,
                    "--size", size, "--count", "1", "--model", "gpt-image-2", "--out-dir", out_dir]
             _log_line(pf, phase_key, "tool", "🎨 调用 gpt-image-2 整图按诉求改…")
-        env = dict(os.environ)
-        env["PF_PROJECT"] = project_root
-        _inject_openai_env(env)
-        try:
-            proc = subprocess.run(cmd, cwd=project_root, env=env, capture_output=True,
-                                  text=True, timeout=300)
-        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-            _log_line(pf, phase_key, "error", "❌ 重绘调用失败：" + _clip(e, 80))
-            return
-        wrote = re.findall(r"wrote (\S+\.png)", proc.stdout or "")
-        if proc.returncode != 0 or not wrote:
-            tail = (proc.stderr or proc.stdout or "")[-200:]
-            _log_line(pf, phase_key, "error", f"❌ {kind_label}失败：" + _clip(tail, 140))
-            return
-        new_rel = f"artifacts/phase-{stage}/{wrote[-1]}"
+            try:
+                proc = subprocess.run(cmd, cwd=project_root, env=env, capture_output=True, text=True, timeout=300)
+            except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+                _log_line(pf, phase_key, "error", "❌ 重绘调用失败：" + _clip(e, 80))
+                return
+            wrote = re.findall(r"wrote (\S+\.png)", proc.stdout or "")
+            if proc.returncode != 0 or not wrote:
+                tail = (proc.stderr or proc.stdout or "")[-200:]
+                _log_line(pf, phase_key, "error", "❌ 整图改失败：" + _clip(tail, 140))
+                return
+            new_rel = f"artifacts/phase-{stage}/{wrote[-1]}"
+            kind_label = "整图改"
+        # 登记新版本（③ add-hero / ④ page add-version / 其它 artifact）
         if stage == 3:
             subprocess.run(["python3", ps, "--dir", project_root, "explore", "add-hero", new_rel,
                             "--style", kind_label], capture_output=True, text=True, timeout=30)
@@ -712,12 +768,9 @@ def _auto_redraw(pf: str, payload: dict) -> None:
         else:
             subprocess.run(["python3", ps, "--dir", project_root, "artifact", "4", new_rel,
                             "--title", kind_label], capture_output=True, text=True, timeout=30)
-        _log_line(pf, phase_key, "done", f"✅ {kind_label}完成，已作新版本并存：{wrote[-1]}")
-    finally:
-        try:
-            os.remove(mask_path)
-        except OSError:
-            pass
+        _log_line(pf, phase_key, "done", f"✅ {kind_label}完成，已作新版本并存：{os.path.basename(new_rel)}")
+    except Exception as e:  # noqa: BLE001
+        _log_line(pf, phase_key, "error", "❌ 重绘异常：" + _clip(e, 80))
 
 
 def _clear_explore_slot(exj: dict, kind=None) -> bool:
@@ -1765,8 +1818,13 @@ class Handler(BaseHTTPRequestHandler):
             rel = str(data.get("file") or "").strip().lstrip("/")
             regions = data.get("regions")
             req_text = str(data.get("prompt") or "").strip()
-            # regions 可为空：空=整图按这句改（不带蒙版的整张重画）；非空=局部 inpaint。prompt 必填。
-            if stage not in (3, 4) or not rel or not isinstance(regions, list) or not req_text:
+            # 诉求来源：通用 prompt（整图改/兜底）或每个框自带 text（按区域分别改）。
+            # 无框 → 必须有 prompt；有框 → 每个框要么自带 text、要么有通用 prompt 兜底。
+            if stage not in (3, 4) or not rel or not isinstance(regions, list):
+                self._json({"error": "bad_redraw_req"}, 400)
+                return
+            rtexts = [str((r or {}).get("text") or "").strip() for r in regions if isinstance(r, dict)]
+            if (not regions and not req_text) or (regions and not req_text and any(not t for t in rtexts)):
                 self._json({"error": "bad_redraw_req"}, 400)
                 return
             # 防穿越：file 必须落在本项目 artifacts/ 下且确实存在

@@ -75,7 +75,8 @@ export function PreviewOverlay() {
       const x = Math.min(sx, p.x), y = Math.min(sy, p.y), w = Math.abs(p.x - sx), h = Math.abs(p.y - sy)
       if (w < 0.02 || h < 0.02) return
       if (pv.mode === 'redraw') {
-        boxes.current.push({ x, y, w, h, text: '' })
+        const t = (prompt('这块区域要改成什么？（留空＝用下面那句通用描述）') || '').trim()
+        boxes.current.push({ x, y, w, h, text: t })
       } else {
         const t = prompt('这块区域有什么问题 / 想怎么改？')
         if (!t || !t.trim()) return
@@ -110,22 +111,29 @@ export function PreviewOverlay() {
   }
 
   const doEditImage = () => {
-    const text = instr.trim()
-    if (!text) {
-      toast('写一句要改成什么')
-      return
-    }
     if (pv.mode !== 'redraw') return
     const { file, stage, pageId, platform } = pv
+    const text = instr.trim()
     if (boxes.current.length) {
-      const regions = boxes.current.map((b) => ({ x: +b.x.toFixed(4), y: +b.y.toFixed(4), w: +b.w.toFixed(4), h: +b.h.toFixed(4) }))
-      postRedraw({ stage, file, regions, prompt: text, pageId, platform }, '🎨 正在局部重绘选中区域…完成后作为新版本出现在画布（原图保留）')
+      // 每个框可带独立描述（按区域分别改）；某框没写就用下面那句通用描述兜底
+      const regions = boxes.current.map((b) => ({ x: +b.x.toFixed(4), y: +b.y.toFixed(4), w: +b.w.toFixed(4), h: +b.h.toFixed(4), text: (b.text || '').trim() }))
+      if (regions.some((r) => !r.text && !text)) {
+        toast('每个框写一句要改成什么（点框上的序号编辑），或在下面写一句通用的')
+        return
+      }
+      const distinct = new Set(regions.map((r) => r.text || text)).size
+      postRedraw(
+        { stage, file, regions, prompt: text, pageId, platform },
+        distinct > 1 ? `🎨 正在按区域逐块重绘（${distinct} 种改法）…完成后作为新版本（原图保留）` : '🎨 正在局部重绘选中区域…完成后作为新版本（原图保留）',
+      )
     } else if (stage === 3) {
+      if (!text) { toast('写一句要改成什么'); return }
       const selectedRefs = explore?.selectedRefs || []
       post('/api/explore', { selectedRefs, request: { kind: 'gen-heroes', baseImage: file, instruction: text } })
       closePreview()
       toast('🎨 已请 Agent 按这句整图改这张（新版本累积，原图保留）')
     } else {
+      if (!text) { toast('写一句要改成什么'); return }
       postRedraw({ stage, file, regions: [], prompt: text, pageId, platform }, '🎨 正在整图按这句改…完成后作为新版本出现在画布（原图保留）')
     }
   }
@@ -161,7 +169,7 @@ export function PreviewOverlay() {
   const actionLabel = pv.mode === 'redraw' ? (boxes.current.length ? '🎨 重绘选中区域' : '🎨 整图按这句改') : '发送给 Agent'
   const hint =
     pv.mode === 'redraw'
-      ? '框选要改的局部 = 只改那块；不框、写一句 = 整图按这句改。结果作为新版本，原图保留。'
+      ? '框选要改的局部，每个框可单独写一句（框上序号点一下可编辑）；多块不同诉求会按区域逐块改。不框、只写下面一句 = 整图按这句改。结果作为新版本，原图保留。'
       : '拖拽框选有问题的区域 → 填一句意见（可框多处）。发送后 Agent 知道是「哪张图、哪块区域、什么问题」。'
 
   return (
@@ -180,7 +188,7 @@ export function PreviewOverlay() {
               const short = b.text.length > 18 ? b.text.slice(0, 18) + '…' : b.text
               return (
                 <div key={i} className="pv-box" style={{ left: b.x * 100 + '%', top: b.y * 100 + '%', width: b.w * 100 + '%', height: b.h * 100 + '%' }}>
-                  <span className="pvn" title={b.text || '选中区域'}>{b.text ? `${i + 1}. ${short}` : `${i + 1}`}</span>
+                  <span className="pvn" title={b.text || '点这里给这块写诉求'} onClick={() => { const t = prompt('这块区域要改成什么？', b.text || ''); if (t !== null) { boxes.current[i].text = t.trim(); force() } }}>{b.text ? `${i + 1}. ${short}` : `${i + 1} ✎`}</span>
                   <span className="pvx" title="删除" onClick={() => { boxes.current.splice(i, 1); force() }}>✕</span>
                 </div>
               )
