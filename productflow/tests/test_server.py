@@ -656,6 +656,63 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(m.getpixel((50, 100))[3], 0)    # 区域中心：透明=重绘
         self.assertEqual(m.getpixel((2, 2))[3], 255)     # 角落：不透明=保留
 
+    def _fake_edit_py_chain(self):
+        """假 edit.py（链式版）：写**有效 PNG**（让下一块能 PIL 打开）、唯一名、把诉求记进 redraw-calls.log。"""
+        d = os.path.join(self.home, ".claude", "skills", "openai-image-gen", "scripts")
+        os.makedirs(d, exist_ok=True)
+        log = os.path.join(self.home, "redraw-calls.log")
+        try:
+            os.remove(log)
+        except OSError:
+            pass
+        png_hex = ("89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+                   "1f15c4890000000d49444154789c6360000002000100ffff0300000006"
+                   "0005a3b8c4ad0000000049454e44ae426082")
+        with open(os.path.join(d, "edit.py"), "w") as f:
+            f.write(
+                "import argparse, os\n"
+                "p=argparse.ArgumentParser()\n"
+                "for a in ('--image','--mask','--prompt','--size','--count','--quality','--model','--out-dir','--timeout','--api-key'):\n"
+                "    p.add_argument(a, action='append' if a=='--image' else 'store')\n"
+                "a=p.parse_args()\n"
+                "od=getattr(a,'out_dir'); os.makedirs(od, exist_ok=True)\n"
+                "req=(a.prompt or '').split('本次诉求：')[-1].split(chr(10))[0]\n"
+                f"open({log!r},'a').write(req+chr(10))\n"
+                f"n=sum(1 for _ in open({log!r}))\n"
+                "fn='edit-%02d-redraw.png'%n\n"
+                f"open(os.path.join(od,fn),'wb').write(bytes.fromhex({png_hex!r}))\n"
+                "print('wrote '+fn)\n"
+            )
+        return log
+
+    def test_redraw_per_region_sequential(self):
+        # 两个框各带不同诉求 → 后端按区域分组、**顺序逐块重绘**（链式），最终登记为「分区重绘」新版本
+        from PIL import Image
+        log = self._fake_edit_py_chain()
+        cp = h.create_project(self.port, "Redraw PerRegion", slug="redraw-pr")
+        pid, d = cp["id"], cp["dir"]
+        src_rel = "artifacts/phase-3/heroes/src.png"
+        src = os.path.join(d, ".productflow", src_rel)
+        os.makedirs(os.path.dirname(src), exist_ok=True)
+        Image.new("RGB", (120, 200), (10, 20, 30)).save(src)
+        status, body = h.http(self.port, f"/p/{pid}/api/redraw", method="POST",
+            body={"stage": 3, "file": src_rel, "platform": "APP", "regions": [
+                {"x": 0.1, "y": 0.1, "w": 0.3, "h": 0.2, "text": "改成蓝色"},
+                {"x": 0.6, "y": 0.7, "w": 0.3, "h": 0.2, "text": "放大这块"}]})
+        self.assertEqual(status, 200)
+        self.assertTrue(self._wait_until(lambda: os.path.isfile(log) and len(open(log).read().splitlines()) >= 2),
+                        "应按区域链式调用 edit.py 两次")
+        self.assertEqual(open(log).read().splitlines(), ["改成蓝色", "放大这块"], "每块用各自诉求、按序")
+        exp = os.path.join(d, ".productflow", "explore.json")
+
+        def _added():
+            try:
+                hs = json.load(open(exp)).get("heroes", [])
+            except (OSError, ValueError):
+                return False
+            return any("分区重绘" in (x.get("style") or "") for x in hs)
+        self.assertTrue(self._wait_until(_added), "分区重绘结果应作为新版本并存")
+
     def test_redraw_rejects_bad_requests(self):
         from PIL import Image
         cp = h.create_project(self.port, "Redraw Bad", slug="redraw-bad")

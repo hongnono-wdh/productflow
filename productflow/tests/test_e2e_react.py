@@ -310,5 +310,79 @@ class TestE2EReact(unittest.TestCase):
             page.close()
 
 
+    # ── P3 首图：②选中参考摆到画布 + 画布点选联动「本次参考」+ 缩略图 🔍/× + 无顶部再生成 ──
+    def test_p3_roundref_canvas_link(self):
+        proj = h.create_project(self.port, "首图联动", slug="p3-link")
+        pid, pdir = proj["id"], proj["dir"]
+        for i in range(2):
+            rel = f"artifacts/phase-2/refs/r{i}.png"
+            self._art(pdir, rel)
+            h.cli(["explore", "add-ref", rel, "--title", f"参考{i}"], self.home, project=pdir)
+        ex = json.load(open(os.path.join(pdir, ".productflow", "explore.json")))
+        h.cli(["explore", "select-refs", *[r["id"] for r in ex["refs"]]], self.home, project=pdir)
+        self._art(pdir, "artifacts/phase-3/heroes/h.png")
+        h.cli(["explore", "add-hero", "artifacts/phase-3/heroes/h.png", "--style", "玻璃"], self.home, project=pdir)
+        page, errs = self._page()
+        try:
+            self._open(page, pid)
+            self._stage(page, 3)
+            page.wait_for_selector("#hero-dialog .hd-go", timeout=10000)
+            # ②选中的参考作为 ref 卡片摆到画布；顶部「再生成一批」已去掉（stagebar 对 s3 隐藏）
+            page.wait_for_function("() => document.querySelectorAll('#cv-world .cv-item.ref').length === 2", timeout=10000)
+            bar = page.query_selector("#cv-stagebar")
+            self.assertTrue(bar is None or not bar.is_visible(), "stage3 不应再有顶部 stagebar 按钮")
+            # 默认本次参考 = 2 张选中参考；画布点掉一张 → 缩略图变 1
+            page.wait_for_function("() => document.querySelectorAll('#hero-dialog .hd-ref').length === 2", timeout=8000)
+            page.click(".cv-item.ref .cv-roundref.on")
+            page.wait_for_function("() => document.querySelectorAll('#hero-dialog .hd-ref').length === 1", timeout=8000)
+            # 缩略图带 🔍放大 + ×移出
+            self.assertTrue(page.query_selector("#hero-dialog .hd-rzoom") and page.query_selector("#hero-dialog .hd-rdel"))
+            self.assertEqual(errs, [], f"JS errors: {errs}")
+        finally:
+            page.close()
+
+    # ── 顶部步骤条：网页「完成·下一步」标记阶段完成（打勾）──
+    def test_stage_done_from_web(self):
+        proj = h.create_project(self.port, "打勾", slug="stage-done")
+        pid, pdir = proj["id"], proj["dir"]
+        page, errs = self._page()
+        try:
+            self._open(page, pid)
+            self._stage(page, 2)
+            self.assertNotIn("done", page.eval_on_selector("#stepper .step-pill >> nth=1", "e=>e.className"))
+            page.click("#next-stage-btn")  # 完成 · 下一步
+            page.wait_for_function("() => document.querySelectorAll('#stepper .step-pill')[1].className.includes('done')", timeout=8000)
+            st = json.load(open(os.path.join(pdir, ".productflow", "state.json")))
+            self.assertEqual(next(p for p in st["phases"] if p["id"] == 2)["status"], "done")
+            self.assertEqual(errs, [], f"JS errors: {errs}")
+        finally:
+            page.close()
+
+    # ── P2 找参考：可编辑搜索关键词（chips 增删持久化）+ 粘贴/拖入上传参考 ──
+    def test_p2_keyword_edit_and_upload(self):
+        import base64
+        proj = h.create_project(self.port, "关键词上传", slug="p2-kw")
+        pid, pdir = proj["id"], proj["dir"]
+        h.cli(["explore", "set-search-plan", "--keyword", "kanban app UI", "--keyword", "dark dashboard",
+               "--basis", "工具型+冷色+桌面"], self.home, project=pdir)
+        page, errs = self._page()
+        try:
+            self._open(page, pid)
+            self._stage(page, 2)
+            page.wait_for_function("() => document.querySelectorAll('#stage-extra .kw-chip').length === 2", timeout=10000)
+            page.click("#stage-extra .kw-chip i")  # 删一个关键词
+            page.wait_for_function("() => document.querySelectorAll('#stage-extra .kw-chip').length === 1", timeout=8000)
+            kp = json.load(open(os.path.join(pdir, ".productflow", "explore.json"))).get("searchPlan", {})
+            self.assertEqual(len(kp.get("keywords", [])), 1, "关键词删除应持久化")
+            # 粘贴/拖入上传：uploadRef 端点 → 参考出现在网格
+            durl = "data:image/png;base64," + base64.b64encode(_PNG_1x1).decode()
+            status, _ = h.http(self.port, f"/p/{pid}/api/explore", method="POST", body={"uploadRef": {"dataUrl": durl, "title": "粘贴图"}})
+            self.assertEqual(status, 200)
+            page.wait_for_function("() => document.querySelectorAll('#stage-extra .wz-ref').length === 1", timeout=8000)
+            self.assertEqual(errs, [], f"JS errors: {errs}")
+        finally:
+            page.close()
+
+
 if __name__ == "__main__":
     unittest.main()
