@@ -386,12 +386,126 @@ def j_reload_mid_run(ctx: Ctx, pid, pdir):
         ctx.record("reload", "P5", "broken", "run-stage 后 reload 项目视图未恢复", ["run-stage→reload"], "无 stepper", "WS 重连 + 视图恢复")
 
 
+def j_keyword_editor(ctx: Ctx, pid, pdir):
+    """② 搜索关键词编辑器：预设 chips + 增删持久化 + 特殊/超长词（overflow）。"""
+    h.cli(["explore", "set-search-plan", "--keyword", "kanban app UI", "--keyword", "dark dashboard", "--basis", "工具型+冷色"], ctx.home, project=pdir)
+    pg = ctx.page
+    pg.click("#stepper .step-pill >> nth=1")
+    try:
+        pg.wait_for_function("() => document.querySelectorAll('#stage-extra .kw-chip').length >= 2", timeout=8000)
+    except Exception:
+        ctx.record("keywords", "P2", "broken", "②预设关键词 chips 未显示", ["set-search-plan 后进②"], "无 .kw-chip", "显示预设关键词")
+        return
+    kw = pg.query_selector("#stage-extra .kw-input")
+    if kw:
+        kw.fill(("超长词" * 8 + " <x>") if ctx.knobs.get("long_input") else "fintech ui")
+        kw.press("Enter")
+        pg.wait_for_timeout(300)
+    cx = pg.query_selector("#stage-extra .kw-chip i")
+    if cx:
+        cx.click()
+        pg.wait_for_timeout(300)
+    try:
+        sp = json.load(open(os.path.join(pdir, ".productflow", "explore.json"))).get("searchPlan") or {}
+        if not sp.get("keywords"):
+            ctx.record("keywords", "P2", "broken", "关键词增删未持久化", ["②增删关键词"], "searchPlan.keywords 空", "持久化")
+    except Exception:
+        pass
+    if ctx.console:
+        ctx.record("keywords", "P2", "broken", "关键词编辑器 console 报错", ["②增删关键词"], "; ".join(ctx.console[:2]), "0 error")
+
+
+def j_roundref(ctx: Ctx, pid, pdir):
+    """③ 画布联动「本次参考」：②选中参考摆上首图画布、点选开关增减本次参考。"""
+    for i in range(2):
+        rel = f"artifacts/phase-2/refs/rr{i}.png"
+        ctx.art(pdir, rel)
+        h.cli(["explore", "add-ref", rel, "--title", f"r{i}"], ctx.home, project=pdir)
+    try:
+        ex = json.load(open(os.path.join(pdir, ".productflow", "explore.json")))
+        ids = [r["id"] for r in ex.get("refs", [])][:2]
+        if ids:
+            h.cli(["explore", "select-refs", *ids], ctx.home, project=pdir)
+    except Exception:
+        return
+    pg = ctx.page
+    pg.click("#stepper .step-pill >> nth=2")
+    try:
+        pg.wait_for_function("() => document.querySelectorAll('#cv-world .cv-item.ref').length >= 2", timeout=10000)
+    except Exception:
+        ctx.record("roundref", "P3", "broken", "②选中参考未摆到首图画布", ["选参考→进③"], "无 .cv-item.ref", "参考卡上画布")
+        return
+    n0 = len(pg.query_selector_all("#hero-dialog .hd-ref"))
+    t = pg.query_selector(".cv-item.ref .cv-roundref.on")
+    if t:
+        t.click()
+        pg.wait_for_timeout(400)
+        n1 = len(pg.query_selector_all("#hero-dialog .hd-ref"))
+        if n1 >= n0 and n0 > 0:
+            ctx.record("roundref", "P3", "broken", "画布点掉参考后本次参考未减少", ["点 cv-roundref.on"], f"{n0}→{n1}", "缩略图减少")
+    if ctx.console:
+        ctx.record("roundref", "P3", "broken", "③画布联动 console 报错", ["画布点选参考"], "; ".join(ctx.console[:2]), "0 error")
+
+
+def j_stage_done(ctx: Ctx, pid, pdir):
+    """步骤条网页打勾：完成·下一步标记阶段 done；对抗：连点。"""
+    pg = ctx.page
+    pg.click("#stepper .step-pill >> nth=1")
+    if not pg.query_selector("#next-stage-btn"):
+        ctx.record("stage-done", "*", "broken", "无「完成·下一步」按钮", ["进②"], "无 #next-stage-btn", "有按钮")
+        return
+    for _ in range(3):
+        try:
+            pg.click("#next-stage-btn", timeout=600)
+        except Exception:
+            pass
+    pg.wait_for_timeout(400)
+    try:
+        st = json.load(open(os.path.join(pdir, ".productflow", "state.json")))
+        p2 = next((p for p in st["phases"] if p["id"] == 2), {})
+        if p2.get("status") != "done":
+            ctx.record("stage-done", "P2", "broken", "完成·下一步未把阶段标 done", ["点完成·下一步"], f"status={p2.get('status')}", "done")
+    except Exception:
+        pass
+
+
+def j_redraw_overlay(ctx: Ctx, pid, pdir):
+    """③ 双击首图打开编辑弹层：操作按钮应在输入框旁（.pv-foot），不在顶部。"""
+    ctx.art(pdir, "artifacts/phase-3/heroes/he.png")
+    h.cli(["explore", "add-hero", "artifacts/phase-3/heroes/he.png", "--style", "x"], ctx.home, project=pdir)
+    pg = ctx.page
+    pg.click("#stepper .step-pill >> nth=2")
+    try:
+        pg.wait_for_function("() => document.querySelectorAll('#cv-world .cv-item:not(.ref)').length >= 1", timeout=10000)
+    except Exception:
+        return
+    card = pg.query_selector("#cv-world .cv-item:not(.ref)")   # 重绘只对已生成首图，不对参考卡
+    if not card:
+        return
+    card.dblclick()
+    pg.wait_for_timeout(500)
+    if not pg.query_selector("#pv-overlay.show"):
+        ctx.record("redraw", "P3", "broken", "双击首图未打开编辑弹层", ["双击画布首图"], "无 #pv-overlay.show", "弹层打开")
+        return
+    if not pg.query_selector(".pv-foot .pv-go"):
+        ctx.record("redraw", "P3", "broken", "编辑弹层操作按钮不在输入框旁", ["开编辑弹层"], "无 .pv-foot .pv-go", "按钮在输入框旁")
+    x = pg.query_selector("#pv-overlay .x")
+    if x:
+        x.click()
+        pg.wait_for_timeout(200)
+
+
 def _reset_ui(ctx: Ctx):
     """Clean shared-page state between journeys (close overlays) so one journey's
     leftover (open drawer/modal) doesn't break the next — keeps findings attributable."""
     pg = ctx.page
     try:
         pg.keyboard.press("Escape")  # close modal / preview overlay
+    except Exception:
+        pass
+    try:
+        if pg.query_selector("#pv-overlay.show"):
+            pg.click("#pv-overlay .x", timeout=2000)
     except Exception:
         pass
     try:
@@ -420,8 +534,8 @@ def run(persona: str):
         created = j_create(ctx)
         if created:
             pid, pdir = created
-            for jfn in (j_navigate, j_brief_focus_guard, j_canvas, j_run_stage_concurrency, j_chat, j_modals,
-                        j_multitab, j_injection, j_choices_race, j_reload_mid_run):
+            for jfn in (j_navigate, j_brief_focus_guard, j_keyword_editor, j_roundref, j_canvas, j_run_stage_concurrency,
+                        j_stage_done, j_redraw_overlay, j_chat, j_modals, j_multitab, j_injection, j_choices_race, j_reload_mid_run):
                 try:
                     _reset_ui(ctx)
                     ctx.console.clear()  # clean slate so this journey's console errors attribute correctly
