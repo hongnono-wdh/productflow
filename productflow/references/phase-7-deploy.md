@@ -212,6 +212,12 @@ xcodebuild -exportArchive \
 
 上传 TestFlight（任选其一，凭 ASC API key 认证，**不在命令行明文贴 issuer/key id 之外的秘密**，.p8 路径由 `$ASC_KEY_PATH` 这类环境变量提供）：
 
+> **.p8 就位**：用户若是在⑦「部署凭证」表单**整段粘贴** AuthKey.p8，服务端会把它落成 `~/.productflow/secrets/<项目id>.p8` 并把路径注入 `$ASC_KEY_PATH`。altool/fastlane 默认从 `~/.appstoreconnect/private_keys/AuthKey_<key id>.p8` 找私钥，所以上传前先把它 cp 到位（不打印内容）：
+> ```bash
+> mkdir -p ~/.appstoreconnect/private_keys
+> cp "$ASC_KEY_PATH" ~/.appstoreconnect/private_keys/AuthKey_"$ASC_KEY_ID".p8
+> ```
+
 ```bash
 # 方式 ① fastlane pilot（推荐：自带重试与处理状态轮询）
 fastlane pilot upload \
@@ -221,7 +227,7 @@ fastlane pilot upload \
 # 方式 ② xcrun altool（无 fastlane 时）
 xcrun altool --upload-app -f build/export/MyApp.ipa -t ios \
   --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
-# 注：altool 从 ~/.appstoreconnect/private_keys/AuthKey_<key id>.p8 读私钥，由凭证机制落位，不打印内容
+# 注：altool 从 ~/.appstoreconnect/private_keys/AuthKey_<key id>.p8 读私钥（上面已 cp 就位），不打印内容
 ```
 
 上传后用 `notarytool`/`altool` 或 ASC 网页看 build 是否进入「Processing → Ready to Test」。**到此为止**——下列 App Store Connect 步骤是正式提审前的人工动作，**留给用户手动做**，本阶段不替用户点「提交审核」，只在交接报告里列清单：

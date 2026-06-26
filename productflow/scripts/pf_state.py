@@ -449,8 +449,12 @@ def cmd_page(args) -> None:
         raise SystemExit(f"page not found: {args.id}")
 
     if args.action == "rm":
+        # 删整页 = 删占位符：连带删掉它的全部设计版本文件 + 清 canvas 位置（避免孤儿）
+        for f in {v.get("file") for v in pg.get("versions", []) if isinstance(v, dict) and v.get("file")}:
+            _rm_artifact_file(args.dir, f)
         data["pages"] = [p for p in pages if p["id"] != args.id]
         _save_pages(args.dir, data)
+        _clean_canvas_page(args.dir, args.id)
         print(f"removed page {args.id}")
         return
 
@@ -469,6 +473,21 @@ def cmd_page(args) -> None:
             pg["versions"].append({"file": args.add_version, "platform": plat})
         if pg.get("status") == "placeholder":
             pg["status"] = "done"  # 有了设计版本，占位自动转已设计
+    if getattr(args, "remove_version", None):
+        # 删单个设计版本（保留页面占位）。按 (file, platform) 匹配；文件不再被其它版本引用才删盘
+        plat = (args.platform or "").upper() or None
+        pg["versions"] = [v for v in pg["versions"]
+                          if not (isinstance(v, dict) and v.get("file") == args.remove_version
+                                  and (v.get("platform") or None) == plat)]
+        if not any(isinstance(v, dict) and v.get("file") == args.remove_version for v in pg["versions"]):
+            _rm_artifact_file(args.dir, args.remove_version)
+        if pg.get("activeVersion") == args.remove_version:
+            pg["activeVersion"] = pg["versions"][0]["file"] if pg["versions"] else ""
+        if not pg["versions"]:
+            pg["status"] = "placeholder"   # 删到没有任何版本 → 退回占位符
+            pg.pop("activeVersion", None)
+    if getattr(args, "active_version", None):
+        pg["activeVersion"] = args.active_version   # 定稿版（多版本里挑一个作⑥开发取用）
     if args.status:
         pg["status"] = args.status  # 显式 --status 优先
     _save_pages(args.dir, data)
@@ -516,6 +535,32 @@ def _rm_artifact_file(d: str, rel: str) -> None:
             os.remove(full)
         except OSError:
             pass
+
+
+def _clean_canvas_page(d: str, page_id: str) -> None:
+    """删页面后清掉 canvas.json 里它的位置项（避免孤儿 page:<id>，画布不再残留幽灵卡）。"""
+    if not page_id:
+        return
+    cpath = os.path.join(_root(d), "canvas.json")
+    key = "page:" + str(page_id)
+    try:
+        with open(cpath, encoding="utf-8") as f:
+            cdata = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return
+    if not isinstance(cdata, dict):
+        return
+    changed = False
+    for st in cdata.values():
+        items = st.get("items") if isinstance(st, dict) else None
+        if isinstance(items, dict) and key in items:
+            del items[key]
+            changed = True
+    if changed:
+        tmp = cpath + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cdata, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, cpath)
 
 
 def cmd_explore(args) -> None:
@@ -803,7 +848,9 @@ def main(argv: list[str]) -> int:
     ps.add_argument("--note")
     ps.add_argument("--status", choices=STATUSES)
     ps.add_argument("--add-version", help="关联一个设计产物文件（相对 .productflow/），多版本可多次加")
-    ps.add_argument("--platform", choices=["PC", "H5", "APP"], help="该版本对应的平台（配合 --add-version）")
+    ps.add_argument("--remove-version", help="移除一个设计版本（保留页面占位；删到空自动退回 placeholder）")
+    ps.add_argument("--active-version", help="设为定稿版本（多版本里挑一个，⑥开发优先取用）")
+    ps.add_argument("--platform", choices=["PC", "H5", "APP"], help="该版本对应的平台（配合 --add-version / --remove-version）")
     sp.set_defaults(fn=cmd_page)
 
     # explore：视觉探索（agent 写 Dribbble 参考 / 首图 / 风格总结）

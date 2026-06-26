@@ -401,6 +401,42 @@ def _save_deploy_creds(pid: str, creds: dict) -> int:
     return len(clean)
 
 
+def _p8_path(pid: str) -> str:
+    return os.path.join(SECRETS_DIR, pid + ".p8")
+
+
+def _write_p8(pid: str, content: str) -> str:
+    """把粘贴进来的 App Store Connect .p8 私钥（多行 PEM）单独落成文件（600）并返回路径。
+    .p8 含换行，不能塞进 .env（_save_deploy_creds 会把换行压成空格而损坏 PEM），故独立存放。
+    返回的路径写入 ASC_KEY_PATH 凭证，⑦部署 agent 据此取用。非法 id / 空内容 → ""。"""
+    if not ID_RE.match(pid or ""):
+        return ""
+    content = (content or "").strip()
+    if "PRIVATE KEY" not in content:
+        return ""
+    os.makedirs(SECRETS_DIR, exist_ok=True)
+    try:
+        os.chmod(SECRETS_DIR, 0o700)
+    except OSError:
+        pass
+    path = _p8_path(pid)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(content + "\n")
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+    return path
+
+
+def _remove_p8(pid: str) -> None:
+    try:
+        os.remove(_p8_path(pid))
+    except OSError:
+        pass
+
+
 def _inject_deploy_creds(env: dict, pid: str) -> None:
     """把某项目的部署凭证注入 env——⑦部署 Agent spawn 时调用，agent 直接用 $PF_SSH_HOST 等。"""
     for k, v in _load_deploy_creds(pid).items():
@@ -1761,6 +1797,7 @@ class Handler(BaseHTTPRequestHandler):
                 os.remove(_secrets_path(pid))
             except FileNotFoundError:
                 pass
+            _remove_p8(pid)
             self._json({"ok": True})
             return
 
@@ -1884,8 +1921,43 @@ class Handler(BaseHTTPRequestHandler):
                     "status": "placeholder", "versions": [], "note": "",
                 })
             elif action == "remove":
+                # 删整页（占位符）：连带删全部版本文件 + 清 canvas 位置（修孤儿 bug）
                 pid_ = data.get("id")
+                gone = next((p for p in pdata["pages"] if p.get("id") == pid_), None)
                 pdata["pages"] = [p for p in pdata["pages"] if p.get("id") != pid_]
+                if gone:
+                    for vf in {v.get("file") for v in gone.get("versions", []) if isinstance(v, dict) and v.get("file")}:
+                        pf_state._rm_artifact_file(root, vf)
+                    with _CANVAS_LOCK:
+                        pf_state._clean_canvas_page(root, pid_)
+            elif action == "remove-version":
+                # 删单个设计版本，保留页面占位；删到空退回 placeholder
+                pid_ = data.get("id")
+                vfile = data.get("file")
+                vplat = (data.get("platform") or None)
+                pg = next((p for p in pdata["pages"] if p.get("id") == pid_), None)
+                if pg is None or not vfile:
+                    self._json({"error": "no_such_page"}, 400)
+                    return
+                pg["versions"] = [v for v in pg.get("versions", [])
+                                  if not (isinstance(v, dict) and v.get("file") == vfile
+                                          and (v.get("platform") or None) == vplat)]
+                if not any(isinstance(v, dict) and v.get("file") == vfile for v in pg["versions"]):
+                    pf_state._rm_artifact_file(root, vfile)
+                if pg.get("activeVersion") == vfile:
+                    pg["activeVersion"] = pg["versions"][0]["file"] if pg["versions"] else ""
+                if not pg["versions"]:
+                    pg["status"] = "placeholder"
+                    pg.pop("activeVersion", None)
+            elif action == "set-active":
+                # 把某版本设为定稿版（★）
+                pid_ = data.get("id")
+                vfile = data.get("file")
+                pg = next((p for p in pdata["pages"] if p.get("id") == pid_), None)
+                if pg is None or not vfile:
+                    self._json({"error": "no_such_page"}, 400)
+                    return
+                pg["activeVersion"] = vfile
             elif action == "gen-version":
                 # 点画布上某页的空平台徽章 → spawn Agent 生成该页该平台版本
                 page_id = data.get("id")
@@ -2099,21 +2171,33 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
             return
         if sub == "/api/deploy-creds":
-            # 用户在⑦填部署凭证（SSH 地址/账号/token…）：存到项目仓库外的 secrets/<id>.env(600)。
-            # 默认与已存的合并；replace=true 整体覆盖；clear=true 清空全部；remove=KEY 删单条。
+            # 用户在⑦填部署凭证（SSH 地址/账号/token / 整段 .p8…）：存到项目仓库外的 secrets/<id>.env(600)。
+            # 默认与已存的合并；replace=true 整体覆盖；clear=true 清空全部；remove=KEY 删单条；
+            # p8="<PEM>" 把 App Store Connect 私钥落成 <id>.p8 文件并自动设 ASC_KEY_PATH（多行 PEM 不能进 .env）。
             if data.get("clear"):
                 n = _save_deploy_creds(pid, {})
+                _remove_p8(pid)
                 self._json({"ok": True, "count": n})
                 return
             rm = data.get("remove")
             if rm:
                 cur = _load_deploy_creds(pid)
                 cur.pop(str(rm), None)
+                if str(rm) == "ASC_KEY_PATH":
+                    _remove_p8(pid)
                 n = _save_deploy_creds(pid, cur)
                 self._json({"ok": True, "count": n})
                 return
             creds = data.get("creds")
-            if not isinstance(creds, dict):
+            creds = dict(creds) if isinstance(creds, dict) else {}
+            p8 = data.get("p8")
+            if isinstance(p8, str) and p8.strip():
+                p8path = _write_p8(pid, p8)
+                if not p8path:
+                    self._json({"error": "bad_p8"}, 400)
+                    return
+                creds["ASC_KEY_PATH"] = p8path
+            if not creds:
                 self._json({"error": "bad_creds"}, 400)
                 return
             if data.get("replace"):

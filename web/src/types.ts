@@ -204,6 +204,7 @@ export interface Page {
   group?: string
   status?: string
   versions?: PageVersion[]
+  activeVersion?: string
 }
 export interface PagesPayload {
   pages: Page[]

@@ -6,10 +6,9 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import { useChannel, toast, openArtifact, openRedraw } from '../store'
 import { PF_BASE, post, artUrl, loadScript } from '../lib'
 import { IcSpark } from '../icons'
-import type { ExplorePayload, ExploreRef, ExploreHero, PagesPayload, Page, CanvasCell, HeroGenLogEntry, AgentLogPayload } from '../types'
+import type { ExplorePayload, ExploreRef, ExploreHero, PagesPayload, Page, PageVersion, CanvasCell, HeroGenLogEntry, AgentLogPayload } from '../types'
 
 const ITEM_W = 320, CARD_GAP = 44, GRID_COLS = 4, ROW_GAP = 500
-const PLAT_LIST = ['PC', 'H5', 'APP']
 const defView = () => ({ x: 60, y: 80, z: 0.7 })
 const heroImg = (file: string) => PF_BASE + '/artifacts/' + String(file).replace(/^artifacts\//, '')
 
@@ -28,6 +27,7 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
   const pagesCh = useChannel<PagesPayload>('pages')
   const stage4Log = useChannel<AgentLogPayload>('agent-log:stage-4')
   const [, force] = useReducer((x: number) => x + 1, 0)
+  const [selVer, setSelVer] = useState<Record<string, string>>({}) // 每页当前显示的版本 file（多版本切换，不入库）
 
   const cv = useRef<CanvasCell & { loaded: boolean; stage: number }>({ view: defView(), items: {}, notes: [], loaded: false, stage })
   const [isLoaded, setIsLoaded] = useState(false)
@@ -179,7 +179,7 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0) return
       const t = e.target as Element
-      if (t.closest('textarea') || t.closest('.cv-base') || t.closest('.cv-roundref') || t.closest('.cv-page-del') || t.closest('.cv-del') || t.closest('.cv-plat') || t.closest('.cv-controls') || t.closest('#cv-stagebar') || t.closest('#hero-dialog')) return
+      if (t.closest('textarea') || t.closest('.cv-base') || t.closest('.cv-roundref') || t.closest('.cv-page-del') || t.closest('.cv-del') || t.closest('.cv-plat') || t.closest('.cv-verrow') || t.closest('.cv-regen') || t.closest('.cv-controls') || t.closest('#cv-stagebar') || t.closest('#hero-dialog')) return
       const item = t.closest('.cv-item') as HTMLElement | null
       sx = e.clientX; sy = e.clientY; moved = false
       if (item) {
@@ -276,24 +276,38 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
     toast('已删除该首图')
     force()
   }
-  const removePage = (id: string) => {
-    post('/api/pages', { action: 'remove', id }).then(() => toast('已删除页面')).catch(() => {})
+  // 删整个页面（占位符）—— 连带删全部版本 + 清画布位置
+  const removePage = (pg: Page) => {
+    const n = (pg.versions || []).filter((v) => v && v.file).length
+    if (!confirm(`删除整个页面「${pg.name}」？` + (n ? `将一并删掉它的 ${n} 个设计版本，` : '') + '不可恢复。')) return
+    delete cv.current.items['page:' + pg.id]
+    post('/api/pages', { action: 'remove', id: pg.id }).then(() => toast('已删除页面「' + pg.name + '」')).catch(() => {})
+    force()
   }
-  const platClick = (pg: Page, plat: string, v?: { file?: string }) => {
-    if (v && v.file) {
-      openArtifact(artUrl(v.file), plat + ' 版', 'image')
-      return
-    }
-    if (confirm(`让 Agent 生成「${pg.name}」的 ${plat} 版设计？`)) {
-      post('/api/pages', { action: 'gen-version', id: pg.id, platform: plat })
-      toast(`已让 Agent 生成「${pg.name}」的 ${plat} 版（完成后版本徽章会变亮）`)
-    }
+  // 删单个设计版本（保留页面占位）
+  const delVersion = (pg: Page, v: PageVersion) => {
+    if (!confirm(`删除「${pg.name}」的这一版设计稿？页面占位会保留，可以再出新版本。`)) return
+    post('/api/pages', { action: 'remove-version', id: pg.id, file: v.file, platform: v.platform || null })
+      .then(() => toast('已删除该版本（页面占位保留）'))
+      .catch(() => {})
+    setSelVer((m) => {
+      if (m[pg.id] !== v.file) return m
+      const next = { ...m }
+      delete next[pg.id]
+      return next
+    })
+  }
+  // 点版本 = 切换显示 + 持久为该页当前版本（⑥开发取用）
+  const setActive = (pg: Page, file: string) => {
+    post('/api/pages', { action: 'set-active', id: pg.id, file }).catch(() => {})
   }
   const dblEdit = (c: Card) => {
     // ③④ 双击 → 改图 overlay（框选=局部重绘 / 不框写一句=整图改）
     if (c.kind === 'hero' && c.file) openRedraw(c.file, c.title || '设计稿', 3, null, '')
     else if (c.kind === 'page' && c.pg) {
-      const v = (c.pg.versions || []).find((x) => x && x.file)
+      const vs = (c.pg.versions || []).filter((x) => x && x.file)
+      const af = selVer[c.pg.id] || c.pg.activeVersion || vs[0]?.file
+      const v = vs.find((x) => x.file === af) || vs[0]
       if (v && v.file) openRedraw(v.file, c.pg.name, 4, c.pg.id, v.platform || '')
     }
   }
@@ -402,16 +416,15 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
             )
           }
           const pg = c.pg!
-          const byPlat: Record<string, { file?: string }> = {}
-          for (const v of pg.versions || []) if (v && v.platform) byPlat[v.platform] = v
-          const primary = (pg.versions || []).find((v) => v && v.file)
-          const platClass = primary && primary.platform === 'PC' ? ' plat-pc' : ''
+          const versions = (pg.versions || []).filter((v) => v && v.file)
+          const activeFile = selVer[pg.id] || pg.activeVersion || versions[0]?.file // 当前显示的版本
+          const shown = versions.find((v) => v.file === activeFile) || versions[0]
           return (
-            <div key={c.id} className={'cv-item page-card' + platClass} data-id={c.id} data-pgid={pg.id} style={{ left: pos.x, top: pos.y }} onDoubleClick={() => dblEdit(c)}>
-              <div className="cv-page-del" title="删除" onClick={() => removePage(pg.id)}>×</div>
-              {primary ? (
-                <div className="pthumb">
-                  <img src={artUrl(primary.file!)} loading="lazy" />
+            <div key={c.id} className="cv-item page-card" data-id={c.id} data-pgid={pg.id} style={{ left: pos.x, top: pos.y }}>
+              <div className="cv-page-del" title="删除整个页面（含全部版本）" onClick={() => removePage(pg)}>×</div>
+              {shown ? (
+                <div className="pthumb" title="双击编辑这版（框选=局部重绘 / 不框=整图改，结果作新版本）" onDoubleClick={() => dblEdit(c)}>
+                  <img src={artUrl(shown.file!)} loading="lazy" />
                 </div>
               ) : (
                 <div className="pthumb ph">{pg.status === 'designing' ? '设计中…' : '待设计'}</div>
@@ -421,16 +434,19 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
                   <span className={'pdot ' + (pg.status || 'placeholder')} />
                   {pg.name} <span className="pg-g">{pg.group || ''}</span>
                 </div>
-                <div className="cv-platrow">
-                  {PLAT_LIST.map((p) => {
-                    const has = byPlat[p]
-                    return (
-                      <span key={p} className={'cv-plat' + (has ? ' on' : '')} title={has ? undefined : `点击让 Agent 生成 ${p} 版`} onClick={() => platClick(pg, p, has)}>
-                        {p}
-                      </span>
-                    )
-                  })}
-                </div>
+                {versions.length > 1 && (
+                  <div className="cv-verrow">
+                    {versions.map((v, i) => {
+                      const sel = v.file === activeFile
+                      return (
+                        <span key={v.file} className={'cv-ver' + (sel ? ' sel' : '')} title={`版本 v${i + 1}（点切换 · 双击放大）`} onClick={() => { setSelVer((m) => ({ ...m, [pg.id]: v.file! })); setActive(pg, v.file!) }} onDoubleClick={(e) => { e.stopPropagation(); openArtifact(artUrl(v.file!), `${pg.name} v${i + 1}`, 'image') }}>
+                          v{i + 1}
+                          <span className="cv-ver-x" title="删除这一版设计稿（保留页面占位）" onClick={(e) => { e.stopPropagation(); delVersion(pg, v) }}>✕</span>
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )

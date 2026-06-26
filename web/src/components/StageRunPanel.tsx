@@ -73,7 +73,7 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
 
   return (
     <>
-      {phase === 7 && <DeployCredsCard />}
+      {phase === 7 && <DeployCredsCard primary={prim} />}
       {phase === 6 && <PreviewSection />}
       <div className="card">
         <h2>

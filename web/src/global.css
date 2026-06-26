@@ -356,12 +356,16 @@
   .cv-item .bar.col { flex-direction: column; align-items: stretch; gap: 7px; }
   .cv-item .pn { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink); }
   .cv-item .pn .pg-g { color: var(--faint); font-weight: 400; font-size: 11px; margin-left: auto; }
-  .cv-platrow { display: flex; gap: 6px; }
-  .cv-plat { font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px solid transparent; color: var(--dim); background: var(--fill); }
-  .cv-plat.on { background: var(--ink); color: #fff; font-weight: 600; cursor: pointer; }
-  .cv-page-del { position: absolute; right: 8px; top: 8px; width: 20px; height: 20px; border-radius: 6px; background: rgba(255,255,255,.92);
-    border: none; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--dim); cursor: pointer; z-index: 2; box-shadow: var(--block-sh); }
-  .cv-page-del:hover { color: var(--ink); }
+  /* 版本 pill 条：多版本共存 + 切换显示 + ✕删单版（仅 2+ 版本时出现） */
+  .cv-verrow { display: flex; flex-wrap: wrap; gap: 5px; }
+  .cv-ver { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--fill); color: var(--dim); cursor: pointer; border: 1px solid transparent; }
+  .cv-ver.sel { border-color: var(--ink); color: var(--ink); font-weight: 700; }
+  .cv-ver-x { cursor: pointer; opacity: .5; line-height: 1; }
+  .cv-ver-x:hover { color: #c2406a; opacity: 1; }
+  /* 用 .page-card 前缀提高优先级，盖过后面 legacy .cv-page-del 的 display:none（否则删除×一直隐藏） */
+  .page-card .cv-page-del { position: absolute; right: 8px; top: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(17,17,17,.55);
+    border: none; display: flex !important; align-items: center; justify-content: center; font-size: 15px; line-height: 1; color: #fff; cursor: pointer; z-index: 3; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  .page-card .cv-page-del:hover { background: #c2406a; }
 
   /* 页面地图（画布顶部占位带） */
   .cv-grouplabel { position: absolute; font-size: 12px; font-weight: 800; color: var(--ink); pointer-events: none; white-space: nowrap; display: flex; align-items: center; gap: 7px; }
