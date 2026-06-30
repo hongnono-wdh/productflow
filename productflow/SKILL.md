@@ -32,7 +32,7 @@ sh "$SKILL_DIR/scripts/start.sh"          # = /productflow-start
 
 ## 启动（每次会话开始时做）
 
-操作台是**全局单例**：固定端口 7717，一个进程服务所有项目。每次会话按三步走：
+操作台是**全局单例**：固定端口 7717，一个进程服务所有项目。每次会话按四步走（第 4 步「生图 key 预检」是进 ③④ 的硬闸）：
 
 先设两个变量（后续所有命令依赖它们）：
 
@@ -60,6 +60,30 @@ python3 "$SKILL_DIR/scripts/pf_state.py" init --product "<产品名>"   # 已有
 ```
 
 init 输出里有项目 id；告知用户项目地址 `http://127.0.0.1:7717/p/<id>/`，CLI 和网页留言都有效。
+
+**4. 生图 key 预检（必做闸口——缺 key 不进流水线，强制向用户索取）**：③首图设计 / ④页面设计**强制使用生图模型 `gpt-image-2`**，必须有 OpenAI 生图 key。认领/创建项目后**立即**做这道预检，**通不过就不要进入 ③/④、不要标 phase done、更不要静默降级用 HTML 截图凑合**：
+
+```bash
+# 有 OPENAI_API_KEY 就放行；没有则进入索取流程
+grep -qE '^[[:space:]]*export[[:space:]]+OPENAI_API_KEY=' ~/.config/openai/env 2>/dev/null && echo OK || echo NEED_KEY
+```
+
+- **缺 key 时**：停下，在 CLI 明确告诉用户「本项目的 ③首图 / ④页面设计必须用生图模型 `gpt-image-2`，需要你提供 **OpenAI 生图 key**（如走网关再给一个 `OPENAI_BASE_URL`，没有就用官方默认）」，**等用户给了再继续**——这就是「用户让 AI 跑项目 → AI 反馈缺什么 → 用户提供 → 跑起来」的握手。用户一时给不出，可先停在这里做不依赖生图的阶段（①②⑤的非生图部分），但 **③④ 在拿到 key 前不得开工**。
+- **拿到后写入并锁权限**（key 是敏感凭证，按⑦部署凭证同规格处理）：
+
+  ```bash
+  mkdir -p ~/.config/openai && touch ~/.config/openai/env && chmod 600 ~/.config/openai/env
+  KEY='<用户给的 key>'; BASE='<用户给的网关地址，没有就留空>'
+  # 先删旧的同名 export 行再追加，避免重复
+  keep=$(grep -vE '^[[:space:]]*export[[:space:]]+(OPENAI_API_KEY|OPENAI_BASE_URL)=' ~/.config/openai/env 2>/dev/null)
+  printf '%s\n' "$keep" > ~/.config/openai/env
+  printf 'export OPENAI_API_KEY="%s"\n' "$KEY" >> ~/.config/openai/env
+  [ -n "$BASE" ] && printf 'export OPENAI_BASE_URL="%s"\n' "$BASE" >> ~/.config/openai/env
+  ```
+
+- **不要回显 key 本身**、不要 `log`/`reply` 进状态、不要写进产物或留言。
+- 操作台已在跑也**无需重启**：server 每次调 `gen.py` 都从该文件即时注入（`_inject_openai_env`），新写的 key 立刻生效。
+- **降级边界**：只有当你的 agent 根本没有图像生成能力（非 Claude Code、连 openai-image-gen 这类 skill 都没有）时，才回到 AGENTS.md 的降级路径；**「有生图能力但缺 key」必须走上面的强制握手，不得静默降级。**
 
 **防双入口重复建项**：任何时候要在 CLI 侧新建项目（含用户口头提出新产品、或你打算主动起一个项目）之前，必须先 `ls ~/.productflow/pending/` 再看一眼卡片墙现有项目——队列里或墙上已有相近需求时，先与用户确认是不是同一件事，确认后认领或续用，**不要另起炉灶**。用户没点名产品时更不要替用户决定做什么项目，先问。
 
@@ -147,7 +171,7 @@ $PF status                           # 总览
 | Node.js + npm | 视项目 | 仅 T2/T3 项目要；纯静态 T1 不需要 |
 | Playwright | 强烈建议 | ②找参考抓图、成品预览与 E2E 旅程测试(P6)都靠它（①市场调研已不截图）。装：`pip install playwright && python3 -m playwright install chromium`，或 `npm i -D @playwright/test && npx playwright install chromium` |
 | design-taste-frontend | 增强 | Phase 4 页面设计入口 A。缺失→用 frontend-design / ui-ux-pro-max；再缺→按 direction.md 直接手写 HTML/CSS |
-| openai-image-gen | 增强 | Phase 3 首图设计批量多风格生图（还需图像 API key）。缺失→跳过 AI 生图，改用 Phase 2 参考图直接定方向 |
+| openai-image-gen + 生图 key | **必需** | ③首图 / ④页面强制用 `gpt-image-2` 出图，需图像 API key。**缺 key 不静默降级**——按上文「启动·4. 生图 key 预检」在 CLI 向用户强制索取并写入 `~/.config/openai/env` 后再进 ③④。只有连图像生成能力都没有的 agent（非 Claude Code）才回退到「跳过 AI 生图 / 用 Phase 2 参考图定方向」 |
 | database-schema-designer | 增强 | 缺失→按 phase-5 手册内置的 SQLite 约定直接设计，照样能出 ER/DDL |
 | deploy-cf-pages | 增强 | 仅 CF 部署用。缺失→按 phase-7 的 wrangler 命令手动部署 |
 | webapp-testing / playwright-cli | 增强 | 浏览器自动化封装。缺失→直接用 Playwright（上面那行） |

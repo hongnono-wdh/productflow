@@ -7,6 +7,7 @@
 - Phase ③（首图设计）已 done，首图与视觉基调已定：`artifacts/phase-3/heroes/` 下有选中首图，`explore.json` 的 `selectedHero`/`styleSummary` 记录其风格（配色 hex、字体气质、留白、质感）。
 - Phase ① 已 done，`artifacts/phase-1/replicate-notes.md`（复刻要点）存在——其中"推荐信息架构"是本阶段 **page-map** 列页面的依据。
 - 若 ③ 缺首图、① 缺复刻要点 → 回对应阶段补齐再开始。没有视觉基调，逐页设计就会各画各的；没有信息架构，列不全页面。
+- **生图 key 必须已就位**（本阶段批量出图同样**强制用 `gpt-image-2`**）。正常情况下 ③ 已通过 `SKILL.md`「启动·4. 生图 key 预检」；若用户直接从 ④ 切入而 `~/.config/openai/env` 无 `OPENAI_API_KEY`，**先回到那道预检在 CLI 向用户强制索取 key 再开工，缺 key 不静默降级、不开始批量出图**。
 
 ## 阶段启动
 

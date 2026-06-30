@@ -16,7 +16,7 @@
 
 - **"调用 X skill"** = 用你 agent 的对应能力；没有 Skill 机制就把它当**方法论名词**手动做：
   - design-taste-frontend → 手写 anti-slop 的落地页 HTML/CSS（参考 `references/phase-4-pages.md` 的设计原则）
-  - openai-image-gen → 没有图像生成能力就**跳过 Phase 3 首图生成**，并在 Phase 4 走直接写页面而非参考图
+  - openai-image-gen → ③④ 强制用 `gpt-image-2` 出图，需 OpenAI 生图 key。**有生图能力但缺 key**（`~/.config/openai/env` 无 `OPENAI_API_KEY`）→ 不静默降级，按 `SKILL.md`「启动·4. 生图 key 预检」在 CLI 向用户**强制索取 key 并写入**后再进 ③④；**只有连图像生成能力都没有**才跳过 Phase 3 首图生成、在 Phase 4 直接写页面而非参考图
   - database-schema-designer → 按 `references/phase-5-spec.md` 内置的 SQLite 约定直接设计
   - test-driven-development / verification-before-completion / systematic-debugging → 先写测试 / 跑验证命令再说完成 / 先复现定位根因再改
   - deploy-cf-pages → 按 `references/phase-7-deploy.md` 的 wrangler 命令手动部署
