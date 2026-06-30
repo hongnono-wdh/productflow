@@ -16,7 +16,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 pick-target --status active
 
 - **primary = PC（桌面）** → 按预设走 **Web 路径（A/B/C，桌面 Web 站点）** 或 **路径 d（P-Desktop，桌面应用，预设在 Phase 5 `template-choice.md` 已记录）**。
 - **primary = H5（移动 Web）** → 走 Web 路径 A/B/C（按所选预设 T1/T2/T3 对应）。
-- **primary = APP（原生移动）** → 按所选预设走 **路径 i（P-iOS → TestFlight）** 或 **路径 a（P-Android → Google Play 内部测试）**（预设在 Phase 5 `template-choice.md` 已记录）。
+- **primary = APP（原生移动）** → 按所选预设走 **路径 i（P-iOS → TestFlight）**；Android（P-Android）有两条可选发布渠道，**按用户已填的凭证择一**：填了 Google Play 凭证（`$PLAY_SERVICE_ACCOUNT_JSON`）→ **路径 a（Google Play 内部测试）**；填了蒲公英凭证（`$PGYER_API_KEY`）→ **路径 g（蒲公英内测分发，国内）**；两套都填 → 用 `choice ask` 让用户选；都没填 → 提示去⑦「部署凭证」表单补（预设在 Phase 5 `template-choice.md` 已记录）。
 
 | 路径 | 适用预设 | 形态 | 手段 |
 |------|----------|------|------|
@@ -25,9 +25,10 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 pick-target --status active
 | C | T3 | 全栈带后端进程 | 单机服务器或本地：①裸机 rsync+systemd+caddy 或 ②Docker compose |
 | i | P-iOS | 原生 iOS App | `xcodebuild archive` → distribution 签名导出 `.ipa` → 上传 TestFlight（fastlane `pilot` / `xcrun altool` / Transporter），停在提审前（见下方 iOS 小节） |
 | a | P-Android | 原生 Android App | `./gradlew bundleRelease` → AAB 签名（upload keystore） → 上传 Google Play 内部测试（停在生产提审前，见下方 Android 小节） |
+| g | P-Android | 原生 Android App（国内内测分发） | `./gradlew assembleRelease` → APK 签名 → `curl` 上传蒲公英（`$PGYER_API_KEY`）→ 得扫码安装短链（无审核、上传即用，见下方蒲公英小节） |
 | d | P-Desktop | PC 桌面应用 | `cargo tauri build`（或 `electron-builder`）→ 平台安装包（`.dmg`/`.msi`/`.AppImage`）→ 签名/公证 → 直接分发或可选上架商店（停在提交商店前，见下方桌面小节） |
 
-路径与预设一一对应，不再询问用户选哪条；Web 内部选目标形态（本机/CF/服务器、Docker/systemd）有歧义时用 `choice ask` 抛到网页让用户点选（见 SKILL.md）。
+路径与预设一一对应，不再询问用户选哪条（唯一例外：**Android 在路径 a（Google Play）/ 路径 g（蒲公英）两渠道间按用户已填凭证择一，两套都填才用 `choice ask` 让用户选**）；Web 内部选目标形态（本机/CF/服务器、Docker/systemd）有歧义时用 `choice ask` 抛到网页让用户点选（见 SKILL.md）。
 
 **部署凭证（重要）**：服务器地址/SSH 账号/端口/token 等由用户在操作台⑦「部署凭证」表单填，存在项目仓库外的 `~/.productflow/secrets/<项目id>.env`（600，不进 git/留言）。本阶段被触发时这些值**已作为环境变量注入**你的运行环境，直接引用即可：
 
@@ -294,6 +295,39 @@ fastlane supply \
 - 在内部测试轨道确认测试员可安装、冒烟通过后，由用户手动在 Play Console 点「发布到生产」（或先升级到封测/开放测试轨道）。
 
 Android 路径无线上 URL / 端口，下方 deploy done 的 log 写「Google Play 内部测试 build 已上传：versionCode <n> / versionName <x>」即可。
+
+### 路径 g：Android 蒲公英内测分发（P-Android · 国内渠道）—— 上传即出可装链接，真端到端闭环
+
+用于 `primary = APP` 的 Android App，且用户填了蒲公英凭证（`$PGYER_API_KEY`）。蒲公英是国内 App 内测分发平台：上传成品 APK 即生成扫码安装短链，**无审核、上传即用**——和 Google Play 内部测试（路径 a）相比，它不卡在提审，是这几条 App 路径里唯一能当场端到端跑通的。适用：面向国内的安卓内测分发（国内访问 Google Play 困难）。前置工具检测见上方 checklist 第 4 项（`./gradlew --version` 就位，缺了提示装，别硬跑）。
+
+凭证全程走环境变量，**绝不打印、不入库**（`PGYER_API_KEY` 不进 agent-log / 产物 / 留言）。
+
+```bash
+# 1. 构建可安装的 Release APK（注意：蒲公英要 APK，不是 Google Play 的 AAB）
+./gradlew assembleRelease
+# 产物：app/build/outputs/apk/release/app-release.apk
+# 若该 build 未配 release 签名，可用 assembleDebug 出 debug 签名 APK 也能装；
+# 有 upload keystore 时优先 release 签名（apksigner/jarsigner，方式同路径 a，密钥从 $ANDROID_KEYSTORE 等环境变量读，绝不明文）。
+```
+
+```bash
+# 2. 上传蒲公英（单步 upload API，凭 $PGYER_API_KEY 认证；buildType=android，文件字段 file）
+RESP=$(curl -s -F "_api_key=$PGYER_API_KEY" \
+  -F "buildType=android" \
+  -F "buildInstallType=1" \
+  -F "file=@app/build/outputs/apk/release/app-release.apk" \
+  https://www.pgyer.com/apiv2/app/upload)
+```
+
+```bash
+# 3. 自检：解析返回、确认拿到安装短链（这步能真验证「上线成功」，不像提审前那样无凭据）
+echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('code')==0, d; b=d['data']; print('蒲公英安装短链: https://www.pgyer.com/'+b['buildShortcutUrl'], '| buildKey:', b['buildKey'])"
+# 大包（>100MB）单步若超时，改用新版两步 API（getCOSToken → PUT 到 COS → buildInfo 轮询），见蒲公英官方文档。
+```
+
+蒲公英无线上 Web URL，deploy done 的 log 写「蒲公英安装短链已生成：https://www.pgyer.com/<短链> · versionName <x>」即可；可选把二维码/安装页截图登记为 `artifacts/phase-7/live.png`（扫码即装的等价「线上截图」）。
+
+**与 Google Play（路径 a）的区别**：蒲公英直接收成品 APK、无审核、当场可装、不依赖 Google 账号（国内友好），且**真能端到端闭环**（不停在提审前）；但它是**内测分发**不是**应用商店上架**——正式上架国内各大安卓商店（华为/小米/应用宝等）仍需各自渠道，本路径不覆盖。iOS 走蒲公英需 ad-hoc（UDID 白名单）或企业签名，本路径只覆盖 Android。
 
 ### 路径 d：桌面应用打包 + 分发（P-Desktop）—— 停在提交商店前
 

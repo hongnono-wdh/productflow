@@ -30,6 +30,12 @@ const R: Record<string, Recipe> = {
       ANDROID_KEYSTORE: '上传密钥库 .jks/.keystore 文件的本机路径',
     },
   },
+  pgyer: {
+    key: 'pgyer',
+    label: 'App · 蒲公英内测分发',
+    need: ['PGYER_API_KEY'],
+    tips: { PGYER_API_KEY: '蒲公英后台 → 账户设置 → API 信息（www.pgyer.com/account/api），复制 API Key（账号级，一个就够；上传 .ipa/.apk 即生成扫码安装链接）' },
+  },
   cf: {
     key: 'cf',
     label: 'Web · Cloudflare',
@@ -50,10 +56,11 @@ function detectRecipes(have: Set<string>, primary?: string | null): Recipe[] {
   const out: Recipe[] = []
   if (ks.some((k) => k.startsWith('ASC_'))) out.push(R.ios)
   if (ks.some((k) => k.startsWith('ANDROID_') || k.startsWith('PLAY_'))) out.push(R.android)
+  if (ks.some((k) => k.startsWith('PGYER_'))) out.push(R.pgyer)
   if (have.has('CF_API_TOKEN') || have.has('CF_ACCOUNT_ID')) out.push(R.cf)
   if (ks.some((k) => k.startsWith('PF_SSH_'))) out.push(R.ssh)
   if (out.length) return out
-  return (primary || '').toUpperCase() === 'APP' ? [R.ios, R.android] : [R.cf, R.ssh]
+  return (primary || '').toUpperCase() === 'APP' ? [R.ios, R.android, R.pgyer] : [R.cf, R.ssh]
 }
 
 // 确定性解析：抽出 .p8 PEM 块 + 逐行 KEY=VALUE / export / TOML key="v" / "KEY": "v" / KEY: v

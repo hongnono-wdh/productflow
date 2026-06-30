@@ -1,6 +1,6 @@
 ---
 name: productflow
-version: 2.21.1
+version: 2.21.2
 description: 完整互联网产品全自动生产操作台。启动 localhost 控制台 + 7 阶段流水线：市场调研 → 找参考 → 首图设计 → 页面设计 → 功能与数据设计(ER/数据层/接口) → 开发实现(前后端全栈 / 原生 App + 测试) → 部署上线（Web：CF Pages/Workers 或单机；iOS：TestFlight；Android：Google Play 内部测试；PC 桌面应用：Tauri 打包安装包/可选上架商店）。从落地页/官网/waitlist，到带数据库与后端的功能性 Web 应用，再到原生移动 App（iOS：SwiftUI+SwiftData / Android：Kotlin+Compose+Room）与 PC 桌面应用（Tauri）都能做（落地页只是最简单的一种）。只要用户想"做一个网站/Web 产品/应用/落地页/官网/waitlist/小工具"、"做一个 iOS App / Android 安卓 App / 原生移动应用"、"做一个 PC 桌面应用 / Windows / Mac 客户端"、"做一个带后端和数据库的产品"、"复刻某产品"、"从调研到上线"、提到 ProductFlow / 操作台 / landing page pipeline，或要求"启动产品项目"，就使用本 skill——即使他们没说出 skill 名字。
 ---
 
@@ -97,7 +97,7 @@ grep -qE '^[[:space:]]*export[[:space:]]+OPENAI_API_KEY=' ~/.config/openai/env 2
 | ④ 页面设计 | **画布** | 在无限画布上按「页面 × 平台」铺开各页面各端的设计稿 |
 | ⑤ 功能与数据 | 面板 | 模块清单、ER 图、数据层（Web 表结构 / iOS SwiftData `@Model` / Android Room `@Entity` / PC 桌面应用 SQLite 表结构）、接口契约（纯本地 App 无） |
 | ⑥ 开发实现 | 面板 | 脚手架、前后端 / 原生 App、冒烟测试、接口/交付文档 |
-| ⑦ 部署上线 | 面板 | 部署/上架路径（Web 上线 / iOS 上传 TestFlight / Android 上传 Google Play 内部测试 / PC 桌面应用打包安装包·可选上架商店）、冒烟、交付报告 |
+| ⑦ 部署上线 | 面板 | 部署/上架路径（Web 上线 / iOS 上传 TestFlight / Android 上传 Google Play 内部测试或蒲公英内测分发 / PC 桌面应用打包安装包·可选上架商店）、冒烟、交付报告 |
 
 **两块独立画布**：③首图设计 和 ④页面设计 各是一块独立的无限画布（不是同一张）——③专放首图方案、④专放页面×平台的设计稿，互不混淆。画布上产物可拖拽摆位、滚轮缩放、双击预览，布局存 `.productflow/canvas.json`。③④ 画布每张设计图还能**框选局部 + 写一句怎么改 → gpt-image-2 只重绘选中区域**（其余像素保留），结果作为新版本并存、原图不动可对比/回退——用户嫌某块按钮/配色/排版不对时不必整张重出。产物登记（`artifact` 命令）后自动出现在对应阶段视图里——这就是设计稿、截图、报告要勤登记的原因：画布是用户审阅和对比方案的主要场所。
 
