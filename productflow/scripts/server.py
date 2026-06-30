@@ -295,6 +295,31 @@ def _inject_openai_env(env: dict) -> None:
         pass
 
 
+def _imagegen_key_ready() -> bool:
+    """③④ 生图硬前提：进程环境或 ~/.config/openai/env 里有非空 OPENAI_API_KEY 才算就绪。
+    与 _inject_openai_env 同源（纯 stdlib）。缺 key 时 server 直接拒绝出图请求、不静默降级——
+    配合 SKILL.md「启动·4. 生图 key 预检」的强制握手，把闸从文档下沉到代码。"""
+    if (os.environ.get("OPENAI_API_KEY") or "").strip():
+        return True
+    try:
+        with open(os.path.expanduser("~/.config/openai/env"), encoding="utf-8") as f:
+            for line in f:
+                m = re.match(r'\s*export\s+OPENAI_API_KEY\s*=\s*"?([^"\n]*)"?', line)
+                if m and m.group(1).strip():
+                    return True
+    except OSError:
+        pass
+    return False
+
+
+# ③④ 出图端点缺 key 时统一返回这个（HTTP 428 Precondition Required）
+_NEED_IMAGEGEN_KEY = {
+    "error": "need_imagegen_key",
+    "message": ("③首图 / ④页面设计强制使用生图模型 gpt-image-2，需先配置 OpenAI 生图 key"
+                "（写入 ~/.config/openai/env 的 OPENAI_API_KEY）。请向用户索取 key 后重试。"),
+}
+
+
 def _reveal_in_file_manager(path: str):
     """在系统文件管理器里打开目录（macOS Finder / Linux 文件管理器 / Windows 资源管理器）。
     本地工具用：让用户从操作台一键看项目代码。fire-and-forget，返回 (ok, err)。"""
@@ -1931,6 +1956,10 @@ class Handler(BaseHTTPRequestHandler):
             if not cand.startswith(art_base + os.sep) or not os.path.isfile(cand):
                 self._json({"error": "bad_file"}, 400)
                 return
+            # 生图硬闸：局部重绘走 edit.py 出图，缺 key 不放行
+            if not _imagegen_key_ready():
+                self._json(_NEED_IMAGEGEN_KEY, 428)
+                return
             payload = {"stage": stage, "file": rel, "regions": regions, "prompt": req_text,
                        "platform": data.get("platform"), "pageId": data.get("pageId")}
             threading.Thread(target=_auto_redraw, args=(pf, payload), daemon=True).start()
@@ -2035,6 +2064,10 @@ class Handler(BaseHTTPRequestHandler):
                 if pg is None:
                     self._json({"error": "no_such_page"}, 400)
                     return
+                # 生图硬闸：生成某页某平台设计稿走生图，缺 key 不放行
+                if not _imagegen_key_ready():
+                    self._json(_NEED_IMAGEGEN_KEY, 428)
+                    return
                 with open(os.path.join(pf, "inbox.jsonl"), "a", encoding="utf-8") as f:
                     f.write(json.dumps({"ts": _now(), "from": "web", "type": "page-version-request",
                                         "text": f"生成「{pg.get('name')}」的 {platform} 版设计"},
@@ -2051,6 +2084,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if sub == "/api/explore":
             # 前端写「风格偏好 / 发起请求 / 选择参考 / 选择首图」；agent 用 pf_state explore 写结果
+            # 生图硬闸：只有 gen-heroes（③首图生成）真出图，缺 key 早退、不记请求；
+            # search-refs / suggest-keywords / collect-ref 走 playwright/文本，不卡。
+            _req0 = data.get("request")
+            if isinstance(_req0, dict) and _req0.get("kind") == "gen-heroes" and not _imagegen_key_ready():
+                self._json(_NEED_IMAGEGEN_KEY, 428)
+                return
             ex_path = os.path.join(pf, "explore.json")
             try:
                 with open(ex_path, encoding="utf-8") as f:
@@ -2197,6 +2236,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if phase not in _STAGE_NAME:
                 self._json({"error": "bad_phase"}, 400)
+                return
+            # 生图硬闸：③④ 是出图阶段，缺 key 不放行（不静默降级、不 spawn 注定失败的 agent）
+            if phase in (3, 4) and not _imagegen_key_ready():
+                self._json(_NEED_IMAGEGEN_KEY, 428)
                 return
             # 并发护栏：同一 (pid, phase) 已有 agent 在跑就拒绝，别双开互相覆盖产物/代码
             with _STAGE_RUN_LOCK:

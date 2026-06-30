@@ -68,6 +68,13 @@ def make_home():
     """
     home = tempfile.mkdtemp(prefix="pf-test-home-")
     os.makedirs(os.path.join(home, "code"), exist_ok=True)
+    # 假生图 key：server._imagegen_key_ready() 读 ~/.config/openai/env（HOME 已被沙箱覆盖），
+    # 让 ③④ 出图端点（run-stage 3/4、redraw、page-version、explore gen-heroes）的硬闸放行，
+    # 测试照旧用假 claude/PF_EDIT_PY stub 驱动。负向「无 key→428」用例自行删掉这把 key。
+    cfg = os.path.join(home, ".config", "openai")
+    os.makedirs(cfg, exist_ok=True)
+    with open(os.path.join(cfg, "env"), "w") as f:
+        f.write('export OPENAI_API_KEY="test-dummy-key"\n')
     bindir = os.path.join(home, "bin")
     os.makedirs(bindir, exist_ok=True)
     stub = os.path.join(bindir, "claude")

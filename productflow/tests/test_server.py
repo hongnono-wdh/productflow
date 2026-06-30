@@ -546,6 +546,34 @@ class ServerTest(unittest.TestCase):
         status, _ = h.http(self.port, f"/p/{pid}/api/run-stage", method="POST", body={"phase": "x"})
         self.assertEqual(status, 400)
 
+    def test_imagegen_key_gate(self):
+        # 生图硬闸（代码层）：无 key 时 ③④ 出图阶段被服务端拒绝（428 need_imagegen_key），
+        # 不静默降级、不 spawn 注定失败的 agent；非出图阶段（⑤）不受影响；配上 key 后放行。
+        # 用一台独立、无 key 的 server 验证（共享 server 的沙箱默认带假 key）。
+        home = h.make_home()
+        os.remove(os.path.join(home, ".config", "openai", "env"))   # 抹掉沙箱默认假 key
+        proc, port = h.start_server(home, extra_env={"OPENAI_API_KEY": ""})
+        try:
+            cp = h.create_project(port, "No Key", slug="no-key")
+            pid = cp["id"]
+            # ④页面设计（出图阶段）→ 428 硬闸
+            status, body = h.http(port, f"/p/{pid}/api/run-stage", method="POST", body={"phase": 4})
+            self.assertEqual(status, 428)
+            self.assertEqual(body.get("error"), "need_imagegen_key")
+            # ⑤功能与数据（非出图）→ 不受闸影响，正常触发（claude stub → 200）
+            status, _ = h.http(port, f"/p/{pid}/api/run-stage", method="POST", body={"phase": 5})
+            self.assertEqual(status, 200)
+            # 配上 key（即用户在握手里提供）后 ④ 放行
+            cfg = os.path.join(home, ".config", "openai")
+            os.makedirs(cfg, exist_ok=True)
+            with open(os.path.join(cfg, "env"), "w") as f:
+                f.write('export OPENAI_API_KEY="now-set"\n')
+            status, _ = h.http(port, f"/p/{pid}/api/run-stage", method="POST", body={"phase": 4})
+            self.assertEqual(status, 200)
+        finally:
+            h.stop_server(proc)
+            h.rm_home(home)
+
     def test_deploy_creds_roundtrip_masked_merge_and_perms(self):
         cp = h.create_project(self.port, "Deploy Creds", slug="deploy-creds")
         pid = cp["id"]
