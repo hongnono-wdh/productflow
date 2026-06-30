@@ -26,8 +26,11 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
   const last = lines.length ? lines[lines.length - 1] : null
   const running = !!log?.running || justClicked
   const waiting = !!log?.waiting
-  const failed = !running && !!last && last.kind === 'error'
   const done = phaseStatus === 'done'
+  // done 后一律不报警（CLI 接手/续跑完成会标 done → 红条自动消）。
+  // 超时(kind=timeout)是「自动续跑到上限暂停」，可继续，不是失败；只有真失败/连续无进展(kind=error)才红条。
+  const failed = !running && !done && !!last && last.kind === 'error'
+  const paused = !running && !done && !!last && last.kind === 'timeout'
   const prim = wizard?.primary ?? null
 
   const guard = (act: () => void) => {
@@ -112,9 +115,19 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
             <span style={{ color: 'var(--dim)', fontSize: 12 }}>进度见下方步骤 / 产物 / 进展日志</span>
           </div>
         )}
+        {paused && (
+          <div className="wz-aibox" style={{ marginTop: 14, borderColor: '#d8c98a', background: '#fcf8e8', color: '#7a6a1f' }}>
+            ⏸ 本阶段已自动续跑多轮仍没全部做完，先暂停了——已完成的步骤都保留，点下面接着做完。
+            <br />
+            <button className="btn" style={{ marginTop: 10 }} disabled={running} onClick={runStage}>
+              <IcSpark />
+              继续做完本阶段
+            </button>
+          </div>
+        )}
         {failed && (
           <div className="wz-aibox" style={{ marginTop: 14, borderColor: '#e0b4b4', background: '#fdf4f4', color: '#b3403a' }}>
-            ❌ Agent 中断了（可能 claude 未登录 / 超时 / 中途报错）。点上面按钮重试，或在💬留言说明、或在 CLI 里接手本阶段。
+            ❌ Agent 没能继续（claude 未登录，或连续多轮没有新进展）。点上面按钮重试，或在💬留言补充方向，或在 CLI 里接手本阶段。
           </div>
         )}
       </div>

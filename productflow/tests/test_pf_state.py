@@ -761,5 +761,40 @@ class TestChoice(PfStateBase):
         self.assertIsNone(c.get("answer"))
 
 
+class TestFlow(PfStateBase):
+    """④ 流程图边/入口 CLI（pf_state flow）→ 写 canvas.json['4'].flow。"""
+
+    def _canvas4(self):
+        p = os.path.join(self.dir, ".productflow", "canvas.json")
+        return (json.load(open(p)).get("4") or {}) if os.path.isfile(p) else {}
+
+    def test_add_edge_dedup_entry_remove_clear(self):
+        self.run_ok(["flow", "add-edge", "--from", "pg-a", "--to", "pg-b", "--label", "点登录"])
+        self.run_ok(["flow", "add-edge", "--from", "pg-b", "--to", "pg-c", "--label", "点搜索"])
+        self.run_ok(["flow", "add-edge", "--from", "pg-a", "--to", "pg-b", "--label", "点登录"])  # 重复→去重
+        self.run_ok(["flow", "set-entry", "pg-a"])
+        f = self._canvas4()["flow"]
+        self.assertEqual(len(f["edges"]), 2)
+        self.assertEqual(f["entry"], "pg-a")
+        self.assertIn({"from": "pg-a", "to": "pg-b", "label": "点登录"}, f["edges"])
+        self.run_ok(["flow", "rm-edge", "--from", "pg-a", "--to", "pg-b"])
+        self.assertEqual(len(self._canvas4()["flow"]["edges"]), 1)
+        self.run_ok(["flow", "clear"])
+        f = self._canvas4()["flow"]
+        self.assertEqual(f["edges"], [])
+        self.assertIsNone(f["entry"])
+
+    def test_flow_preserves_other_canvas_keys(self):
+        # flow 写 canvas['4'].flow 时不破坏已有 view/items/notes
+        cpath = os.path.join(self.dir, ".productflow", "canvas.json")
+        with open(cpath, "w") as fp:
+            json.dump({"4": {"view": {"x": 1}, "items": {"page:pg-a": {"x": 5, "y": 6}}, "notes": []}}, fp)
+        self.run_ok(["flow", "add-edge", "--from", "pg-a", "--to", "pg-b"])
+        cell = self._canvas4()
+        self.assertEqual(cell["view"], {"x": 1})
+        self.assertEqual(cell["items"], {"page:pg-a": {"x": 5, "y": 6}})
+        self.assertEqual(len(cell["flow"]["edges"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

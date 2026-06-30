@@ -14,6 +14,7 @@ requests (Host=127.0.0.1) pass cleanly.
 import json
 import os
 import shutil
+import site
 import socket
 import subprocess
 import sys
@@ -33,6 +34,17 @@ SERVER = os.path.join(SCRIPTS, "server.py")
 CHROMIUM_EXE = os.path.expanduser(
     "~/Library/Caches/ms-playwright/chromium_headless_shell-1169/chrome-mac/headless_shell"
 )
+
+# Real per-user site-packages, captured NOW under the real HOME. _env() overrides
+# HOME to sandbox the registry/projects, but macOS/Linux derive user-site from HOME
+# — so a subprocess would otherwise recompute it under the sandbox HOME and lose any
+# `pip install --user` deps (Pillow, playwright, …), making e.g. redraw falsely fail.
+# Injecting this into PYTHONPATH keeps user-site importable without weakening the
+# data isolation, and matches what a real (non-HOME-overridden) run actually sees.
+try:
+    _REAL_USER_SITE = site.getusersitepackages()
+except Exception:  # noqa: BLE001  (ENABLE_USER_SITE off, exotic envs)
+    _REAL_USER_SITE = ""
 
 
 def free_port():
@@ -78,6 +90,10 @@ def _env(home, project=None):
     # 框选重绘默认调仓库自带的 scripts/edit.py（会真打网关）。测试里指向沙箱内的假 edit.py
     # （TestRedraw._fake_edit_py 写在这），既不走网络又能验证 server 真传了 --mask 蒙版。
     e["PF_EDIT_PY"] = os.path.join(home, ".claude", "skills", "openai-image-gen", "scripts", "edit.py")
+    # Keep user-site deps importable despite the HOME override (see _REAL_USER_SITE).
+    if _REAL_USER_SITE and os.path.isdir(_REAL_USER_SITE):
+        e["PYTHONPATH"] = _REAL_USER_SITE + (
+            os.pathsep + e["PYTHONPATH"] if e.get("PYTHONPATH") else "")
     e.pop("PF_PROJECT", None)
     if project:
         e["PF_PROJECT"] = project

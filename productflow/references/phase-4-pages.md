@@ -53,25 +53,39 @@ $PF page list   # 给用户/自己看占位带全貌
 python3 "$SKILL_DIR/scripts/pf_state.py" step 4 page-map --status done
 ```
 
+### 顺带：规划页面流程图（flow）
+
+页面列出后，据每页内容 / 功能模块**推断页面之间的跳转关系**，登记成「流程图的边」——供操作台 ④「**流程图**」模式把页面渲染成思维导图式的用户流转图（只给人看、不影响设计稿、不喂 ⑥）：
+
+```bash
+# 设入口页（用户打开产品看到的第一个页面，如 onboarding / 登录 / 首页）
+python3 "$SKILL_DIR/scripts/pf_state.py" --dir <项目> flow set-entry <page-id>
+# 逐条加跳转边：from → to + 触发操作（一个页面可有多条出边）
+python3 "$SKILL_DIR/scripts/pf_state.py" --dir <项目> flow add-edge --from <源 page-id> --to <目标 page-id> --label "<操作，如 点登录 / 点搜索 / 看详情>"
+```
+
+`page-id` 一律用 `pages.json` 里的真实 id；连线要**贴合真实业务流程**（入口 → 首页 → 各功能页 → 详情 / 结果页…），别连成全连接。重排时先 `flow clear` 再加。操作台「流程图」模式也有「**让 Agent 规划流程**」按钮触发同一动作。
+
 ## Step 2: design-pages — 逐页设计
 
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" step 4 design-pages --status active
 ```
 
-> **操作台两种触发**：①在某页卡片上点空的平台格（PC/H5/APP）→ 单独生成那一页那个平台；②点顶部「**批量生成全部（N 页）**」→ 把所有还没设计的页面**按主平台并发各出一版**（`run-stage` 派一个 agent 跑整批）。
+> **操作台两种触发**：①在某页卡片上点空的平台格（PC/H5/APP）→ 单独生成那一页那个平台；②点顶部「**批量生成全部（N 页）**」→ **按 `priority` 逐平台、把所有还没该平台设计稿的页面并发各出一版**（覆盖**所有选定平台**，`run-stage` 派一个 agent 跑整批）。
 >
-> **批量必须并发、不要逐页串行**——openai-image-gen 的 `gen.py` 支持 `--concurrency 20`，且 `--prompt` 可重复。所以批量请求的正确做法是：先把每个占位页的 prompt 一次性写好（每页 = 该页内容 + ③ 视觉基调 + 主平台界面描述 + 纯 UI 约束），然后用**一条 gen.py 命令**把它们一起并发出图：
+> **批量必须并发、不要逐页串行**——openai-image-gen 的 `gen.py` 支持 `--concurrency 20`，且 `--prompt` 可重复。正确做法：读 `.productflow/wizard.json` 的 `platforms` + `priority`，**按 priority 逐平台**处理；对**当前平台**，先把每个还没该平台稿的页面 prompt 一次性写好（每页 = 该页内容 + ③ 视觉基调 + **该平台**界面描述 + 纯 UI 约束），然后用**一条 gen.py 命令**把它们一起并发出图：
 >
 > ```bash
+> # 每个平台各跑一条（尺寸按平台取）：
 > python3 "$GEN" \
->   --prompt "<页1内容> <主平台界面描述> 纯UI, <③基调>, pure UI, no background scene, no device frame, front view" \
+>   --prompt "<页1内容> <该平台界面描述> 纯UI, <③基调>, pure UI, no background scene, no device frame, front view" \
 >   --prompt "<页2内容> …" \
 >   --prompt "<页N内容> …" \
->   --size <主平台: APP/H5=1080x2340, PC=1440x1080> --concurrency 20 --model gpt-image-2 --out-dir artifacts/phase-4
+>   --size <该平台: APP/H5=1080x2340, PC=1440x1080> --concurrency 20 --model gpt-image-2 --out-dir artifacts/phase-4
 > ```
 >
-> 出图完按 `prompts.json` 把每张映射回对应页面，逐个 `page set <pg-id> --add-version <文件> --platform <主平台>` 关联（登记串行无妨，耗时的生图已并发）。**别一页一页 gen.py 串行调用**。
+> 出图完按 `prompts.json` 把每张映射回对应页面，逐个 `page set <pg-id> --add-version <文件> --platform <该平台>` 关联。**一个平台出完再下一个平台**，直到所有选定平台出齐；**别一页一页 gen.py 串行调用**。
 
 按 page-map 的清单**逐页**设计。开始设计某一页时，先把它从占位翻成"设计中"，让画布占位带亮起该页进度：
 

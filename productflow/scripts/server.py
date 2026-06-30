@@ -158,10 +158,13 @@ def _distill_event(pf: str, phase: str, evt: dict) -> None:
 
 
 def _run_claude_streaming(pf: str, phase: str, prompt: str, cwd: str,
-                          env: dict | None = None, timeout: int = 600) -> str:
+                          env: dict | None = None, timeout: int = 600,
+                          status: dict | None = None) -> str:
     """用 Popen 跑 claude -p stream-json，逐行解析进度写进 agent-log，返回完整 result 文本。
     超时用墙钟看门狗线程：到 timeout 秒无条件 kill 进程——不依赖 stdout 是否还有新行，
-    所以即使 agent 卡在一个无输出的长工具调用里（如某竞品站 Playwright 截图挂死）也能准时杀、准时报错。"""
+    所以即使 agent 卡在一个无输出的长工具调用里（如某竞品站 Playwright 截图挂死）也能准时杀、准时报错。
+    status：可选 out-dict，回填 {"timed_out": True} 或 {"error": "spawn"}，
+    供调用方（如 _auto_stage 自动续跑）区分「到时长上限」与「真失败（没登录/崩溃）」。"""
     cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions",
            "--output-format", "stream-json", "--verbose"]
     result_text = ""
@@ -169,6 +172,8 @@ def _run_claude_streaming(pf: str, phase: str, prompt: str, cwd: str,
         proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=True, bufsize=1)
     except (FileNotFoundError, OSError) as e:
+        if status is not None:
+            status["error"] = "spawn"
         _log_line(pf, phase, "error", "❌ 启动 claude 失败: " + _clip(e, 80))
         return result_text
     # 墙钟看门狗：到点无条件杀，不管进程当下有没有在吐 stdout（修"静默卡死不被超时砍"的缺陷）
@@ -204,6 +209,8 @@ def _run_claude_streaming(pf: str, phase: str, prompt: str, cwd: str,
     finally:
         wd.cancel()
     if timed_out["v"]:
+        if status is not None:
+            status["timed_out"] = True
         _log_line(pf, phase, "error", "❌ 超时终止")
     return result_text
 
@@ -508,6 +515,30 @@ _STAGE_DECISION = {
 }
 
 
+def _stage_timeout(phase: int) -> int:
+    """单轮墙钟上限：⑥开发实现/⑦部署是长循环，给足 45 分钟；不够会自动续跑下一轮。其余 30 分钟。"""
+    return {6: 2700, 7: 2700}.get(phase, 1800)
+
+
+def _phase_node(pf: str, phase: int) -> dict | None:
+    """state.json 里 id==phase 的阶段节点（取不到返回 None）。"""
+    try:
+        st = _read_json(os.path.join(pf, "state.json"))
+        for ph in st.get("phases") or []:
+            if ph.get("id") == phase:
+                return ph
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _stage_progress_key(pf: str, phase: int):
+    """该阶段进展指纹：(已完成 step 数, 阶段 status)。跨续跑轮比对，判断有没有真推进。"""
+    ph = _phase_node(pf, phase) or {}
+    done = sum(1 for s in (ph.get("steps") or []) if s.get("status") == "done")
+    return (done, ph.get("status"))
+
+
 def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = None) -> None:
     """后台 spawn claude 当完整 agent，按 phase-N-*.md 跑某个面板阶段（⑤⑥⑦，及④兜底）全流程。
     遇歧义点提示用 choice ask 抛给用户点选；instruction = 用户对本次（重）做的额外要求。
@@ -556,12 +587,42 @@ def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = No
                        "别把占位值瞎填进命令。）")
     if instruction:
         prompt += f"\n\n★用户对本阶段的额外要求（务必优先遵循，不要无视）：{instruction}"
-    _log_reset(pf, f"stage-{phase}", f"开始{name}")
+    chan = f"stage-{phase}"
+    _log_reset(pf, chan, f"开始{name}")
+    # 自动续跑：⑥/⑦ 是长循环，单轮易撞墙钟上限。撞了不当「失败」——只要还在推进，就自动起
+    # 下一轮接着做（已完成的 step 都保留），直到阶段 done / 连续多轮无进展 / 到硬上限才停。
+    # 这样用户不会看到吓人的「Agent 中断了」红条，业务自己往下走。
+    MAX_ROUNDS = 6            # 总轮数硬上限，绝对防失控空转
+    NO_PROGRESS_STOP = 2      # 连续这么多轮没有新进展就停，交给人接手
+    no_progress = 0
     try:
-        _run_claude_streaming(pf, f"stage-{phase}", prompt, project_root, env=env, timeout=1800)
+        for rnd in range(1, MAX_ROUNDS + 1):
+            if rnd > 1:
+                _log_line(pf, chan, "info",
+                          f"↻ 第 {rnd} 轮自动续跑（上一轮到时长上限，已完成的步骤保留，接着做没做完的）")
+            before = _stage_progress_key(pf, phase)
+            status: dict = {}
+            _run_claude_streaming(pf, chan, prompt, project_root, env=env,
+                                  timeout=_stage_timeout(phase), status=status)
+            node = _phase_node(pf, phase)
+            if node and node.get("status") == "done":
+                break                                    # 阶段真做完了
+            if not status.get("timed_out"):
+                break                                    # 非超时退出（没登录/崩溃/结束却没标 done）→ 留给前端 failed
+            no_progress = no_progress + 1 if _stage_progress_key(pf, phase) == before else 0
+            if no_progress >= NO_PROGRESS_STOP:
+                _log_line(pf, chan, "error",
+                          f"⚠️ 连续 {no_progress} 轮自动续跑都没有新进展，已停下——"
+                          "请在💬留言补充方向，或在 CLI 里接手本阶段")
+                break
+            _log_line(pf, chan, "timeout",
+                      "⏸ 本轮到时长上限，正在自动续跑下一轮（已完成的步骤都保留）")
+        else:
+            _log_line(pf, chan, "timeout",
+                      f"已自动续跑 {MAX_ROUNDS} 轮仍未做完——点「继续」可再续，或在 CLI 接手（进度已全部保留）")
     finally:
         with _STAGE_RUN_LOCK:
-            _STAGE_RUNNING.discard((pid, phase))   # 跑完/异常都释放，允许下次重做
+            _STAGE_RUNNING.discard((pid, phase))         # 跑完/异常都释放，允许下次重做/续跑
     print(f"[stage-{phase}] 结束", file=sys.stderr)
 
 
@@ -1891,10 +1952,15 @@ class Handler(BaseHTTPRequestHandler):
                         cdata = {}
                 except (FileNotFoundError, json.JSONDecodeError):
                     cdata = {}
+                prev = cdata.get(stage) if isinstance(cdata.get(stage), dict) else {}
                 cdata[stage] = {
                     "view": data.get("view"),
                     "items": data.get("items") or {},
                     "notes": data.get("notes") or [],
+                    # flow（边/入口，agent 用 `pf_state flow` CLI 写）+ flowItems（流程图坐标，前端写）：
+                    # 带了就用、没带就保留原值——避免常规 save（拖动/缩放）覆盖掉 agent 写的流程图。
+                    "flowItems": data.get("flowItems") if isinstance(data.get("flowItems"), dict) else prev.get("flowItems", {}),
+                    "flow": data.get("flow") if isinstance(data.get("flow"), dict) else prev.get("flow", {"edges": [], "entry": None}),
                 }
                 _atomic_write_json(cpath, cdata)
             self._json({"ok": True})

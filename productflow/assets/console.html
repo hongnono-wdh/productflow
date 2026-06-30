@@ -1504,7 +1504,8 @@ function runStageHtml(phase) {
     ${previewBtn}
     <button class="btn ghost" onclick="revealCode()" title="在系统文件管理器打开项目代码目录">📂 ${navigator.platform.indexOf('Mac') >= 0 ? '在访达打开代码' : '打开代码目录'}</button>
     ${st.running ? `<div class="wz-aibox" style="margin-top:14px${st.waiting ? ';border-color:#d8c98a;background:#fcf8e8;color:#7a6a1f' : ''}">${st.waiting ? '⏳ Agent 正等你回答上面弹出的选项（回答后会自动继续，别关页面）' : '✦ Agent 进行中…'}${st.line ? `<br><span style="color:var(--dim);font-size:12px">${esc(st.line)}</span>` : ''}<br><span style="color:var(--dim);font-size:12px">进度见下方步骤 / 产物 / 进展日志</span></div>` : ''}
-    ${st.failed ? `<div class="wz-aibox" style="margin-top:14px;border-color:#e0b4b4;background:#fdf4f4;color:#b3403a">❌ Agent 中断了（可能 claude 未登录 / 超时 / 中途报错）。点上面按钮重试，或在💬留言说明、或在 CLI 里接手本阶段。</div>` : ''}</div>`;
+    ${(st.paused && !done) ? `<div class="wz-aibox" style="margin-top:14px;border-color:#d8c98a;background:#fcf8e8;color:#7a6a1f">⏸ 本阶段已自动续跑多轮仍没全部做完，先暂停了——已完成的步骤都保留，点下面接着做完。<br><button class="btn" style="margin-top:10px" ${st.running ? 'disabled' : ''} onclick="doRunStage(${phase})">${IC_SPARK}继续做完本阶段</button></div>` : ''}
+    ${(st.failed && !done) ? `<div class="wz-aibox" style="margin-top:14px;border-color:#e0b4b4;background:#fdf4f4;color:#b3403a">❌ Agent 没能继续（claude 未登录，或连续多轮没有新进展）。点上面按钮重试，或在💬留言补充方向，或在 CLI 里接手本阶段。</div>` : ''}</div>`;
 }
 // 在系统文件管理器（macOS 访达 / Win 资源管理器）打开项目代码目录
 function revealCode() {
@@ -1543,6 +1544,7 @@ async function pollStageRun() {
       running: !!data.running,                 // 服务端真实运行态（不再靠日志末行猜）
       waiting: !!data.waiting,                 // agent 阻塞在 choice，正等你回答
       failed: !data.running && !!last && last.kind === 'error',
+      paused: !data.running && !!last && last.kind === 'timeout',  // 自动续跑到上限暂停（可继续，非失败）
       instr: prev.instr || '',                 // 保留用户正在写的重做要求
     };
     if (selectedPhase !== phase) return;

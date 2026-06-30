@@ -563,6 +563,74 @@ def _clean_canvas_page(d: str, page_id: str) -> None:
         os.replace(tmp, cpath)
 
 
+# ── ④ 页面流程图（canvas.json["4"].flow，全局/平台无关：节点=页面，边=跳转）──
+
+def _load_canvas(d: str) -> dict:
+    cpath = os.path.join(_root(d), "canvas.json")
+    try:
+        with open(cpath, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    return {}
+
+
+def _save_canvas(d: str, data: dict) -> None:
+    cpath = os.path.join(_root(d), "canvas.json")
+    tmp = cpath + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, cpath)
+
+
+def _stage4_flow(canvas: dict) -> dict:
+    """取 canvas["4"].flow（缺则建空 {edges:[], entry:None}），返回可改的引用。"""
+    s4 = canvas.get("4")
+    if not isinstance(s4, dict):
+        s4 = canvas["4"] = {}
+    flow = s4.get("flow")
+    if not isinstance(flow, dict):
+        flow = s4["flow"] = {}
+    if not isinstance(flow.get("edges"), list):
+        flow["edges"] = []
+    flow.setdefault("entry", None)
+    return flow
+
+
+def cmd_flow(args) -> None:
+    """④ 页面流程图的边/入口管理（写 canvas.json["4"].flow，全局、平台无关）。"""
+    canvas = _load_canvas(args.dir)
+    flow = _stage4_flow(canvas)
+    act = args.action
+    if act == "add-edge":
+        label = args.label or ""
+        if not any(e.get("from") == args.frm and e.get("to") == args.to and e.get("label", "") == label
+                   for e in flow["edges"]):
+            flow["edges"].append({"from": args.frm, "to": args.to, "label": label})
+        _save_canvas(args.dir, canvas)
+        print(f"边已加：{args.frm} →（{label}）→ {args.to}")
+    elif act == "rm-edge":
+        before = len(flow["edges"])
+        flow["edges"] = [e for e in flow["edges"]
+                         if not (e.get("from") == args.frm and e.get("to") == args.to
+                                 and (args.label is None or e.get("label", "") == args.label))]
+        _save_canvas(args.dir, canvas)
+        print(f"删除 {before - len(flow['edges'])} 条边")
+    elif act == "set-entry":
+        flow["entry"] = args.id
+        _save_canvas(args.dir, canvas)
+        print(f"入口页设为 {args.id}")
+    elif act == "clear":
+        flow["edges"] = []
+        flow["entry"] = None
+        _save_canvas(args.dir, canvas)
+        print("已清空流程图（边 + 入口）")
+    elif act == "show":
+        print(json.dumps(flow, ensure_ascii=False, indent=2))
+
+
 def cmd_explore(args) -> None:
     _load(args.dir)  # 校验项目 + 自愈注册
     e = _load_explore(args.dir)
@@ -852,6 +920,23 @@ def main(argv: list[str]) -> int:
     ps.add_argument("--active-version", help="设为定稿版本（多版本里挑一个，⑥开发优先取用）")
     ps.add_argument("--platform", choices=["PC", "H5", "APP"], help="该版本对应的平台（配合 --add-version / --remove-version）")
     sp.set_defaults(fn=cmd_page)
+
+    # ④ 页面流程图：边/入口（写 canvas.json["4"].flow，全局、平台无关）
+    sp = sub.add_parser("flow", help='④ 页面流程图：边/入口管理（canvas.json["4"].flow）')
+    fsub = sp.add_subparsers(dest="action", required=True)
+    fa = fsub.add_parser("add-edge", help="加一条流程边 from→to（操作标注可选）")
+    fa.add_argument("--from", dest="frm", required=True, help="起点页面 id")
+    fa.add_argument("--to", required=True, help="终点页面 id")
+    fa.add_argument("--label", help="操作标注（如「点登录」）")
+    fr = fsub.add_parser("rm-edge", help="删流程边")
+    fr.add_argument("--from", dest="frm", required=True)
+    fr.add_argument("--to", required=True)
+    fr.add_argument("--label", help="只删该标注的边；不给则删 from→to 的全部")
+    fe = fsub.add_parser("set-entry", help="设入口页")
+    fe.add_argument("id", help="入口页面 id")
+    fsub.add_parser("clear", help="清空流程图（边 + 入口），重新生成前用")
+    fsub.add_parser("show", help="打印当前流程图 JSON")
+    sp.set_defaults(fn=cmd_flow)
 
     # explore：视觉探索（agent 写 Dribbble 参考 / 首图 / 风格总结）
     sp = sub.add_parser("explore")

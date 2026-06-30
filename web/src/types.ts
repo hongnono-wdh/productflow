@@ -216,10 +216,17 @@ export interface CanvasView {
   y: number
   z: number
 }
+export interface FlowEdge {
+  from: string
+  to: string
+  label?: string
+}
 export interface CanvasCell {
   view: CanvasView | null
   items: Record<string, { x: number; y: number }>
   notes: unknown[]
+  flow?: { edges: FlowEdge[]; entry?: string | null } // ④ 页面流程图：边 + 入口页（全局，平台无关）
+  flowItems?: Record<string, { x: number; y: number }> // ④ 流程图节点坐标（与平铺 items 分开）
 }
 export interface HeroGenLogEntry {
   mode?: string
