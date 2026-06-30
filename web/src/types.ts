@@ -220,6 +220,8 @@ export interface FlowEdge {
   from: string
   to: string
   label?: string
+  b1?: number // 三次贝塞尔控制点1 在基线 1/3 处「垂直于基线」的偏移量（弯曲量；0=直，undefined=默认弧）
+  b2?: number // 控制点2 在基线 2/3 处的垂直偏移量
 }
 export interface CanvasCell {
   view: CanvasView | null
