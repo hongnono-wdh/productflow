@@ -13,6 +13,20 @@ type MarkmapGlobal = {
   Markmap: { create: (sel: string, opts: Record<string, unknown>, root: unknown) => void }
 }
 
+// mermaid global (vendored UMD). Used to render ```mermaid blocks in .md 产物（尤其 ⑤ er.md 的 ER 图）为真图。
+type MermaidGlobal = {
+  initialize: (opts: Record<string, unknown>) => void
+  render: (id: string, code: string) => Promise<{ svg: string }>
+}
+// 抽出 markdown 里所有 ```mermaid 代码块的源码
+function extractMermaid(md: string): string[] {
+  const out: string[] = []
+  const re = /```mermaid\s*\n([\s\S]*?)```/g
+  let mch: RegExpExecArray | null
+  while ((mch = re.exec(md))) out.push(mch[1].trim())
+  return out
+}
+
 function OvImg({ file, label }: { file: string; label: string }) {
   const u = artUrl(file)
   return (
@@ -86,12 +100,37 @@ function Overview() {
 export function Modal() {
   const m = useModal()
   const [text, setText] = useState('')
+  const [mmSvgs, setMmSvgs] = useState<string[] | null>(null)  // 渲染好的 mermaid 图（null=无/纯文本）
+  const [showSrc, setShowSrc] = useState(false)
   useEffect(() => {
-    setText('')
+    setText(''); setMmSvgs(null); setShowSrc(false)
     if (m?.kind === 'artifact' && m.type !== 'image' && m.type !== 'mindmap') {
       fetch(m.url).then((r) => r.text()).then(setText).catch(() => setText('(加载失败)'))
     }
   }, [m])
+
+  // mermaid render：文本产物里若含 ```mermaid 块（如 ⑤ er.md 的 ER 图），渲染成真图
+  useEffect(() => {
+    if (m?.kind !== 'artifact' || m.type === 'image' || m.type === 'mindmap') return
+    const blocks = extractMermaid(text)
+    if (!blocks.length) { setMmSvgs(null); return }
+    let cancelled = false
+    ;(async () => {
+      await loadScript('/vendor/mermaid.min.js')
+      if (cancelled) return
+      const mermaid = (window as unknown as { mermaid: MermaidGlobal }).mermaid
+      mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose', er: { useMaxWidth: false } })
+      const svgs: string[] = []
+      for (let i = 0; i < blocks.length; i++) {
+        try {
+          const { svg } = await mermaid.render(`mmd-${i}-${text.length}`, blocks[i])
+          svgs.push(svg)
+        } catch { /* 单个块解析失败就跳过，不阻断其它块 */ }
+      }
+      if (!cancelled) setMmSvgs(svgs.length ? svgs : null)
+    })()
+    return () => { cancelled = true }
+  }, [m, text])
 
   // markmap render
   useEffect(() => {
@@ -134,7 +173,7 @@ export function Modal() {
   }, [])
 
   if (!m) return null
-  const wide = m.kind === 'artifact' && m.type === 'mindmap'
+  const wide = m.kind === 'artifact' && (m.type === 'mindmap' || !!mmSvgs)
   return (
     <div className="modal show" id="modal" onClick={(e) => { if (e.target === e.currentTarget) closeModal() }}>
       <div className={'box' + (wide ? ' wide' : '')}>
@@ -147,7 +186,20 @@ export function Modal() {
         <div id="modal-body" style={{ overflow: 'auto', display: 'flex', justifyContent: 'center' }}>
           {m.kind === 'artifact' && m.type === 'image' && <img className="full" src={m.url} />}
           {m.kind === 'artifact' && m.type === 'mindmap' && <svg id="mm-svg" />}
-          {m.kind === 'artifact' && m.type !== 'image' && m.type !== 'mindmap' && <pre>{text}</pre>}
+          {m.kind === 'artifact' && m.type !== 'image' && m.type !== 'mindmap' && (
+            mmSvgs
+              ? <div style={{ width: '100%', maxWidth: 1100 }}>
+                  {mmSvgs.map((svg, i) => (
+                    <div key={i} className="mermaid-box" style={{ display: 'flex', justifyContent: 'center', padding: '8px 0', overflow: 'auto' }}
+                      dangerouslySetInnerHTML={{ __html: svg }} />
+                  ))}
+                  <div style={{ textAlign: 'center', margin: '12px 0 2px' }}>
+                    <button className="btn ghost" onClick={() => setShowSrc((s) => !s)}>{showSrc ? '隐藏源码' : '查看源码'}</button>
+                  </div>
+                  {showSrc && <pre>{text}</pre>}
+                </div>
+              : <pre>{text}</pre>
+          )}
           {m.kind === 'overview' && <Overview />}
         </div>
       </div>

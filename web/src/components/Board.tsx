@@ -143,6 +143,7 @@ export function Board({ phase, state, stageExtra }: { phase: StatePhase; state: 
                 <li key={s.id}>
                   <span className={'dot ' + s.status} />
                   <span className={'st-title ' + s.status}>{s.title}</span>
+                  {s.status === 'skipped' && <span className="st-skip" title="本步经判断不适用本项目，已有意跳过（不是未完成）">跳过</span>}
                   <span className="hint mono" style={{ marginLeft: 'auto', color: 'var(--faint)', fontSize: 11 }}>
                     {s.id}
                   </span>
