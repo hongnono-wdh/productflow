@@ -216,19 +216,10 @@ export interface CanvasView {
   y: number
   z: number
 }
-export interface FlowEdge {
-  from: string
-  to: string
-  label?: string
-  b1?: number // 三次贝塞尔控制点1 在基线 1/3 处「垂直于基线」的偏移量（弯曲量；0=直，undefined=默认弧）
-  b2?: number // 控制点2 在基线 2/3 处的垂直偏移量
-}
 export interface CanvasCell {
   view: CanvasView | null
   items: Record<string, { x: number; y: number }>
   notes: unknown[]
-  flow?: { edges: FlowEdge[]; entry?: string | null } // ④ 页面流程图：边 + 入口页（全局，平台无关）
-  flowItems?: Record<string, { x: number; y: number }> // ④ 流程图节点坐标（与平铺 items 分开）
 }
 export interface HeroGenLogEntry {
   mode?: string

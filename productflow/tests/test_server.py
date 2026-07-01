@@ -310,24 +310,9 @@ class ServerTest(unittest.TestCase):
                               body={"stage": "3", "view": "grid", "items": {"a": 1}, "notes": ["n1"]})
         self.assertEqual(status, 200)
         self.assertTrue(body["ok"])
-        # GET ?stage=3 returns that stage's cell（含 ④ 流程图字段 flow/flowItems：POST 不带就保留默认空值）
+        # GET ?stage=3 returns that stage's cell（只存 view/items/notes；④ 架构图是独立 .mm.md 产物，不入 canvas.json）
         status, canvas = h.http(self.port, f"/p/{pid}/api/canvas?stage=3")
-        self.assertEqual(canvas, {"view": "grid", "items": {"a": 1}, "notes": ["n1"],
-                                  "flowItems": {}, "flow": {"edges": [], "entry": None}})
-
-    def test_canvas_post_preserves_flow(self):
-        # ④ 流程图：POST 带 flow 写入后，常规 save（不带 flow）不应覆盖掉它（前端拖动/缩放不丢边）
-        cp = h.create_project(self.port, "Canvas Flow", slug="canvas-flow")
-        pid = cp["id"]
-        h.http(self.port, f"/p/{pid}/api/canvas", method="POST",
-               body={"stage": "4", "view": None, "items": {}, "notes": [],
-                     "flow": {"edges": [{"from": "pg-a", "to": "pg-b", "label": "x"}], "entry": "pg-a"}})
-        h.http(self.port, f"/p/{pid}/api/canvas", method="POST",   # 常规 save，不带 flow
-               body={"stage": "4", "view": None, "items": {"page:pg-a": {"x": 1, "y": 2}}, "notes": []})
-        status, canvas = h.http(self.port, f"/p/{pid}/api/canvas?stage=4")
-        self.assertEqual(len(canvas["flow"]["edges"]), 1)                   # flow 被保留
-        self.assertEqual(canvas["flow"]["entry"], "pg-a")
-        self.assertEqual(canvas["items"], {"page:pg-a": {"x": 1, "y": 2}})  # items 正常更新
+        self.assertEqual(canvas, {"view": "grid", "items": {"a": 1}, "notes": ["n1"]})
 
     def test_canvas_per_stage_isolation(self):
         # 守 P0 覆盖写 bug：P3 与 P4 两块画布各自持久化、互不覆盖

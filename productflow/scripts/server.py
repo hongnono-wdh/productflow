@@ -1981,15 +1981,10 @@ class Handler(BaseHTTPRequestHandler):
                         cdata = {}
                 except (FileNotFoundError, json.JSONDecodeError):
                     cdata = {}
-                prev = cdata.get(stage) if isinstance(cdata.get(stage), dict) else {}
                 cdata[stage] = {
                     "view": data.get("view"),
                     "items": data.get("items") or {},
                     "notes": data.get("notes") or [],
-                    # flow（边/入口，agent 用 `pf_state flow` CLI 写）+ flowItems（流程图坐标，前端写）：
-                    # 带了就用、没带就保留原值——避免常规 save（拖动/缩放）覆盖掉 agent 写的流程图。
-                    "flowItems": data.get("flowItems") if isinstance(data.get("flowItems"), dict) else prev.get("flowItems", {}),
-                    "flow": data.get("flow") if isinstance(data.get("flow"), dict) else prev.get("flow", {"edges": [], "entry": None}),
                 }
                 _atomic_write_json(cpath, cdata)
             self._json({"ok": True})

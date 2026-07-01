@@ -366,11 +366,9 @@
   .page-card .cv-page-del { position: absolute; right: 8px; top: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(17,17,17,.55);
     border: none; display: flex !important; align-items: center; justify-content: center; font-size: 15px; line-height: 1; color: #fff; cursor: pointer; z-index: 3; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
   .page-card .cv-page-del:hover { background: #c2406a; }
-  /* ④ 流程图：＋连线 / 删除× 仅在 hover 卡片时浮现（不常驻挡内容）；都放卡内顶部，避免被 overflow:hidden 裁 */
-  .page-card .cv-page-del, .page-card .cv-flow-link { opacity: 0; transition: opacity .12s; }
-  .cv-item:hover .cv-page-del, .cv-item:hover .cv-flow-link { opacity: 1; }
-  .page-card .cv-flow-link { position: absolute; top: 8px; right: 40px; z-index: 6; background: #5470c6; color: #fff; font-size: 11px; font-weight: 600; line-height: 1.6; padding: 1px 8px; border-radius: 10px; cursor: pointer; user-select: none; }
-  .page-card .cv-flow-link.active { opacity: 1; background: #e8833a; }
+  /* ④ 删除× 仅在 hover 卡片时浮现（不常驻挡内容）；放卡内顶部，避免被 overflow:hidden 裁 */
+  .page-card .cv-page-del { opacity: 0; transition: opacity .12s; }
+  .cv-item:hover .cv-page-del { opacity: 1; }
 
   /* 页面地图（画布顶部占位带） */
   .cv-grouplabel { position: absolute; font-size: 12px; font-weight: 800; color: var(--ink); pointer-events: none; white-space: nowrap; display: flex; align-items: center; gap: 7px; }
