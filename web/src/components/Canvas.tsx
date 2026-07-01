@@ -30,10 +30,22 @@ type MarkmapGlobal = {
   Markmap: { create: (el: SVGElement, opts: Record<string, unknown>, root: unknown) => void }
 }
 
-// ④「架构图」模式：只读渲染 module-arch.mm.md 为树状思维导图（markmap 自带缩放/平移）。
+// ④「架构图」模式：只读渲染 module-arch.mm.md 为树状思维导图。
+// 缩放/平移不交给 markmap，改用和设计稿画板一致的自控 transform（滚轮=以光标为中心缩放、拖动=平移）：
+// 在**捕获阶段**拦截滚轮/指针并 stopPropagation，markmap 完全不参与交互，行为与 ③④ 画布统一。
 function ArchTree({ nonce }: { nonce: number }) {
   const svgRef = useRef<SVGSVGElement>(null)
+  const worldRef = useRef<HTMLDivElement>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const view = useRef({ x: 0, y: 0, z: 1 })
   const [state, setState] = useState<'loading' | 'empty' | 'ready'>('loading')
+
+  const applyT = () => {
+    const v = view.current
+    if (worldRef.current) worldRef.current.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.z})`
+  }
+
+  // 渲染 markmap（自带缩放/平移关掉，交给下面自控 transform）
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -54,15 +66,19 @@ function ArchTree({ nonce }: { nonce: number }) {
         mm.Markmap.create(
           svgRef.current,
           {
-            duration: 300,
+            duration: 0,
             maxWidth: 340,
             paddingX: 18,
             autoFit: true,
             initialExpandLevel: -1,
+            zoom: false,
+            pan: false,
             color: (n: { state?: { path?: string } }) => palette[(parseInt((n.state?.path || '0.0').split('.')[1]) || 0) % palette.length],
           },
           root,
         )
+        view.current = { x: 0, y: 0, z: 1 }
+        applyT()
         if (!cancelled) setState('ready')
       } catch {
         if (!cancelled) setState('empty')
@@ -70,9 +86,56 @@ function ArchTree({ nonce }: { nonce: number }) {
     })()
     return () => { cancelled = true }
   }, [nonce])
+
+  // 自控滚轮缩放 + 拖动平移（与设计稿画板同款手感）；捕获阶段拦截，markmap 不参与
+  useEffect(() => {
+    const box = boxRef.current
+    if (!box) return
+    let panning = false, sx = 0, sy = 0, ox = 0, oy = 0, captured = false
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      const r = box.getBoundingClientRect()
+      const cx = e.clientX - r.left, cy = e.clientY - r.top
+      const v = view.current
+      const z2 = Math.min(4, Math.max(0.1, v.z * Math.exp(-e.deltaY * 0.0018)))
+      const k = z2 / v.z
+      v.x = cx - (cx - v.x) * k
+      v.y = cy - (cy - v.y) * k
+      v.z = z2
+      applyT()
+    }
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return
+      e.stopPropagation()
+      panning = true; captured = false
+      sx = e.clientX; sy = e.clientY; ox = view.current.x; oy = view.current.y
+      box.style.cursor = 'grabbing'
+    }
+    const onMove = (e: PointerEvent) => {
+      if (!panning) return
+      if (!captured) { try { box.setPointerCapture(e.pointerId) } catch { /* noop */ } captured = true }
+      view.current.x = ox + (e.clientX - sx)
+      view.current.y = oy + (e.clientY - sy)
+      applyT()
+    }
+    const onUp = () => { panning = false; box.style.cursor = 'grab' }
+    box.addEventListener('wheel', onWheel, { passive: false, capture: true })
+    box.addEventListener('pointerdown', onDown, { capture: true })
+    box.addEventListener('pointermove', onMove)
+    box.addEventListener('pointerup', onUp)
+    return () => {
+      box.removeEventListener('wheel', onWheel, { capture: true } as EventListenerOptions)
+      box.removeEventListener('pointerdown', onDown, { capture: true } as EventListenerOptions)
+      box.removeEventListener('pointermove', onMove)
+      box.removeEventListener('pointerup', onUp)
+    }
+  }, [])
+
   return (
-    <div className="cv-arch" style={{ position: 'absolute', inset: 0 }}>
-      <svg ref={svgRef} style={{ width: '100%', height: '100%', display: state === 'ready' ? 'block' : 'none' }} />
+    <div ref={boxRef} className="cv-arch" style={{ position: 'absolute', inset: 0, overflow: 'hidden', cursor: 'grab' }}>
+      <div ref={worldRef} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', transformOrigin: '0 0' }}>
+        <svg ref={svgRef} style={{ width: '100%', height: '100%', display: state === 'ready' ? 'block' : 'none' }} />
+      </div>
       {state !== 'ready' && (
         <div className="cv-arch-empty" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 40, color: 'var(--dim)' }}>
           {state === 'loading'
