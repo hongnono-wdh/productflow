@@ -1,6 +1,6 @@
 ---
 name: productflow
-version: 2.22.0
+version: 2.23.0
 description: 完整互联网产品全自动生产操作台。启动 localhost 控制台 + 7 阶段流水线：市场调研 → 找参考 → 首图设计 → 页面设计 → 功能与数据设计(ER/数据层/接口) → 开发实现(前后端全栈 / 原生 App + 测试) → 部署上线（Web：CF Pages/Workers 或单机；iOS：TestFlight；Android：Google Play 内部测试；PC 桌面应用：Tauri 打包安装包/可选上架商店）。从落地页/官网/waitlist，到带数据库与后端的功能性 Web 应用，再到原生移动 App（iOS：SwiftUI+SwiftData / Android：Kotlin+Compose+Room）与 PC 桌面应用（Tauri）都能做（落地页只是最简单的一种）。只要用户想"做一个网站/Web 产品/应用/落地页/官网/waitlist/小工具"、"做一个 iOS App / Android 安卓 App / 原生移动应用"、"做一个 PC 桌面应用 / Windows / Mac 客户端"、"做一个带后端和数据库的产品"、"复刻某产品"、"从调研到上线"、提到 ProductFlow / 操作台 / landing page pipeline，或要求"启动产品项目"，就使用本 skill——即使他们没说出 skill 名字。
 ---
 
@@ -92,7 +92,7 @@ grep -qE '^[[:space:]]*export[[:space:]]+OPENAI_API_KEY=' ~/.config/openai/env 2
 | 阶段 | 视图形态 | 在里面做什么 |
 |------|----------|--------------|
 | ① 市场调研 | 面板 | 竞品分析、核心矛盾导图，**含产品需求 brief**（项目创建时没填，在这里写） |
-| ② 找参考 | 面板 | 收集 Dribbble 等参考图、登记、用户选稿 |
+| ② 找参考 | 面板 | 多来源（Dribbble 概念稿 + 落地页/网页画廊真实截图）收集参考图、登记、用户选稿 |
 | ③ 首图设计 | **画布** | 在无限画布上批量生图、摆放、对比多张首图方案 |
 | ④ 页面设计 | **画布** | 在无限画布上按「页面 × 平台」铺开各页面各端的设计稿 |
 | ⑤ 功能与数据 | 面板 | 模块清单、ER 图、数据层（Web 表结构 / iOS SwiftData `@Model` / Android Room `@Entity` / PC 桌面应用 SQLite 表结构）、接口契约（纯本地 App 无） |
@@ -150,7 +150,7 @@ $PF status                           # 总览
 | 阶段 | 手册 | 一句话 |
 |------|------|--------|
 | ① 市场调研 | `references/phase-1-research.md` | 写产品需求 brief → 竞品搜索（**官网只罗列网址、不整页截图**；APP 项目补抓商店官方截图）→ 实地浏览竞品分析（多竞品可并行，无并行能力则串行）→ **核心矛盾分析导图**（用户动作拆解+打点→真问题→傻瓜式路径，.mm.md 面板可交互渲染）→ 复刻要点报告（官网视觉参考留到③首图给参考图） |
-| ② 找参考 | `references/phase-2-refs.md` | 去 Dribbble 等收集参考截图 → 存 `artifacts/phase-2/refs/` → `explore add-ref` 逐张登记 → 用户选稿（selectedRefs） |
+| ② 找参考 | `references/phase-2-refs.md` | 多来源（Dribbble + 落地页/网页画廊 A1/A2）收集参考截图 → 存 `artifacts/phase-2/refs/` → `explore add-ref` 逐张登记 → 用户选稿（selectedRefs） |
 | ③ 首图设计 | `references/phase-3-hero.md` | 读 selectedRefs 总结风格 → openai-image-gen 批量多风格生图 → 存 `artifacts/phase-3/heroes/` → `explore add-hero` 逐张登记，**首图画布**上对比定稿 |
 | ④ 页面设计 | `references/phase-4-pages.md` | 三入口：直接生成（design-taste-frontend）/ 参考图改风格 / 画布（canvas-design）→ **页面画布**按页面×平台铺稿 → direction.md 定稿 |
 | ⑤ 功能与数据设计 | `references/phase-5-spec.md` | 模块清单 → ER 图 → 数据层（Web：SQLite DDL / iOS：SwiftData `@Model` / Android：Room `@Entity` / PC 桌面应用：SQLite DDL，同 Web）→ 接口契约（纯本地 App 无）→ 按 `references/templates.md` 先看平台、再按需选推荐预设（Web T1/T2/T3 或 iOS P-iOS / Android P-Android / PC 桌面应用 P-Desktop） |
