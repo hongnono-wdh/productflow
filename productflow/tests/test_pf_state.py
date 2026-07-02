@@ -761,5 +761,48 @@ class TestChoice(PfStateBase):
         self.assertIsNone(c.get("answer"))
 
 
+class TestArch(PfStateBase):
+    """④ 业务架构树：arch.json → `arch build` 确定性组装——图标由树中深度、父子由 parent 字段。"""
+
+    def _write_arch(self, data):
+        with open(os.path.join(self.dir, ".productflow", "arch.json"), "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+
+    def test_arch_build_icons_and_nesting(self):
+        self._write_arch({"product": "Wise App", "pages": [
+            {"id": "home", "name": "首页", "parent": None,
+             "modules": [{"name": "快捷操作", "features": ["Send", "Add"]}]},
+            {"id": "acct", "name": "币种账户详情", "parent": "home", "modules": []},
+            {"id": "quote", "name": "转账报价页", "parent": "home", "modules": []},
+            {"id": "confirm", "name": "转账确认页", "parent": "quote", "modules": []},
+            {"id": "me", "name": "我的", "parent": None, "modules": []},
+        ]})
+        self.run_ok(["arch", "build"])
+        mm = os.path.join(self.dir, ".productflow", "artifacts", "phase-4", "module-arch.mm.md")
+        self.assertTrue(os.path.isfile(mm))
+        md = open(mm, encoding="utf-8").read()
+        self.assertIn("## 🗂 首页", md)           # 顶层页 = 🗂 + ##
+        self.assertIn("## 🗂 我的", md)
+        self.assertIn("### 📄 币种账户详情", md)   # home 的子页 → 深一级 + 📄
+        self.assertIn("### 📄 转账报价页", md)
+        self.assertIn("#### 📄 转账确认页", md)     # quote 的子页 → 再深一级（父子嵌套生效）
+        self.assertIn("- 🧩 快捷操作", md)          # 模块 = 🧩
+        self.assertIn("  - Send", md)               # 功能点 = 缩进列表
+        self.assertIn("业务模块架构", json.dumps(read_state(self.dir), ensure_ascii=False))  # 已登记
+
+    def test_arch_build_dangling_parent_lifts_to_top(self):
+        # 父 id 指向不存在的页 → 提到顶层（不丢节点、不成环）
+        self._write_arch({"product": "P", "pages": [
+            {"id": "a", "name": "A页", "parent": "ghost", "modules": []},
+        ]})
+        self.run_ok(["arch", "build"])
+        md = open(os.path.join(self.dir, ".productflow", "artifacts", "phase-4", "module-arch.mm.md"), encoding="utf-8").read()
+        self.assertIn("## 🗂 A页", md)
+
+    def test_arch_build_missing_json_errors(self):
+        r = cli(["arch", "build"], self.home, project=self.dir)
+        self.assertNotEqual(r.returncode, 0)        # 无 arch.json → 非 0 退出（不静默）
+
+
 if __name__ == "__main__":
     unittest.main()

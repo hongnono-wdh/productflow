@@ -54,35 +54,38 @@ $PF page list   # 给用户/自己看占位带全貌
 python3 "$SKILL_DIR/scripts/pf_state.py" step 4 page-map --status done
 ```
 
-### 顺带：生成业务模块架构图（只读树）
+### 顺带：生成业务模块架构图（只读树）——**结构化 JSON + 代码组装**
 
-页面列出后，据每页内容 / 功能模块，**按页面视角**把每个页面内部的功能模块层层拆开，写成一棵**树状思维导图**——供操作台 ④「**架构图**」模式渲染（**只给人看**：不影响设计稿、不喂 ⑤/⑥；**全局一份、平台无关**——各平台展示不同，但项目业务只有一套）。
+供操作台 ④「**架构图**」模式渲染的一棵**带页面层级的信息架构树**（**只给人看**：不影响设计稿、不喂 ⑤/⑥；**全局一份、平台无关**）。
 
-产物是一个 markmap 大纲文件 `artifacts/phase-4/module-arch.mm.md`，层级：顶层 `#` = 产品名；每个**页面 / 主 Tab** 用 `##`；页面内的**功能模块**用 `###`；再细的**子功能**用无序列表 `-`（可继续缩进）。节点只放**业务模块名称（纯文字）**，不放图片 / 链接。示例（电商 App）：
+> ⚠️ **别自己手写 `.mm.md`**。经验教训：让 agent 直接手拼 markmap 大纲，结果总是把页面全平铺、还漏打类型图标。所以改成——**你只产出结构化数据（判对父子），markdown 的图标与父子嵌套交给代码确定性组装。**
 
-```markdown
-# 某电商 App · 业务模块架构
-## 首页
-### 快捷入口
-- 秒杀
-- 国补
-- 超市
-### 商品介绍 banner 模块
-### 推荐商品
-## 搜索页
-### 搜索框（历史 / 联想）
-### 结果列表（空态 / 筛选 / 排序）
-## 购物车
-## 我的
-```
+**两步走**：
 
-写完登记产物（前端「架构图」模式据此固定路径读取渲染）：
+1. **写结构化数据 `.productflow/arch.json`**：为**每个页面**判定 `parent`（父页面 id，用户从哪页下钻/点进才到它——依据每页 note 里「从X进入 / 属于X模块 / X流程第N步 / 底部Tab」等线索 + 产品常识；一级页面/入口页 `parent` 置 `null`，**别把所有页面都放顶层**）+ `modules`（页内模块，各含 `features`）：
 
-```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" --dir <项目> artifact 4 artifacts/phase-4/module-arch.mm.md --title "业务模块架构"
-```
+   ```json
+   {"product":"某电商 App","pages":[
+     {"id":"home","name":"首页","parent":null,"modules":[{"name":"快捷入口","features":["秒杀","国补","超市"]},{"name":"推荐商品","features":[]}]},
+     {"id":"detail","name":"商品详情页","parent":"home","modules":[{"name":"加入购物车","features":[]}]},
+     {"id":"cart","name":"购物车","parent":null,"modules":[]},
+     {"id":"checkout","name":"下单结算页","parent":"cart","modules":[]},
+     {"id":"me","name":"我的","parent":null,"modules":[]},
+     {"id":"orders","name":"我的订单","parent":"me","modules":[]}
+   ]}
+   ```
+   `id` 自取唯一短横线串；`parent` 必须引用某页 id 或 `null`；页面尽量都收进来。
 
-操作台 ④「架构图」模式也有「**让 Agent 生成业务架构**」按钮触发同一动作。重出直接覆盖同名文件再登记即可（前端会重取）。
+2. **代码组装 + 登记**（图标/嵌套由代码按位置自动打，你不用管）：
+
+   ```bash
+   python3 "$SKILL_DIR/scripts/pf_state.py" --dir <项目> arch build
+   ```
+   它读 `arch.json` → 写 `artifacts/phase-4/module-arch.mm.md`（**顶层页=🗂 / 子页=📄 / 模块=🧩** 由代码按树中深度自动打）→ 登记为 phase-4 产物。解析报错就修 JSON 再跑。
+
+> 前端渲染：`🗂/📄/🧩` 图标 + 按类型配色（一级页面深蓝 / 子页面浅蓝 / 模块琥珀 / 功能点灰 / 产品根黑）+ 字重递减；画布左上角有图例。
+
+操作台 ④「架构图」模式的「**让 Agent 生成业务架构**」按钮走**专职 agent**（`server.py:_auto_arch`）触发同一「写 arch.json → arch build」动作。重出直接重写 arch.json 再 `arch build` 即可（前端会重取）。
 
 ## Step 2: design-pages — 逐页设计
 
@@ -121,7 +124,7 @@ $PF page set <pg-id> --status designing
   - 产品 UI（dashboard、列表、表单、设置、admin、数据表格）→ **不要用** design-taste-frontend（它自身声明 out of scope），改用 `frontend-design` 或 `ui-ux-pro-max`。
   - 一个项目内两类页面并存时，分别按页面类型选工具。
 - **页面骨架来自 P1**：落地页骨架直接用 `replicate-notes.md` 的区块顺序；功能页骨架按该页职责自定。
-- 单页设计产物先落 `artifacts/phase-4/pages/<page>/`（如 HTML/CSS 初稿），下一步 platform-versions 再按平台登记版本。
+- 单页设计产物落 `artifacts/phase-4/`（主路径 = gpt-image-2 出图，**产物为 PNG**；若改用 design-taste-frontend / frontend-design 手写前端，则为 HTML/CSS），下一步 platform-versions 再按平台登记版本。⑥ 开发实现会按页截图与这些设计稿并排对比，PNG 设计稿能直接并排、最直观。
 
 > 某页设计完、但平台版本要在 Step 3 统一出时，本步可只把该页 `--status designing`，待版本登记后自动转 `done`（见下）。逐页推进，画布占位带实时反映"哪些在设计中、哪些已完成"。
 
@@ -138,9 +141,9 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 4 platform-versions --status activ
 每个页面要按目标平台分别出版本。范围以 Phase ① `scope` 选定的平台为准（用户勾了 PC/H5/APP 中的哪些就出哪些）。为某页的某平台产出版本文件后，用 `--add-version` + `--platform` 登记：
 
 ```bash
-$PF page set <pg-id> --add-version artifacts/phase-4/pages/home/home-pc.html  --platform PC
-$PF page set <pg-id> --add-version artifacts/phase-4/pages/home/home-h5.html  --platform H5
-$PF page set <pg-id> --add-version artifacts/phase-4/pages/home/home-app.html --platform APP
+$PF page set <pg-id> --add-version artifacts/phase-4/home-pc.png  --platform PC
+$PF page set <pg-id> --add-version artifacts/phase-4/home-h5.png  --platform H5
+$PF page set <pg-id> --add-version artifacts/phase-4/home-app.png --platform APP
 ```
 
 **`--platform` 用法（关键）**：

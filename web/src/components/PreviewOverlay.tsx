@@ -170,32 +170,52 @@ export function PreviewOverlay() {
   const hint =
     pv.mode === 'redraw'
       ? '框选要改的局部，每个框可单独写一句（框上序号点一下可编辑）；多块不同诉求会按区域逐块改。不框、只写下面一句 = 整图按这句改。结果作为新版本，原图保留。'
+      : pv.designFile
+      ? '左为 ④ 设计稿（只读对照），在右侧「实现」图上拖拽框选问题区域 → 填一句意见（可框多处）。发送后 Agent 知道「哪页、哪块、什么问题」。'
       : '拖拽框选有问题的区域 → 填一句意见（可框多处）。发送后 Agent 知道是「哪张图、哪块区域、什么问题」。'
+
+  // 圈选舞台（实现图 + 已画的框）。双栏对比时放右列，单图时独占。ref 只挂这一份。
+  const stageEl = (
+    <div className="pv-stage" id="pv-stage" ref={stageRef}>
+      <img id="pv-img" src={artUrl(pv.file)} alt="" />
+      <div id="pv-boxes">
+        {boxes.current.map((b, i) => {
+          const short = b.text.length > 18 ? b.text.slice(0, 18) + '…' : b.text
+          return (
+            <div key={i} className="pv-box" style={{ left: b.x * 100 + '%', top: b.y * 100 + '%', width: b.w * 100 + '%', height: b.h * 100 + '%' }}>
+              <span className="pvn" title={b.text || '点这里给这块写诉求'} onClick={() => { const t = prompt('这块区域要改成什么？', b.text || ''); if (t !== null) { boxes.current[i].text = t.trim(); force() } }}>{b.text ? `${i + 1}. ${short}` : `${i + 1} ✎`}</span>
+              <span className="pvx" title="删除" onClick={() => { boxes.current.splice(i, 1); force() }}>✕</span>
+            </div>
+          )
+        })}
+      </div>
+      <div id="pv-draft" className="pv-draft" ref={draftRef} />
+    </div>
+  )
 
   return (
     <div id="pv-overlay" className="show">
       <div className="pv-head">
-        <span id="pv-title">{(pv.mode === 'redraw' ? '编辑这张 · ' : '圈选反馈 · ') + pv.title}</span>
+        <span id="pv-title">{(pv.mode === 'redraw' ? '编辑这张 · ' : pv.designFile ? '设计 ↔ 实现对比 · ' : '圈选反馈 · ') + pv.title}</span>
         <span className="x" onClick={closePreview}>
           <IcX /> 关闭
         </span>
       </div>
       <div className="pv-wrap">
-        <div className="pv-stage" id="pv-stage" ref={stageRef}>
-          <img id="pv-img" src={artUrl(pv.file)} alt="" />
-          <div id="pv-boxes">
-            {boxes.current.map((b, i) => {
-              const short = b.text.length > 18 ? b.text.slice(0, 18) + '…' : b.text
-              return (
-                <div key={i} className="pv-box" style={{ left: b.x * 100 + '%', top: b.y * 100 + '%', width: b.w * 100 + '%', height: b.h * 100 + '%' }}>
-                  <span className="pvn" title={b.text || '点这里给这块写诉求'} onClick={() => { const t = prompt('这块区域要改成什么？', b.text || ''); if (t !== null) { boxes.current[i].text = t.trim(); force() } }}>{b.text ? `${i + 1}. ${short}` : `${i + 1} ✎`}</span>
-                  <span className="pvx" title="删除" onClick={() => { boxes.current.splice(i, 1); force() }}>✕</span>
-                </div>
-              )
-            })}
+        {pv.mode === 'feedback' && pv.designFile ? (
+          <div className="pv-compare">
+            <div className="pv-cmp-col">
+              <div className="pv-cmp-cap">🔒 {pv.designTitle || '设计稿'}（只读）</div>
+              <img className="pv-cmp-img" src={artUrl(pv.designFile)} alt="" />
+            </div>
+            <div className="pv-cmp-col">
+              <div className="pv-cmp-cap">✍️ 实现（可圈选）</div>
+              {stageEl}
+            </div>
           </div>
-          <div id="pv-draft" className="pv-draft" ref={draftRef} />
-        </div>
+        ) : (
+          stageEl
+        )}
       </div>
       <div className="pv-foot">
         <textarea id="pv-instr" className={'pv-instr' + (pv.mode === 'redraw' ? ' show' : '')} placeholder="写一句要改成什么…" value={instr} onChange={(e) => setInstr(e.target.value)} />

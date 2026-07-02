@@ -267,6 +267,18 @@ def cmd_status(args) -> None:
 def cmd_phase(args) -> None:
     s = _load(args.dir)
     ph = _phase(s, args.n)
+    # ⑥ 完工完整性闸：标 phase 6 done 前，④ 每个有设计稿的「页×平台」都要有带 page-id 的实现截图——
+    # 缺页要么补做、要么 `page set <id> --impl-skip "原因"` 显式豁免，杜绝「漏页还标完成」。--force 可越闸（留痕）。
+    if args.n == 6 and args.status == "done" and not getattr(args, "force", False):
+        _c, missing, _s = _impl_coverage(args.dir)
+        if missing:
+            lines = "\n".join(f"  - {m['name']}（{m['platform'] or '通用'}） id={m['id']}" for m in missing)
+            raise SystemExit(
+                f"⑥ 还有 {len(missing)} 个页面只有 ④ 设计稿、没有 ⑥ 实现截图，不能标 done：\n{lines}\n"
+                "→ 补做并 `artifact 6 <图> --page-id <id> --platform <PC|H5|APP>` 登记；"
+                "确实本阶段不做的页用 `page set <id> --impl-skip \"原因\"` 显式豁免；"
+                "或加 `--force` 强行标 done（不推荐，会留痕）。先跑 `impl-check` 看缺哪些。"
+            )
     # 每次（重新）进入本阶段 = 新「一代」：之后登记的产物都带这个版本号，
     # 这样重做后产物画廊一眼看出哪批是哪一版（老批留痕、可对比）。只在 pending/done→active 时 +1。
     if args.status == "active" and ph.get("status") != "active":
@@ -309,7 +321,14 @@ def cmd_artifact(args) -> None:
     # 重做后新登记的产物号 +1，老产物留痕——产物画廊据此分辨哪批是哪一版。未激活/老数据默认 v1。
     version = ph.get("gen") or 1
     ph["artifacts"] = [a for a in ph["artifacts"] if a["file"] != rel]
-    ph["artifacts"].append({"file": rel, "title": args.title, "type": atype, "ts": _now(), "version": version})
+    rec = {"file": rel, "title": args.title, "type": atype, "ts": _now(), "version": version}
+    # ⑥ 实现截图与 ④ 页面配对用：--page-id 关联某页（pages.json 的 pg-xxx）、--platform 标平台。
+    # 都可选；带上后操作台「成品预览」能把「④设计图 ↔ ⑥实现图」按页并排对比（P6-5）。
+    if getattr(args, "page_id", None):
+        rec["pageId"] = args.page_id
+    if getattr(args, "platform", None):
+        rec["platform"] = args.platform.upper()
+    ph["artifacts"].append(rec)
     s["log"].append({"ts": _now(), "msg": f"P{args.n} 产物：{args.title}（v{version}）"})
     _save(args.dir, s)
     print(f"registered {rel} (v{version})")
@@ -329,6 +348,74 @@ def cmd_artifact_rm(args) -> None:
     s["log"].append({"ts": _now(), "msg": f"P{args.n} 移除产物：{rel}"})
     _save(args.dir, s)
     print(f"unregistered {rel}" + ("" if args.keep_file else " (file deleted)"))
+
+
+def _build_arch_md(data: dict) -> str:
+    """把 arch.json（agent 产出的结构化页面树）**确定性地**组装成 markmap 大纲。
+    图标由树中位置推导（顶层页=🗂 / 嵌套子页=📄 / 模块=🧩）、页面父子由 parent 字段嵌套——
+    都由代码保证，不依赖 agent 手拼 markdown。agent 只需把每页的 parent 判对。"""
+    product = str(data.get("product") or "产品").strip()
+    pages = [p for p in (data.get("pages") or []) if isinstance(p, dict)]
+    by_id = {str(p.get("id") or "").strip(): p for p in pages if str(p.get("id") or "").strip()}
+    children: dict = {}
+    for p in pages:
+        par = p.get("parent")
+        par = str(par).strip() if par else ""
+        if par not in by_id:          # 悬空/无父 → 提到顶层
+            par = ""
+        children.setdefault(par, []).append(p)
+    lines = [f"# {product}"]
+    seen: set = set()
+
+    def emit(p: dict, depth: int) -> None:
+        pid = str(p.get("id") or "").strip()
+        if pid in seen:               # 防父子成环
+            return
+        seen.add(pid)
+        icon = "🗂" if depth <= 2 else "📄"   # 顶层页=一级/入口(🗂)，更深=子页(📄)
+        name = str(p.get("name") or "").strip()
+        if depth <= 6:
+            lines.append(f"{'#' * depth} {icon} {name}")
+        else:
+            lines.append(f"{'  ' * (depth - 7)}- {icon} {name}")   # 过深兜底转列表
+        for m in (p.get("modules") or []):
+            if not isinstance(m, dict):
+                continue
+            lines.append(f"- 🧩 {str(m.get('name') or '').strip()}")
+            for feat in (m.get("features") or []):
+                lines.append(f"  - {str(feat).strip()}")
+        for c in children.get(pid, []):
+            emit(c, depth + 1)
+
+    for top in children.get("", []):
+        emit(top, 2)
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def cmd_arch(args) -> None:
+    """④ 业务架构树：读 .productflow/arch.json（agent 产出的结构化页面树）→ 代码组装
+    module-arch.mm.md（类型图标 + 页面父子嵌套由代码保证正确）+ 登记为 phase-4 产物。"""
+    root = _root(args.dir)
+    ap = os.path.join(root, "arch.json")
+    try:
+        with open(ap, encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        raise SystemExit("找不到 .productflow/arch.json（先让 agent 写好结构化页面树再 build）")
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"arch.json 解析失败：{e}")
+    rel = "artifacts/phase-4/module-arch.mm.md"
+    os.makedirs(os.path.join(root, "artifacts", "phase-4"), exist_ok=True)
+    with open(os.path.join(root, rel), "w", encoding="utf-8") as f:
+        f.write(_build_arch_md(data))
+    s = _load(args.dir)               # 登记为 phase-4 产物（mindmap）
+    ph = _phase(s, 4)
+    version = ph.get("gen") or 1
+    ph["artifacts"] = [a for a in ph["artifacts"] if a["file"] != rel]
+    ph["artifacts"].append({"file": rel, "title": "业务模块架构", "type": "mindmap", "ts": _now(), "version": version})
+    s["log"].append({"ts": _now(), "msg": f"P4 产物：业务模块架构（v{version}）"})
+    _save(args.dir, s)
+    print(f"业务架构树已组装并登记：{len(data.get('pages') or [])} 页 → {rel}")
 
 
 def cmd_log(args) -> None:
@@ -417,6 +504,59 @@ def _save_pages(d: str, data: dict) -> None:
     os.replace(tmp, _pages_path(d))
 
 
+def _impl_coverage(d: str):
+    """⑥ 实现覆盖：比对「④ 有设计稿的 (页 × 平台)」vs「⑥ 带 page-id 的实现截图」。
+    返回 (covered, missing, skipped)——元素为 dict。无设计稿的页不参与（还没设计，不算 ⑥ 的账）；
+    页设了 implSkip（显式声明本阶段不实现）→ 整页计入 skipped、不算缺。
+    匹配：优先 (pageId, platform) 精确；截图没标 platform 时按页级兜底。"""
+    pages = _load_pages(d)["pages"]
+    s = _load(d)
+    ph6 = next((p for p in s.get("phases", []) if p.get("id") == 6), {})
+    impls = [a for a in ph6.get("artifacts", []) if a.get("type") == "image" and a.get("pageId")]
+    have_pp = {(a.get("pageId"), (a.get("platform") or "").upper()) for a in impls if a.get("platform")}
+    have_pg = {a.get("pageId") for a in impls if not a.get("platform")}  # 无平台标记 → 页级兜底
+    covered, missing, skipped = [], [], []
+    for p in pages:
+        vers = [v for v in p.get("versions", []) if isinstance(v, dict) and v.get("file")]
+        if not vers:
+            continue
+        if (p.get("implSkip") or "").strip():
+            skipped.append({"id": p["id"], "name": p["name"], "reason": p["implSkip"].strip()})
+            continue
+        plats: list = []
+        for v in vers:
+            pl = (v.get("platform") or "").upper()
+            if pl not in plats:
+                plats.append(pl)
+        for pl in plats:
+            row = {"id": p["id"], "name": p["name"], "platform": pl}
+            (covered if ((p["id"], pl) in have_pp or p["id"] in have_pg) else missing).append(row)
+    return covered, missing, skipped
+
+
+def cmd_impl_check(args) -> None:
+    covered, missing, skipped = _impl_coverage(args.dir)
+    if getattr(args, "json", False):
+        print(json.dumps({"covered": covered, "missing": missing, "skipped": skipped}, ensure_ascii=False))
+    else:
+        total = len(covered) + len(missing)
+        print(f"⑥ 实现覆盖校验：④ 设计稿共 {total} 个「页×平台」，已实现 {len(covered)}、缺 {len(missing)}、豁免 {len(skipped)}")
+        if missing:
+            print("❌ 缺实现（有 ④ 设计稿、无 ⑥ 带 page-id 的实现截图）：")
+            for m in missing:
+                print(f"   - {m['name']}（{m['platform'] or '通用'}）  id={m['id']}")
+        if skipped:
+            print("⏭ 已豁免（本阶段显式声明不实现）：")
+            for m in skipped:
+                print(f"   - {m['name']}：{m['reason']}")
+        if missing:
+            print("→ 补做并 `artifact 6 <图> --page-id <id> --platform <PC|H5|APP>` 登记；"
+                  "确实本阶段不做的页用 `page set <id> --impl-skip \"原因\"` 豁免。")
+        else:
+            print("✅ 全部覆盖或已豁免，通过。")
+    raise SystemExit(0 if not missing else 1)
+
+
 def cmd_page(args) -> None:
     _load(args.dir)  # 校验项目存在 + 注册表自愈
     data = _load_pages(args.dir)
@@ -465,6 +605,13 @@ def cmd_page(args) -> None:
         pg["group"] = args.group
     if args.note is not None:
         pg["note"] = args.note
+    if getattr(args, "impl_skip", None) is not None:
+        # ⑥ 覆盖校验豁免：声明该页本阶段不实现的原因；传空串清除豁免
+        r = args.impl_skip.strip()
+        if r:
+            pg["implSkip"] = r
+        else:
+            pg.pop("implSkip", None)
     if args.add_version:
         plat = (args.platform or "").upper() or None   # PC / H5 / APP，或不分平台
         # versions 元素为 {file, platform}，支持"每页 × 平台"多版本；按 (file,platform) 去重
@@ -796,7 +943,14 @@ def main(argv: list[str]) -> int:
     sp = sub.add_parser("phase")
     sp.add_argument("n", type=int)
     sp.add_argument("--status", required=True, choices=["pending", "active", "done"])
+    sp.add_argument("--force", action="store_true", help="越过 ⑥ 实现覆盖闸强行标 done（留痕，不推荐）")
     sp.set_defaults(fn=cmd_phase)
+
+    # ⑥ 实现覆盖校验：④ 每个有设计稿的「页×平台」是否都有带 page-id 的实现截图（缺页 → 退出码 1）
+    sp = sub.add_parser("impl-check", help="⑥ 校验：④ 设计稿页×平台是否都有带 page-id 的 ⑥ 实现截图；缺则非 0 退出")
+    sp.add_argument("n", type=int, nargs="?", default=6, help="阶段号（当前固定校验 ⑥，默认 6）")
+    sp.add_argument("--json", action="store_true", help="输出 JSON（covered/missing/skipped）")
+    sp.set_defaults(fn=cmd_impl_check)
 
     sp = sub.add_parser("step")
     sp.add_argument("n", type=int)
@@ -809,6 +963,8 @@ def main(argv: list[str]) -> int:
     sp.add_argument("file", help="path relative to .productflow/ (e.g. artifacts/phase-1/x.png)")
     sp.add_argument("--title", required=True)
     sp.add_argument("--type", default=None)
+    sp.add_argument("--page-id", dest="page_id", help="（⑥实现截图用）关联 ④ 的某个页面 id（pages.json 的 pg-xxx），供操作台按页配对「设计图↔实现图」")
+    sp.add_argument("--platform", choices=["PC", "H5", "APP"], help="（⑥实现截图用）该截图对应的平台，配合 --page-id 精确配对")
     sp.set_defaults(fn=cmd_artifact)
 
     sp = sub.add_parser("artifact-rm", help="撤销登记一个产物（默认连磁盘文件一起删；--keep-file 只撤销登记）")
@@ -816,6 +972,12 @@ def main(argv: list[str]) -> int:
     sp.add_argument("file", help="要移除的产物路径，相对 .productflow/（如 artifacts/phase-6/preview-home.png）")
     sp.add_argument("--keep-file", action="store_true", help="只从状态撤销登记，保留磁盘文件")
     sp.set_defaults(fn=cmd_artifact_rm)
+
+    # ④ 业务架构树：读 arch.json → 代码组装 module-arch.mm.md（图标+页面父子嵌套由代码保证）
+    sp = sub.add_parser("arch", help='④ 业务架构树：读 .productflow/arch.json → 组装并登记 module-arch.mm.md')
+    asub = sp.add_subparsers(dest="aaction", required=True)
+    asub.add_parser("build", help="从 arch.json 确定性组装带图标+父子嵌套的架构树并登记")
+    sp.set_defaults(fn=cmd_arch)
 
     sp = sub.add_parser("log")
     sp.add_argument("msg")
@@ -851,6 +1013,7 @@ def main(argv: list[str]) -> int:
     ps.add_argument("--remove-version", help="移除一个设计版本（保留页面占位；删到空自动退回 placeholder）")
     ps.add_argument("--active-version", help="设为定稿版本（多版本里挑一个，⑥开发优先取用）")
     ps.add_argument("--platform", choices=["PC", "H5", "APP"], help="该版本对应的平台（配合 --add-version / --remove-version）")
+    ps.add_argument("--impl-skip", dest="impl_skip", help="（⑥用）声明该页本阶段不实现的原因；写了则 ⑥ 覆盖校验豁免该页。传空串 '' 清除豁免")
     sp.set_defaults(fn=cmd_page)
 
     # explore：视觉探索（agent 写 Dribbble 参考 / 首图 / 风格总结）

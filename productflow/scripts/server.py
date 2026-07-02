@@ -708,6 +708,45 @@ def _auto_action(pf: str, phase: int, action: str, pid: str | None = None) -> No
     print(f"[action-{phase}-{action}] 结束", file=sys.stderr)
 
 
+def _auto_arch(pf: str, pid: str | None = None) -> None:
+    """④ 业务架构树**专职** agent（不搭 ④ 大 agent 的车，注意力只在这一件事上）。
+    只干语义活：判定每个页面的父页面 + 页内模块/功能点 → 写结构化 .productflow/arch.json →
+    跑 `pf_state arch build` 让**代码**确定性组装出带图标+父子嵌套的 module-arch.mm.md（图标/嵌套不靠 agent 手拼）。"""
+    project_root = os.path.dirname(pf)
+    ps = os.path.join(SKILL_DIR, "scripts", "pf_state.py")
+    prompt = (
+        "你是 ProductFlow 业务架构树 Agent（④ 专职），headless 运行，必须用工具实际完成，不要只输出描述。\n"
+        f"项目目录：{project_root}。**只做一件事：产出结构化的业务模块架构树数据，别改产品代码、别出图、别标 phase/step done、别自己手写 .mm.md。**\n"
+        f"第1步 读输入：`{project_root}/.productflow/pages.json`（页面清单，每页有 name + 功能 note）、"
+        f"`{project_root}/.productflow/brief.json` 与 artifacts/phase-1 的产品定位。\n"
+        "第2步 **判层级（你唯一要做的判断活）**：为**每个页面**定：\n"
+        "  · `parent`＝它的**父页面**——用户从哪个页面下钻/点击才进得到它（依据每页 note 里「从X进入 / 属于X模块 / X流程第N步 / 底部Tab」等线索 + 产品常识）。\n"
+        "    用户能直达的一级页面（底部 Tab、启动引导/登录这类入口）`parent` 置 null；\n"
+        "    子页面/详情/表单/流程步 `parent` 填其父页面的 id（如 转账确认.parent=转账报价页；币种账户详情.parent=多币种钱包首页；到账追踪.parent=转账报价页）。**别把所有页面都放顶层。**\n"
+        "  · `modules`＝该页内部功能模块，每个含 `features`（模块下的功能点）。\n"
+        "第3步 写 `.productflow/arch.json`（**只写这个 JSON**）——形如：\n"
+        '  {"product":"<产品名>","pages":[\n'
+        '    {"id":"home","name":"多币种钱包首页","parent":null,"modules":[{"name":"快捷操作","features":["Send","Add","Convert"]}]},\n'
+        '    {"id":"acct-detail","name":"币种账户详情","parent":"home","modules":[{"name":"余额","features":[]}]},\n'
+        '    {"id":"transfer-quote","name":"转账报价页","parent":"home","modules":[]},\n'
+        '    {"id":"transfer-confirm","name":"转账确认页","parent":"transfer-quote","modules":[]}\n'
+        "  ]}\n"
+        "  id 自取唯一短横线串；parent 必须引用某页 id 或 null；pages.json 里的页面尽量都收进来。\n"
+        f"第4步 **组装（图标+嵌套由代码保证，你别手拼）**：运行 `python3 {ps} --dir {project_root} arch build`"
+        "——它读 arch.json 生成并登记 module-arch.mm.md（顶层页=🗂/子页=📄/模块=🧩 由代码按位置自动打）。\n"
+        f"  组装若报 arch.json 解析失败，就修正 JSON 再跑一次 build。\n"
+        f"第5步 用 `python3 {ps} --dir {project_root} reply \"业务架构树已生成\"` 回一句。完成即停，别做别的。\n"
+    )
+    env = dict(os.environ)
+    _log_reset(pf, "stage-4", "生成业务架构树")
+    try:
+        _run_claude_streaming(pf, "stage-4", prompt, project_root, env=env, timeout=600)
+    finally:
+        with _STAGE_RUN_LOCK:
+            _STAGE_RUNNING.discard((pid, 4))
+    print("[arch] 结束", file=sys.stderr)
+
+
 def _auto_page_version(pf: str, page_id: str, platform: str) -> None:
     """后台 spawn claude 为④页面设计画布里某个页面生成指定平台的设计稿，并挂版本。
     沿用③定的视觉基调，按平台尺寸/交互习惯出图，存 artifacts/phase-4/ 并 page set --add-version。"""
@@ -2286,7 +2325,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"error": "bad_phase"}, 400)
                 return
             action = (data.get("action") or "").strip()
-            if phase != 6 or action != "preview":
+            # 允许两类聚焦动作：⑥「构建并预览」(preview) 与 ④「生成业务架构树」(gen-arch，专职 agent，不搭④大 agent 的车)
+            is_arch = phase == 4 and action == "gen-arch"
+            if not ((phase == 6 and action == "preview") or is_arch):
                 self._json({"error": "bad_action"}, 400)
                 return
             # 与「让 Agent 做本阶段」共用 (pid, phase) 并发护栏，别和整阶段 agent 双开互相覆盖
@@ -2295,11 +2336,13 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"error": "already_running"}, 409)
                     return
                 _STAGE_RUNNING.add((pid, phase))
+            note = "生成业务架构树" if is_arch else f"让 Agent 在阶段{phase}「{_STAGE_NAME[phase]}」构建并预览"
             with open(os.path.join(pf, "inbox.jsonl"), "a", encoding="utf-8") as f:
                 f.write(json.dumps({"ts": _now(), "from": "web", "type": "action-request",
-                                    "text": f"让 Agent 在阶段{phase}「{_STAGE_NAME[phase]}」构建并预览"},
-                                   ensure_ascii=False) + "\n")
-            threading.Thread(target=_auto_action, args=(pf, phase, action, pid), daemon=True).start()
+                                    "text": note}, ensure_ascii=False) + "\n")
+            target = _auto_arch if is_arch else _auto_action
+            args_t = (pf, pid) if is_arch else (pf, phase, action, pid)
+            threading.Thread(target=target, args=args_t, daemon=True).start()
             self._json({"ok": True})
             return
         if sub == "/api/deploy-creds":

@@ -13,6 +13,19 @@ const defView = () => ({ x: 60, y: 80, z: 0.7 })
 const heroImg = (file: string) => PF_BASE + '/artifacts/' + String(file).replace(/^artifacts\//, '')
 // ④ 业务模块架构图（只读树）产物的固定路径——agent 写这里，前端「架构图」模式取它渲染。
 const ARCH_MD = 'phase-4/module-arch.mm.md'
+// ④ 架构图节点「按类型」配色（非按深度——同类型同色，页面可在任意深度）：
+// 产品根 / 一级Tab·入口页(🗂) / 子页面(📄) / 业务模块(🧩) / 功能点(叶子)
+const ARCH_TYPE_COLOR: Record<string, string> = {
+  root: '#111111', tab: '#1e4fb8', page: '#3a6cc4', module: '#9a5e14', feature: '#7a7a7a',
+}
+// 类型背景色（浅底胶囊，渲染后在节点文字后插圆角 rect）——结构节点上底更醒目；功能点(叶子)不加底免杂乱
+const ARCH_BG: Record<string, string> = {
+  root: '#ece9e4', tab: '#dbe6fb', page: '#eaf1fd', module: '#f7ead2', feature: '',
+}
+// 类型字重（渲染后直接 inline 设到文字 div 上，不靠 markmap color 回调/CSS——它们只作用于连线/圆点，管不到 foreignObject 里的文字）
+const ARCH_WEIGHT: Record<string, string> = {
+  root: '800', tab: '700', page: '650', module: '550', feature: '400',
+}
 
 interface Card {
   id: string
@@ -62,7 +75,15 @@ function ArchTree({ nonce }: { nonce: number }) {
         const mm = (window as unknown as { markmap: MarkmapGlobal }).markmap
         const { root } = new mm.Transformer().transform(md)
         svgRef.current.innerHTML = ''
-        const palette = ['#111111', '#444444', '#777777', '#999999', '#555555', '#333333']
+        // 按「类型」分类（不是按深度——一个页面可在任意深度，故靠图标标记）：
+        // 🗂=一级Tab/入口页 · 📄=子页面 · 🧩=业务模块 · 无图标叶子=功能点 · 深度0=产品根
+        const typeOf = (n: { content?: string; state?: { path?: string } }) => {
+          const c = String(n?.content ?? '')
+          if (c.includes('🗂')) return 'tab'
+          if (c.includes('📄')) return 'page'
+          if (c.includes('🧩')) return 'module'
+          return String(n?.state?.path ?? '').split('.').length <= 1 ? 'root' : 'feature'
+        }
         mm.Markmap.create(
           svgRef.current,
           {
@@ -73,10 +94,43 @@ function ArchTree({ nonce }: { nonce: number }) {
             initialExpandLevel: -1,
             zoom: false,
             pan: false,
-            color: (n: { state?: { path?: string } }) => palette[(parseInt((n.state?.path || '0.0').split('.')[1]) || 0) % palette.length],
+            color: (n: { content?: string; state?: { path?: string } }) => ARCH_TYPE_COLOR[typeOf(n)],
           },
           root,
         )
+        // 再按类型给节点 <g> 打 class（字重）+ 在文字后插圆角背景 rect（醒目的类型底色）。
+        // rect 尺寸取 foreignObject 的 x/y/w/h + 内边距，插在 foreignObject 前=垫在文字底下；best-effort。
+        try {
+          const NS = 'http://www.w3.org/2000/svg'
+          svgRef.current.querySelectorAll('g.markmap-node').forEach((g) => {
+            const t = g.textContent || ''
+            const type = t.includes('🗂') ? 'tab' : t.includes('📄') ? 'page' : t.includes('🧩') ? 'module'
+              : g.getAttribute('data-depth') === '0' ? 'root' : 'feature'
+            g.classList.add('arch-' + type)
+            const fo = g.querySelector('foreignObject')
+            if (fo) {
+              // 文字配色 + 字重：直接 inline !important 写到 foreignObject 里的文字元素上
+              // （markmap 的 color 回调/自带样式只作用于连线和圆点，管不到这里的文字）
+              fo.querySelectorAll('div, p, span, a, code').forEach((el) => {
+                const s = (el as HTMLElement).style
+                s.setProperty('color', ARCH_TYPE_COLOR[type], 'important')
+                s.setProperty('font-weight', ARCH_WEIGHT[type], 'important')
+              })
+              // 背景胶囊：在文字后插圆角 rect（结构节点才上底；功能点无底）
+              const bg = ARCH_BG[type]
+              if (bg) {
+                const x = parseFloat(fo.getAttribute('x') || '0'), y = parseFloat(fo.getAttribute('y') || '0')
+                const w = parseFloat(fo.getAttribute('width') || '0'), h = parseFloat(fo.getAttribute('height') || '0')
+                const px = 7, py = 1.5
+                const rect = document.createElementNS(NS, 'rect')
+                rect.setAttribute('x', String(x - px)); rect.setAttribute('y', String(y - py))
+                rect.setAttribute('width', String(w + px * 2)); rect.setAttribute('height', String(h + py * 2))
+                rect.setAttribute('rx', '7'); rect.setAttribute('fill', bg)
+                g.insertBefore(rect, fo)
+              }
+            }
+          })
+        } catch { /* noop */ }
         view.current = { x: 0, y: 0, z: 1 }
         applyT()
         if (!cancelled) setState('ready')
@@ -141,6 +195,13 @@ function ArchTree({ nonce }: { nonce: number }) {
           {state === 'loading'
             ? '加载业务架构…'
             : '还没有业务架构图 —— 点上方「让 Agent 生成业务架构」，Agent 会读页面地图，按页面视角把每页的功能模块层层拆成一棵只读的树。'}
+        </div>
+      )}
+      {state === 'ready' && (
+        <div className="cv-arch-legend">
+          {([['tab', '🗂 一级页面'], ['page', '📄 子页面'], ['module', '🧩 业务模块'], ['feature', '· 功能点']] as const).map(([k, label]) => (
+            <span key={k} style={{ color: ARCH_TYPE_COLOR[k] }}><i style={{ background: ARCH_BG[k] || '#fff', borderColor: ARCH_TYPE_COLOR[k] }} />{label}</span>
+          ))}
         </div>
       )}
     </div>
@@ -480,7 +541,10 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
     if (busy) { toast('Agent 正在跑，稍等'); return }
     if (!pages.length) { toast('先「让 Agent 列出页面」'); return }
     setPending('arch')
-    post('/api/run-stage', { phase: 4, instruction: "【只做一件事：生成业务模块架构图（树状思维导图），别重做页面、别出图、别标 phase/step done】。读页面地图（pages.json 的页面名 + 功能 note）与产品定位，**按页面视角**把每个页面内部的功能模块层层拆开，写成一份 markmap 大纲文件 `artifacts/phase-4/module-arch.mm.md`：顶层 `#` = 产品名；每个页面/主 Tab 用 `##`；页面内的功能模块用 `###`；再细的子功能用无序列表 `-`（可再缩进）。示例：`## 首页` 下 `### 快捷入口` 下 `- 秒杀` `- 国补` `- 超市`，再 `### 商品介绍 banner 模块` `### 推荐商品`；`## 搜索页` …；`## 购物车` …；`## 我的` …。**全局一份、平台无关**（各平台展示不同，但项目业务只有一套）。节点只放**业务模块名称（纯文字）**，别放图片/链接。写完 `artifact 4 artifacts/phase-4/module-arch.mm.md --title \"业务模块架构\"` 登记。完成即停。" }).then((r) => { if (!r.ok) { if (r.status === 409) toast('Agent 已在进行中'); setPending(null) } }).catch(() => setPending(null))
+    // 专职 agent（服务端 _auto_arch）：判定页面父子 + 模块 → 写 arch.json → `pf_state arch build` 由代码组装带图标+嵌套的树。
+    // 不走 run-stage 大 agent，避免规则被稀释；prompt 在服务端。
+    post('/api/run-action', { phase: 4, action: 'gen-arch' })
+      .then((r) => { if (!r.ok) { if (r.status === 409) toast('Agent 已在进行中'); setPending(null) } }).catch(() => setPending(null))
     toast('已让 Agent 生成业务架构（完成后在「架构图」里看到树）')
   }
   const tidyPages = () => {

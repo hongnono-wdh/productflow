@@ -61,6 +61,8 @@ export interface Artifact {
   type: string
   ts?: string | number
   version?: number
+  pageId?: string // ⑥ 实现截图关联的 ④ 页面 id（pg-xxx），用于「设计图↔实现图」按页配对
+  platform?: string // ⑥ 实现截图对应平台（PC/H5/APP）
 }
 export interface StatePhase {
   id: number
@@ -205,6 +207,7 @@ export interface Page {
   status?: string
   versions?: PageVersion[]
   activeVersion?: string
+  implSkip?: string // ⑥ 显式声明本阶段不实现的原因（有值 → 覆盖校验豁免、占位显示「本阶段不实现」而非「待补」）
 }
 export interface PagesPayload {
   pages: Page[]

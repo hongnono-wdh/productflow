@@ -83,12 +83,13 @@ export function useModal(): ModalState {
 
 // ── Preview / redraw 圈选 overlay ──
 export type PreviewState =
-  | { mode: 'feedback'; file: string; title: string }
+  | { mode: 'feedback'; file: string; title: string; designFile?: string; designTitle?: string }
   | { mode: 'redraw'; file: string; title: string; stage: number | null; pageId: string | null; platform: string }
   | null
 const previewSlice = new Slice<PreviewState>(null)
-export function openPreview(file: string, title: string): void {
-  previewSlice.set({ mode: 'feedback', file, title: title || '成品预览' })
+// designFile/designTitle：④ 设计稿（只读对照）——传了则弹窗左右双栏「设计图 ↔ 实现图」放大对比，右侧实现图仍可圈选。
+export function openPreview(file: string, title: string, designFile?: string, designTitle?: string): void {
+  previewSlice.set({ mode: 'feedback', file, title: title || '成品预览', designFile, designTitle })
 }
 export function openRedraw(file: string, title: string, stage: number | null, pageId: string | null, platform: string): void {
   previewSlice.set({ mode: 'redraw', file, title: title || '设计稿', stage, pageId: pageId || null, platform: platform || '' })
