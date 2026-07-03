@@ -229,7 +229,11 @@ python3 "$SKILL_DIR/scripts/fidelity_diff.py" --design artifacts/phase-4/<页设
 ```
 差异比例只作「疑似大偏差」软告警，**绝不作 pass/fail**。
 
-**第 3 层 · DOM/文本断言（正交硬 gate）**：见测试步——关键文案/必需组件/ER 字段落地用代码断言（专题 C4）。
+**第 3 层 · DOM/文本断言（正交硬 gate，专题 C4）**：像素/LLM 都抓不到的**可枚举确定性项**用代码断言，落成 E2E 套件里的**可复跑测试**（不是临时脚本），并入 ⑥ 的 integration-test（无后端项目）或 ⑦ 测试（涉后端项目）：
+- **关键文案存在**：Web `expect(page.getByText(...))` / iOS XCUITest `staticTexts` / Android Compose `onNodeWithText`。
+- **spec.components 声明的组件已渲染**：给组件加稳定标识（Web `data-comp`/id、iOS `accessibilityIdentifier`、Android `Modifier.testTag`）后断言存在。
+- **必需区块存在 + ER 字段落到 UI**：表单字段/列表项对应 ⑤ 的实体字段，断言可见。
+视觉裁判管「像不像」、断言管「全不全/对不对」，分工正交。
 
 > 判「能不能 done」的是**第 1 层分档 + 第 3 层断言**；第 2 层只给证据。3 轮自纠（专题 C5）在五期加；当前先立起「裁判 + 证据 + 断言」。
 
