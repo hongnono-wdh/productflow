@@ -1147,6 +1147,126 @@ def cmd_product_key(args) -> None:
         print("已清空第三方 key 需求")
 
 
+# ── design-spec：还原度脊椎（贯穿 ②③④⑤⑥ 的结构化视觉规格）。独立于 state.json ──
+
+def _spec_path(d: str) -> str:
+    return os.path.join(_root(d), "design-spec.json")
+
+
+def _spec_skeleton() -> dict:
+    return {"v": 1, "componentLib": {}, "tokens": {}, "pages": [], "provenance": {}}
+
+
+def _load_spec(d: str) -> dict:
+    """读 design-spec.json；缺文件/损坏 → 空骨架（老项目向后兼容，不报错）。"""
+    try:
+        with open(_spec_path(d), encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                for k, v in _spec_skeleton().items():
+                    data.setdefault(k, v)
+                return data
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    return _spec_skeleton()
+
+
+def _save_spec(d: str, data: dict) -> None:
+    data["updated"] = _now()
+    tmp = _spec_path(d) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, _spec_path(d))
+
+
+def _deep_merge(dst: dict, src: dict) -> dict:
+    """把 src 深合并进 dst（dict 递归，其余覆盖）。"""
+    for k, v in src.items():
+        if isinstance(v, dict) and isinstance(dst.get(k), dict):
+            _deep_merge(dst[k], v)
+        else:
+            dst[k] = v
+    return dst
+
+
+def _set_by_path(tree: dict, path: str, value) -> None:
+    """按点分 path 在嵌套 dict 里设值（如 color.action.primary）。"""
+    parts = path.split(".")
+    node = tree
+    for seg in parts[:-1]:
+        nxt = node.get(seg)
+        if not isinstance(nxt, dict):
+            nxt = {}
+            node[seg] = nxt
+        node = nxt
+    node[parts[-1]] = value
+
+
+def cmd_spec(args) -> None:
+    _load(args.dir)  # 校验项目存在
+    spec = _load_spec(args.dir)
+    act = args.saction
+
+    if act == "show":
+        print(json.dumps(spec, ensure_ascii=False, indent=2))
+        return
+
+    if act == "set-lib":
+        entry = {"lib": args.lib}
+        if args.theme is not None:
+            entry["theme"] = args.theme
+        if args.catalog is not None:
+            entry["catalog"] = args.catalog
+        spec["componentLib"][args.platform] = entry
+
+    elif act == "set-token":
+        rec = {"$value": ("{" + args.value + "}") if args.ref else args.value}
+        if args.type:
+            rec["$type"] = args.type
+        _set_by_path(spec["tokens"], args.path, rec)
+
+    elif act == "set-tokens":
+        try:
+            with open(args.file, encoding="utf-8") as f:
+                incoming = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+            raise SystemExit(f"读 tokens 文件失败：{e}")
+        if not isinstance(incoming, dict):
+            raise SystemExit("tokens 文件应是一个 JSON 对象")
+        if isinstance(incoming.get("tokens"), dict):
+            incoming = incoming["tokens"]
+        _deep_merge(spec["tokens"], incoming)
+
+    elif act == "set-page":
+        pg = next((p for p in spec["pages"] if p.get("id") == args.id), None)
+        if pg is None:
+            pg = {"id": args.id}
+            spec["pages"].append(pg)
+        if args.type:
+            pg["type"] = args.type
+        for c in (args.component or []):
+            slot, lib, variant = (c.split(":", 2) + ["", ""])[:3]
+            comps = [x for x in pg.get("components", []) if x.get("slot") != slot]
+            comp = {"slot": slot, "lib": lib}
+            if variant:
+                comp["variant"] = variant
+            comps.append(comp)
+            pg["components"] = comps
+        for stt in (args.state or []):
+            comp, _sep, states = stt.partition(":")
+            pg.setdefault("states", {})[comp] = [x for x in states.split(",") if x]
+        for a in (args.asset or []):
+            slot, gen, fpath = (a.split(":", 2) + ["", ""])[:3]
+            assets = [x for x in pg.get("assets", []) if x.get("slot") != slot]
+            assets.append({"slot": slot, "gen": gen, "file": fpath})
+            pg["assets"] = assets
+    else:
+        raise SystemExit(f"未知 spec 动作：{act}")
+
+    _save_spec(args.dir, spec)
+    print(f"✅ spec {act}")
+
+
 def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(prog="pf_state", description="ProductFlow pipeline state")
     # 默认取环境变量 PF_PROJECT（启动时 export 一次，全程命令免写 --dir，避免落错目录）；都没有才退到 cwd
@@ -1355,6 +1475,30 @@ def main(argv: list[str]) -> int:
     bs.add_argument("--scope", help="输出范围")
     bsub.add_parser("done-request", help="标记请求已处理")
     sp.set_defaults(fn=cmd_brief)
+
+    # spec：design-spec.json 还原度脊椎（token/组件库/每页规格；②③④⑤ 写、⑥ 读+编译）
+    sp = sub.add_parser("spec", help="design-spec：还原度脊椎（组件库/token/每页组件+状态）")
+    ssub = sp.add_subparsers(dest="saction", required=True)
+    ssub.add_parser("show", help="打印 design-spec.json")
+    sl = ssub.add_parser("set-lib", help="锁定某平台组件库")
+    sl.add_argument("--platform", required=True, choices=["PC", "H5", "APP"])
+    sl.add_argument("--lib", required=True, help="组件库，如 shadcn/ui + tailwind")
+    sl.add_argument("--theme", help="主题名")
+    sl.add_argument("--catalog", help="组件目录文件路径（相对 .productflow/）")
+    stk = ssub.add_parser("set-token", help="设一个 token（点分 path，如 color.action.primary）")
+    stk.add_argument("path", help="token 路径，如 color.action.primary")
+    stk.add_argument("--value", required=True, help="值（#3498db / 16px），或 --ref 时给别名路径")
+    stk.add_argument("--type", help="$type：color/dimension/fontFamily/shadow …")
+    stk.add_argument("--ref", action="store_true", help="value 为别名引用（存成 {value}）")
+    stks = ssub.add_parser("set-tokens", help="从 JSON 文件批量合并 token（②萃取草案用）")
+    stks.add_argument("--file", required=True, help='tokens JSON（tokens 子树或 {"tokens":{…}}）')
+    ssp = ssub.add_parser("set-page", help="设某页规格：类型/组件映射/状态/素材")
+    ssp.add_argument("id", help="页面 id（对齐 pages.json 的 pg-xxx）")
+    ssp.add_argument("--type", choices=["product", "marketing"])
+    ssp.add_argument("--component", action="append", help="slot:lib:variant，可多次（同 slot 覆盖）")
+    ssp.add_argument("--state", action="append", help="comp:s1,s2,… 可多次")
+    ssp.add_argument("--asset", action="append", help="slot:gen:file，可多次（营销页素材）")
+    sp.set_defaults(fn=cmd_spec)
 
     # meta：改项目显示名（向导重入时「创建项目」步可改名，slug/目录不变）
     sp = sub.add_parser("meta")
