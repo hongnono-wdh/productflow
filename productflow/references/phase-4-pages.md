@@ -227,7 +227,17 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 4 finalize-direction --status acti
      --state "hero.cta:default,hover,focus,disabled,loading" --state "list:default,empty,loading"
    ```
 
-（营销页的骨架组件 + 视觉素材见专题 B5 / 下一版手册补；数据态由 ⑤ 补，见 phase-5。移动端版本不要 hover 态——按平台裁剪。）
+4. **营销页专属（`type=marketing`，专题 B5 · 已定「骨架组件化 + 只生素材」）**：营销/落地页**不整页生图**——排版/CTA/栅格/间距同样用组件 + token（骨架组件化），只把**独特视觉素材**（hero 大图、背景纹理、氛围图）交 gpt-image 生成，再嵌进组件骨架。素材登记进 design-spec：
+   ```bash
+   # 生成独立视觉素材（prompt 收窄：只出素材、非整页 UI）
+   python3 "$GEN" --prompt "<素材描述>, 独立视觉素材, 纯色/透明背景, 无 UI 控件/无文字/无按钮, 单一主体" --size <按用途> --model gpt-image-2 --out-dir artifacts/phase-4
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-page <pg-id> --type marketing \
+     --component "hero:Hero:default" --component "cta:Button:primary" \
+     --asset "hero.bg:gpt-image:artifacts/phase-4/<素材文件>.png"
+   ```
+   好处：改文案不用重生图、可 A/B、token 不漂移、不遗传「AI 临摹整页」的还原度病（这是 v2 推翻 v1「营销页整页生图」的落点）。
+
+（数据态由 ⑤ 补，见 phase-5。移动端版本不要 hover 态——按平台裁剪。）
 
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" artifact 4 artifacts/phase-4/direction.md --title "Design direction (final)"
