@@ -1011,6 +1011,20 @@ class TestSpec(PfStateBase):
         r = cli(["spec", "check", "--strict"], self.home, project=self.dir)
         self.assertEqual(r.returncode, 1)
 
+    def test_phase6_fidelity_gate(self):
+        # design-spec 有 type=product 页、无裁判 → phase 6 done 被拒
+        self.run_ok(["spec", "set-page", "pgx", "--type", "product"])
+        r = cli(["phase", "6", "--status", "done"], self.home, project=self.dir)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("还原度裁判", r.stdout + r.stderr)
+        # 出 verdict==pass 的 fidelity json → 通过
+        fid_dir = os.path.join(self.dir, ".productflow", "artifacts", "phase-6")
+        os.makedirs(fid_dir, exist_ok=True)
+        with open(os.path.join(fid_dir, "fidelity-x.json"), "w", encoding="utf-8") as f:
+            f.write('{"page":"pgx","verdict":"pass"}')
+        r = cli(["phase", "6", "--status", "done"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
