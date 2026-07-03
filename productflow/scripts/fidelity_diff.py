@@ -75,6 +75,23 @@ def diff(design_path, impl_path, out_path):
     return {"diff_ratio": n / total if total else 0.0, "out": out_path, "engine": engine}
 
 
+_SEV = {"minor": 1, "major": 3, "blocker": 9}
+
+
+def severity_score(diffs):
+    """差异清单严重度总分（minor=1 / major=3 / blocker=9）。"""
+    return sum(_SEV.get((d or {}).get("severity", "minor"), 1) for d in (diffs or []))
+
+
+def improved(prev_diffs, new_diffs):
+    """自纠护栏(b)：新一轮相对上一轮是否「确有改进」——严重度总分下降，或同分但条数更少。
+    未改进 → False（应回退上一版、停止自纠，专题 C5）。"""
+    ps, ns = severity_score(prev_diffs), severity_score(new_diffs)
+    if ns != ps:
+        return ns < ps
+    return len(new_diffs or []) < len(prev_diffs or [])
+
+
 def main(argv):
     p = argparse.ArgumentParser(prog="fidelity_diff", description="设计稿↔实现 差异图（软证据，不 gate）")
     p.add_argument("--design", required=True, help="④ 设计稿图")
