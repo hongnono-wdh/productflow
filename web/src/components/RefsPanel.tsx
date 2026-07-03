@@ -260,9 +260,9 @@ export function RefsPanel() {
         🖼️ 把图片拖到这里，或在本页 ⌘/Ctrl+V 粘贴 —— 手动加参考（加速 & 注入你的品味）
       </div>
       {collecting && <div className="wz-aibox" style={{ marginTop: 10 }}>✦ Agent 正在打开并采集你贴的链接…</div>}
-      {searchFailed && (
+      {searchFailed && !pe.refs.length && (
         <div className="wz-aibox" style={{ marginTop: 12, borderColor: '#e0b4b4', background: '#fdf4f4', color: '#b3403a' }}>
-          ❌ 访问失败 / 没拿到参考（可能 Dribbble 打不开或被拦截）。点上面「找参考」重试即可。
+          ❌ 没拿到参考（可能超时、或来源反爬 / 限流）。点上面「找参考」重试即可。
         </div>
       )}
       {pe.refs.length ? (

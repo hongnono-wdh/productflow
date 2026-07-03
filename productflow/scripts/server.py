@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """ProductFlow global console server. Serves all registered projects from ~/.productflow/."""
 
+from __future__ import annotations
+
 import argparse
 import datetime as _dt
 import json
@@ -456,7 +458,7 @@ def _p8_path(pid: str) -> str:
 def _write_p8(pid: str, content: str) -> str:
     """把粘贴进来的 App Store Connect .p8 私钥（多行 PEM）单独落成文件（600）并返回路径。
     .p8 含换行，不能塞进 .env（_save_deploy_creds 会把换行压成空格而损坏 PEM），故独立存放。
-    返回的路径写入 ASC_KEY_PATH 凭证，⑦部署 agent 据此取用。非法 id / 空内容 → ""。"""
+    返回的路径写入 ASC_KEY_PATH 凭证，⑧部署 agent 据此取用。非法 id / 空内容 → ""。"""
     if not ID_RE.match(pid or ""):
         return ""
     content = (content or "").strip()
@@ -539,26 +541,27 @@ def _auto_research(pf: str, instruction: str = "") -> None:
 
 # 面板阶段（④页面设计交给画布，这里给 ⑤⑥⑦）的「让 Agent 做本阶段」配置
 _STAGE_DOC = {4: "phase-4-pages.md", 5: "phase-5-spec.md",
-              6: "phase-6-implement.md", 7: "phase-7-deploy.md"}
-_STAGE_NAME = {4: "页面设计", 5: "功能与数据设计", 6: "开发实现", 7: "部署上线"}
+              6: "phase-6-frontend.md", 7: "phase-7-backend.md", 8: "phase-8-deploy.md"}
+_STAGE_NAME = {4: "页面设计", 5: "功能与数据设计", 6: "前端实现", 7: "后端实现 · 测试", 8: "部署上线"}
 _STAGE_STEPS = {
     4: "page-map / design-pages / platform-versions / finalize-direction",
     5: "module-list / er-diagram / schema-ddl / api-contract / pick-template",
-    6: "scaffold / frontend / backend / testing / api-docs",
-    7: "pick-target / deploy / smoke-test / handoff-report",
+    6: "scaffold / frontend",
+    7: "backend / unit-test / integration-test / api-docs",
+    8: "pick-target / deploy / smoke-test / handoff-report",
 }
 # 各阶段典型的「该让用户拍板」决策点——提示 Agent 用 choice ask 抛到网页
 _STAGE_DECISION = {
     5: "选开发模板（pick-template）时，用 choice ask 抛 T1/T2/T3 让用户点选后再继续。",
-    7: "选部署目标（pick-target）时用 choice ask 抛 本机/Cloudflare/服务器 + Docker/systemd 让用户点选。"
-       "部署凭证（SSH 地址/用户/端口/token 等）由用户在⑦的「凭证」表单填好、已作为环境变量注入你的运行环境，"
+    8: "选部署目标（pick-target）时用 choice ask 抛 本机/Cloudflare/服务器 + Docker/systemd 让用户点选。"
+       "部署凭证（SSH 地址/用户/端口/token 等）由用户在⑧的「凭证」表单填好、已作为环境变量注入你的运行环境，"
        "直接用即可（缺什么再用 choice ask 或 CLI 让用户补，别瞎猜）。",
 }
 
 
 def _stage_timeout(phase: int) -> int:
-    """单轮墙钟上限：⑥开发实现/⑦部署是长循环，给足 45 分钟；不够会自动续跑下一轮。其余 30 分钟。"""
-    return {6: 2700, 7: 2700}.get(phase, 1800)
+    """单轮墙钟上限：⑥前端/⑦后端·测试/⑧部署是长循环，给足 45 分钟；不够会自动续跑下一轮。其余 30 分钟。"""
+    return {6: 2700, 7: 2700, 8: 2700}.get(phase, 1800)
 
 
 def _phase_node(pf: str, phase: int) -> dict | None:
@@ -583,7 +586,7 @@ def _stage_progress_key(pf: str, phase: int):
 def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = None) -> None:
     """后台 spawn claude 当完整 agent，按 phase-N-*.md 跑某个面板阶段（⑤⑥⑦，及④兜底）全流程。
     遇歧义点提示用 choice ask 抛给用户点选；instruction = 用户对本次（重）做的额外要求。
-    phase 7（部署）会把用户填的部署凭证作为环境变量注入 agent 的运行环境。"""
+    phase 8（部署）会把用户填的部署凭证作为环境变量注入 agent 的运行环境。"""
     project_root = os.path.dirname(pf)
     ps = os.path.join(SKILL_DIR, "scripts", "pf_state.py")
     name = _STAGE_NAME.get(phase, f"阶段{phase}")
@@ -606,15 +609,15 @@ def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = No
         + f"全部做完：python3 {ps} --dir {project_root} phase {phase} --status done\n"
         "只做本阶段，完成即停。"
     )
-    if phase in (6, 7):
-        # ⑥截图/E2E、⑦线上冒烟截图都要浏览器；headless 无任何浏览器 MCP，别让 agent 乱找
+    if phase in (6, 7, 8):
+        # ⑥前端截图/E2E、⑦测试 E2E、⑧线上冒烟截图都要浏览器；headless 无任何浏览器 MCP，别让 agent 乱找
         prompt += ("\n\n⚠️ 浏览器：你 headless 后台运行，**没有任何浏览器 MCP**（playwright MCP / claude-in-chrome 都不可用）——"
                    "不要 ToolSearch 找浏览器 MCP、不要试 claude-in-chrome。需要截图/E2E 就直接用本机已装的 "
                    "Python Playwright（`from playwright.sync_api import sync_playwright`，chromium headless，桌面 1440 / 移动 390 整页截图），"
                    "或 webapp-testing / playwright-cli skill；E2E 落成项目内可复跑的 @playwright/test 文件。")
     env = dict(os.environ)
     _inject_openai_env(env)   # ④ 批量出图等会调 gen.py，需要 OPENAI_API_KEY/BASE_URL（和 ③ 一致）
-    if phase == 7:
+    if phase == 8:
         # 部署阶段：把用户在网页凭证表单填的值注入 env，agent 直接 $PF_SSH_HOST 等使用
         creds = _load_deploy_creds(pid) if pid else {}
         if creds:
@@ -706,6 +709,47 @@ def _auto_action(pf: str, phase: int, action: str, pid: str | None = None) -> No
         with _STAGE_RUN_LOCK:
             _STAGE_RUNNING.discard((pid, phase))
     print(f"[action-{phase}-{action}] 结束", file=sys.stderr)
+
+
+def _auto_node_change(pf: str, node_id: str, text: str, pid: str | None = None) -> None:
+    """后台 spawn claude 处理用户在系统流程图上对某节点发的改动意见：改这个节点（及牵连的），
+    改完清「处理中」+ 更新状态 + reply。进度走 node-change 通道，操作台节点对话框可实时看。"""
+    project_root = os.path.dirname(pf)
+    ps = os.path.join(SKILL_DIR, "scripts", "pf_state.py")
+    doc = os.path.join(SKILL_DIR, "references", "phase-7-backend.md")
+    prompt = (
+        "你是 ProductFlow 的开发 Agent，headless 运行，必须用工具实际完成改动（不要只输出描述）。\n"
+        f"项目目录：{project_root}（产品代码在项目根；设计产物在 .productflow/）。\n"
+        f"用户在系统流程图上对「{node_id}」节点发来改动意见：\n{text}\n\n"
+        "请：读 .productflow/backend-flow.json 与相关设计（modules/api/er）+ 对应产品代码，按意见改这个节点"
+        "（模块 / 接口 / 数据表）。**若牵连到别的模块 / 接口 / 表：对每个被牵连节点先 "
+        f"`python3 {ps} --dir {project_root} backend-flow proc --id <它的id> --state on`"
+        "（操作台上它也会亮「处理中」、连线随之流动高亮），改完该被牵连节点再 proc --state off + set-status；"
+        "并在最后的 reply 里说明牵连到谁、各改了什么、结果如何。**\n"
+        f"每个 Bash 调用是独立 shell，命令写完整 `python3 <绝对路径> --dir {project_root} ...`。\n"
+        f"过程登记（用户实时可见）：python3 {ps} --dir {project_root} log \"<在改什么>\"。\n"
+        "改完必须依次执行：\n"
+        f"  python3 {ps} --dir {project_root} backend-flow proc --id \"{node_id}\" --state off\n"
+        f"  python3 {ps} --dir {project_root} backend-flow set-status --id \"{node_id}\" --status done   # 或 needfix\n"
+        f"  牵连到的节点也各自 set-status；然后 python3 {ps} --dir {project_root} reply \"<一句话说明改了什么/结果>\"\n"
+        f"只做这一个改动、别推进阶段。手册参考：{doc}。"
+    )
+    env = dict(os.environ)
+    _inject_openai_env(env)
+    _log_reset(pf, "node-change", f"改节点 {node_id}")
+    try:
+        _run_claude_streaming(pf, "node-change", prompt, project_root, env=env, timeout=900)
+    finally:
+        try:  # 兜底：结束时确保该节点不再挂「处理中」，避免 agent 异常时卡死
+            bf = pf_state._load_backend_flow(project_root)
+            for n in bf.get("nodes", []):
+                if n.get("id") == node_id:
+                    n.pop("proc", None)
+            pf_state._save_backend_flow(project_root, bf)
+        except Exception:
+            pass
+    print(f"[node-change] {node_id} 结束", file=sys.stderr)
+
 
 
 def _auto_arch(pf: str, pid: str | None = None) -> None:
@@ -967,6 +1011,32 @@ def _clear_explore_slot(exj: dict, kind=None) -> bool:
     return changed
 
 
+def _autoregister_orphan_refs(pf: str, exj: dict) -> int:
+    """兜底：把已下载到 artifacts/phase-2/refs/ 但没来得及 add-ref 的图，追加进 exj['refs']（就地改，不写盘）。
+    修「下了图却因超时/漏登记导致 refs=0、成果白丢」的坑。返回新增数。"""
+    refs_dir = os.path.join(pf, "artifacts", "phase-2", "refs")
+    try:
+        names = sorted(os.listdir(refs_dir))
+    except OSError:
+        return 0
+    refs = exj.get("refs")
+    if not isinstance(refs, list):
+        refs = exj["refs"] = []
+    have = {r.get("file") for r in refs if isinstance(r, dict)}
+    added = 0
+    for name in names:
+        if not name.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
+            continue
+        rel = "artifacts/phase-2/refs/" + name
+        if rel in have:
+            continue
+        refs.append({"id": "ref-" + os.urandom(3).hex(), "file": rel,
+                     "title": "自动登记（下载完成但未及登记）", "source": "", "desc": "", "auto": True})
+        have.add(rel)
+        added += 1
+    return added
+
+
 def _sweep_stale_explore_slots() -> None:
     """启动时清理上一个 server 进程遗留的孤儿 request 槽——那些后台 agent 已随旧进程一起死了，
     槽却还留着，会让操作台卡在「生成中」永不复位（重启操作台杀掉在跑的生图/摘要就是这种情况）。
@@ -1072,8 +1142,9 @@ def _auto_explore(pf: str, req: dict) -> None:
             f"   python3 {pf_state} --dir {project_root} explore set-search-plan --keyword <词1> --keyword <词2> [--keyword …] --basis \"<依据，如：SaaS 工具型 + 冷色玻璃拟态(取自调研风格候选A) + 桌面落地页>\"\n"
             "1. 按上面『分配原则』选 **≥3 个来源**，用浏览器逐个打开其搜索/列表页（Dribbble：`dribbble.com/search/<关键词>`，URL 编码、空格转 -；画廊类：开列表页按分类/搜索浏览），等加载，收集候选（Dribbble 收 `/shots/` 详情页链接；画廊类收卡片预览图 URL 或详情页链接）。\n"
             f"2. 跨来源合计取 6-9 个候选，下载到 {refs_dir}/<n>.png（先 mkdir -p）：Dribbble 打开详情页读主图 `cdn.dribbble.com` 高清 URL；画廊类直接取卡片/详情页**最大预览截图** URL。用 urllib/requests 下载**高清原图/整页截图**（不是模糊缩略图，要能放大看细节）。\n"
+            "   ⚠️ **别在单一来源死磕**：某来源（尤其画廊类 Cloudflare/限流）试 2-3 次或几分钟还抠不到高清图，就**跳过换下一个来源**，别反复写脚本硬抠——时间要留给下载 + 登记。**Dribbble 拿到 6-9 张即达标**、画廊类是增强非必须；时间紧优先保 Dribbble + 及时登记。\n"
             "   ⚠️ **不要用浏览器截图兜底**：某来源取不到真实图就换下一个来源/跳过；**所有来源整体都访问失败、一张真图都没拿到**才**不要 done-request**、不登记任何东西，直接结束并在最后一句明确说「访问失败」——前端会提示重试。\n"
-            "3. 每下载一张立刻登记（不要攒到最后）。登记前**用 Read 打开这张图**，写一句它的**风格/品类/含哪些区块**作为 --desc（图片解析描述，供用户和③首图判断）。source 填该作品/画廊条目详情页 URL：\n"
+            "3. **每下载一张就立刻 `add-ref` 登记，再去审/优化——绝不攒到最后挑！**（一旦超时或崩溃，没登记的图全部白丢；宁可先登记 6-9 张够用的，之后再逐步替换更好的。）登记前**用 Read 打开这张图**，写一句它的**风格/品类/含哪些区块**作为 --desc（图片解析描述，供用户和③首图判断）。source 填该作品/画廊条目详情页 URL：\n"
             f"   python3 {pf_state} --dir {project_root} explore add-ref artifacts/phase-2/refs/<n>.png --title \"<一句话风格亮点>\" --source \"<详情页 URL>\" --desc \"<如：深色玻璃拟态 SaaS 落地页，hero+logo墙+价格表，冷蓝主色>\"\n"
             f"4. 全部登记完执行：python3 {pf_state} --dir {project_root} explore done-request --kind search-refs\n"
             "只做这件事，完成即停。参考仅供风格判断，不抄袭、不进最终产品。"
@@ -1198,13 +1269,21 @@ def _auto_explore(pf: str, req: dict) -> None:
     _log_reset(pf, phase, "开始" + {"search-refs": "找参考", "gen-heroes": "生成首图",
                                     "collect-ref": "采集参考链接", "suggest-keywords": "据调研建议关键词"}.get(kind, ""))
     _run_claude_streaming(pf, phase, prompt, project_root, env=env, timeout=timeout)
-    # 进程已退出：若 request 槽还在（agent 没 done-request，多半 claude 挂了/未登录/超时/没跑完），
-    # 自动清掉卡住的槽，让前端「生成中」复位、按钮恢复可重试（error 行已在 agent-log 里可见）。
+    # 进程已退出。先兜底登记「下载了却没 add-ref」的参考图（A1，防超时/漏登记导致成果白丢），
+    # 再清掉残留 request 槽让前端「生成中」复位、可重试。
     try:
         exp = os.path.join(pf, "explore.json")
         exj = _read_json(exp)
-        if _clear_explore_slot(exj, kind):
+        req_left = isinstance(exj.get("request"), dict) and kind in exj["request"]
+        # 仅当 agent 没正常 done-request（超时/挂了/没收尾）才兜底——正常收尾时信任 agent 的最终集合
+        n = _autoregister_orphan_refs(pf, exj) if (req_left and kind in ("search-refs", "collect-ref")) else 0
+        cleared = _clear_explore_slot(exj, kind)
+        if n or cleared:
             _atomic_write_json(exp, exj)
+        if n:
+            # 兜底救回了图：报正向 info、不发 error——否则前端 searchFailed（看最后一条是否 error）会把「已救回 N 张」误报成「访问失败」
+            _log_line(pf, phase, "info", f"🛟 已兜底登记 {n} 张下载完成但未收尾的参考图（可重试补更多）")
+        elif cleared:
             _log_line(pf, phase, "error", "❌ 未完成请求，已自动清除（可重试）")
     except Exception:  # noqa: BLE001  清理失败不该让线程崩
         pass
@@ -1360,7 +1439,7 @@ _WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 _WS_PROJECT_CHANNELS = [
     "state", "inbox", "health", "pages", "choices", "brief", "explore", "wizard",
     "agent-log:research", "agent-log:search-refs",
-    "agent-log:stage-4", "agent-log:stage-5", "agent-log:stage-6", "agent-log:stage-7",
+    "agent-log:stage-4", "agent-log:stage-5", "agent-log:stage-6", "agent-log:stage-7", "agent-log:stage-8",
 ]
 
 
@@ -1772,6 +1851,13 @@ class Handler(BaseHTTPRequestHandler):
                         self._send(200, f.read().encode(), "application/json; charset=utf-8")
                 except FileNotFoundError:
                     self._json({"pages": []})
+            elif sub == "/api/backend-flow":
+                # 后端流程图（薄关系层，backend-flow.json）——供「后端设计」视图渲染
+                try:
+                    with open(os.path.join(pf, "backend-flow.json"), encoding="utf-8") as f:
+                        self._send(200, f.read().encode(), "application/json; charset=utf-8")
+                except FileNotFoundError:
+                    self._json({"version": 1, "nodes": [], "edges": [], "pageLinks": [], "entry": None, "layout": {}})
             elif sub == "/api/choices":
                 try:
                     with open(os.path.join(pf, "choices.json"), encoding="utf-8") as f:
@@ -1782,6 +1868,15 @@ class Handler(BaseHTTPRequestHandler):
                 # 只回显「存了哪些键 + 脱敏值」，绝不回吐明文凭证给网页
                 creds = _load_deploy_creds(pid)
                 self._json({"keys": [{"key": k, "masked": _mask_secret(v)} for k, v in creds.items()]})
+            elif sub == "/api/product-keys":
+                # 产品级第三方 key 需求（⑤ 登记的 product-keys.json）+ 填写状态（值在 secrets，只回脱敏）
+                pk = pf_state._load_product_keys(os.path.dirname(pf))
+                creds = _load_deploy_creds(pid)
+                self._json({"keys": [
+                    {"key": e.get("key"), "desc": e.get("desc", ""), "module": e.get("module"),
+                     "filled": bool(creds.get(e.get("key"))),
+                     "masked": _mask_secret(creds[e["key"]]) if creds.get(e.get("key")) else ""}
+                    for e in pk.get("keys", []) if e.get("key")]})
             elif sub == "/api/explore":
                 try:
                     with open(os.path.join(pf, "explore.json"), encoding="utf-8") as f:
@@ -1983,11 +2078,51 @@ class Handler(BaseHTTPRequestHandler):
             return
         pid, sub = m.group(1), m.group(2) or ""
         root = _resolve(pid)
-        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/run-action", "/api/deploy-creds", "/api/reveal", "/api/redraw", "/api/stage"):
+        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/run-action", "/api/deploy-creds", "/api/reveal", "/api/redraw", "/api/stage", "/api/node-proc", "/api/node-change"):
             self._send(404, b"not found", "text/plain")
             return
         pf = os.path.join(root, ".productflow")
         os.makedirs(pf, exist_ok=True)
+        if sub == "/api/node-proc":
+            # 系统流程图节点「处理中」标记：用户给某节点发改动意见时置 on；agent 处理完置 off。
+            node_id = str(data.get("node") or "").strip()
+            if not node_id:
+                self._json({"error": "bad_req"}, 400)
+                return
+            proot = os.path.dirname(pf)
+            bf = pf_state._load_backend_flow(proot)
+            node = next((n for n in bf.get("nodes", []) if n.get("id") == node_id), None)
+            if node is None:
+                self._json({"error": "no_such_node"}, 404)
+                return
+            if data.get("on"):
+                node["proc"] = True
+            else:
+                node.pop("proc", None)
+            pf_state._save_backend_flow(proot, bf)
+            self._json({"ok": True})
+            return
+        if sub == "/api/node-change":
+            # 系统流程图「点节点发意见让 agent 改」：记留言 + 标该节点处理中 + 后台拉起真 agent 去改
+            node_id = str(data.get("node") or "").strip()
+            text = str(data.get("text") or "").strip()
+            if not node_id or not text:
+                self._json({"error": "bad_req"}, 400)
+                return
+            proot = os.path.dirname(pf)
+            bf = pf_state._load_backend_flow(proot)
+            node = next((n for n in bf.get("nodes", []) if n.get("id") == node_id), None)
+            if node is None:
+                self._json({"error": "no_such_node"}, 404)
+                return
+            node["proc"] = True
+            pf_state._save_backend_flow(proot, bf)
+            with open(os.path.join(pf, "inbox.jsonl"), "a", encoding="utf-8") as f:
+                f.write(json.dumps({"ts": _now(), "from": "web", "type": "design-feedback",
+                                    "text": f"系统流程图·节点「{node_id}」要改：\n{text}"}, ensure_ascii=False) + "\n")
+            threading.Thread(target=_auto_node_change, args=(pf, node_id, text, pid), daemon=True).start()
+            self._json({"ok": True})
+            return
         if sub == "/api/reveal":
             # 在系统文件管理器打开项目代码目录（默认项目根；可选 path 子路径，防穿越）
             target = os.path.realpath(root)
@@ -2327,7 +2462,7 @@ class Handler(BaseHTTPRequestHandler):
             action = (data.get("action") or "").strip()
             # 允许两类聚焦动作：⑥「构建并预览」(preview) 与 ④「生成业务架构树」(gen-arch，专职 agent，不搭④大 agent 的车)
             is_arch = phase == 4 and action == "gen-arch"
-            if not ((phase == 6 and action == "preview") or is_arch):
+            if not ((phase in (6, 7) and action == "preview") or is_arch):
                 self._json({"error": "bad_action"}, 400)
                 return
             # 与「让 Agent 做本阶段」共用 (pid, phase) 并发护栏，别和整阶段 agent 双开互相覆盖
@@ -2346,7 +2481,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
             return
         if sub == "/api/deploy-creds":
-            # 用户在⑦填部署凭证（SSH 地址/账号/token / 整段 .p8…）：存到项目仓库外的 secrets/<id>.env(600)。
+            # 用户在⑧填部署凭证（SSH 地址/账号/token / 整段 .p8…）：存到项目仓库外的 secrets/<id>.env(600)。
             # 默认与已存的合并；replace=true 整体覆盖；clear=true 清空全部；remove=KEY 删单条；
             # p8="<PEM>" 把 App Store Connect 私钥落成 <id>.p8 文件并自动设 ASC_KEY_PATH（多行 PEM 不能进 .env）。
             if data.get("clear"):

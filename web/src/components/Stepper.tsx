@@ -1,4 +1,4 @@
-// Top 7-stage stepper. `.sel` (currently-viewed) is DECOUPLED from `.done`.
+// Top 8-stage stepper (数据驱动，随 state.phases 渲染). `.sel` (currently-viewed) is DECOUPLED from `.done`.
 // Selected pill auto-scrolls into view (narrow screens). Responsive collapse is CSS (@1180px).
 import { Fragment, useEffect, useRef } from 'react'
 import type { StatePhase } from '../types'

@@ -173,7 +173,7 @@ my-product/
 - artifacts/phase-5/schema.sql → 复制为 server/schema.sql，db.js 启动时 `db.exec(...)` 建表（CREATE TABLE IF NOT EXISTS 风格，schema-ddl 步骤产出时即按此写）。
 - 接口契约的每个端点 → server/routes/api.js；admin 鉴权用单一 ADMIN_TOKEN 环境变量 + Bearer 头，不上 session/OAuth。
 
-**Phase 7 部署**（单机：任意 Linux 服务器或本机；目标机由用户提供）：项目含 Dockerfile 时优先 `docker compose up -d --build`；否则 rsync 代码到 /opt/my-product → `npm ci --omit=dev` → 写 systemd unit（ExecStart=node server/app.js，Restart=on-failure，Environment=PORT/ADMIN_TOKEN）→ `systemctl enable --now`。需要域名时 caddy 反代（自动 https，见 phase-7-deploy.md 路径 C），否则直接裸端口验收。
+**Phase 8 部署**（单机：任意 Linux 服务器或本机；目标机由用户提供）：项目含 Dockerfile 时优先 `docker compose up -d --build`；否则 rsync 代码到 /opt/my-product → `npm ci --omit=dev` → 写 systemd unit（ExecStart=node server/app.js，Restart=on-failure，Environment=PORT/ADMIN_TOKEN）→ `systemctl enable --now`。需要域名时 caddy 反代（自动 https，见 phase-8-deploy.md 路径 C），否则直接裸端口验收。
 
 **不做什么**：不上 PostgreSQL/MySQL，不上 TypeScript 构建，不用 PM2（systemd 或 Docker 重启策略够了），admin 前端不引框架（vanilla JS + fetch 渲染表格即可），不做多环境配置体系（一个 .env 示例足够）。Docker 非必须，但用户要本地/容器化部署时是首选形态——务必带 `.dockerignore` 排除宿主 node_modules，SQLite 用 `journal_mode=DELETE`（见 phase-6 实战教训）。
 

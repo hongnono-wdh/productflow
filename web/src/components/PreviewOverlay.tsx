@@ -101,7 +101,9 @@ export function PreviewOverlay() {
       .then((r) => r.json())
       .then((j) => {
         if (!j || !j.ok) {
-          toast('重绘请求被拒：' + ((j && j.error) || '未知'))
+          toast(j && j.error === 'need_imagegen_key'
+            ? '改图需先配置生图 key（OPENAI_API_KEY），配置后重试'
+            : '重绘请求被拒：' + ((j && j.error) || '未知'))
           return
         }
         closePreview()

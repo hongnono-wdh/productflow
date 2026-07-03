@@ -232,6 +232,31 @@ export interface HeroGenLogEntry {
   prompt?: string
 }
 
+// ── backend-flow（⑥ 后端流程图，backend-flow.json；薄关系层，直接 GET 非 channel）──
+export interface BFNode {
+  id: string
+  type: 'module' | 'interface' | 'table'
+  module?: string
+  status?: string
+  name?: string // 中文显示名（图上主显中文、英文 id 灰字副显）
+  fields?: string[] // 数据表字段（点表查看用；仍以 ⑤ er/schema 为准，此处只存摘要）
+  proc?: boolean // agent 正在处理这个节点的改动（操作台显示「处理中」脉冲）
+}
+export interface BFEdge {
+  from: string
+  to: string
+  type: string
+  label?: string
+}
+export interface BackendFlow {
+  version: number
+  nodes: BFNode[]
+  edges: BFEdge[]
+  pageLinks: { page: string; module: string }[]
+  entry: string | null
+  layout: Record<string, unknown>
+}
+
 // ── deploy-creds (request/response, not a channel) ──
 export interface DeployCredKey {
   key: string

@@ -1,8 +1,9 @@
 // Artifact modal: image / text-md-json (<pre>) / mindmap (markmap) + overview grid.
 // markmap + overview ported to parity (P4⑥). html opens a new tab (handled in openArtifact).
-import { useEffect, useState } from 'react'
-import { useModal, useChannel, closeModal, openArtifact } from '../store'
-import { PF_BASE, artUrl, loadScript } from '../lib'
+import { useEffect, useMemo, useState } from 'react'
+import { marked } from 'marked'
+import { useModal, useChannel, closeModal, openArtifact, toast } from '../store'
+import { PF_BASE, artUrl, loadScript, post } from '../lib'
 import { IcX } from '../icons'
 import { DocIcon } from './DocIcon'
 import type { StateChannel, BriefPayload, ExplorePayload, PagesPayload } from '../types'
@@ -97,6 +98,42 @@ function Overview() {
   )
 }
 
+// 产物修改意见（⑤ 设计产物交互）：选中一段自动引用 + 写意见 → POST /api/inbox（design-feedback）
+// 复用 preview-feedback 同一投递路径；agent 检查点读 inbox 后定向改该产物，不必纯对话。
+function ArtifactFeedback({ url, title }: { url: string; title: string }) {
+  const [open, setOpen] = useState(false)
+  const [quote, setQuote] = useState('')
+  const [comment, setComment] = useState('')
+  const rel = 'artifacts/' + ((url.split('/artifacts/')[1] || '').split('?')[0])
+  const grab = () => {
+    const s = (window.getSelection?.()?.toString() || '').trim()
+    if (!s) { toast('先在上面的产物里选中一段文字，再点「引用选中」'); return }
+    setQuote(s.length > 240 ? s.slice(0, 240) + '…' : s)
+  }
+  const submit = () => {
+    const c = comment.trim()
+    if (!c) { toast('先写一句要怎么改'); return }
+    const text = `设计产物修改意见 @ ${title}（${rel}）` + (quote ? `\n选中：「${quote}」` : '') + `\n意见：${c}`
+    post('/api/inbox', { text, type: 'design-feedback', file: rel })
+      .then((r) => { if (r.ok) { toast('已提交，Agent 会在检查点读到并定向改这处'); setComment(''); setQuote(''); setOpen(false) } else toast('提交失败，请重试') })
+      .catch(() => toast('提交失败，请重试'))
+  }
+  if (!open) return <button className="btn ghost" onClick={() => setOpen(true)}>✍️ 对这份产物提修改意见（选中一段更精准）</button>
+  return (
+    <div style={{ borderTop: '1px solid var(--line)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="btn ghost sm" onClick={grab}>引用选中</button>
+        {quote && <span style={{ fontSize: 12, color: 'var(--dim)' }}>已引用：「{quote.length > 40 ? quote.slice(0, 40) + '…' : quote}」 <span style={{ cursor: 'pointer', color: '#3b82f6' }} onClick={() => setQuote('')}>×</span></span>}
+      </div>
+      <textarea className="wz-textarea" value={comment} onChange={(e) => setComment(e.target.value)} style={{ height: 68 }} placeholder="这里要怎么改？例：users 表加 phone 字段 / 这个接口改成分页返回 / 删掉这个模块" />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn" onClick={submit}>提交给 Agent 改</button>
+        <button className="btn ghost" onClick={() => { setOpen(false); setComment(''); setQuote('') }}>取消</button>
+      </div>
+    </div>
+  )
+}
+
 export function Modal() {
   const m = useModal()
   const [text, setText] = useState('')
@@ -172,6 +209,9 @@ export function Modal() {
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
+  // .md 产物：正文按 markdown 渲染（mermaid 块另渲成图，这里剥掉）
+  const isMd = !!m && m.kind === 'artifact' && /\.md(\?|$)/.test(m.url || '')
+  const mdBody = useMemo(() => (isMd ? (marked.parse(text.replace(/```mermaid\s*\n[\s\S]*?```/g, ''), { async: false }) as string) : ''), [isMd, text])
   if (!m) return null
   const wide = m.kind === 'artifact' && (m.type === 'mindmap' || !!mmSvgs)
   return (
@@ -187,21 +227,28 @@ export function Modal() {
           {m.kind === 'artifact' && m.type === 'image' && <img className="full" src={m.url} />}
           {m.kind === 'artifact' && m.type === 'mindmap' && <svg id="mm-svg" />}
           {m.kind === 'artifact' && m.type !== 'image' && m.type !== 'mindmap' && (
-            mmSvgs
-              ? <div style={{ width: '100%', maxWidth: 1100 }}>
-                  {mmSvgs.map((svg, i) => (
-                    <div key={i} className="mermaid-box" style={{ display: 'flex', justifyContent: 'center', padding: '8px 0', overflow: 'auto' }}
-                      dangerouslySetInnerHTML={{ __html: svg }} />
-                  ))}
-                  <div style={{ textAlign: 'center', margin: '12px 0 2px' }}>
-                    <button className="btn ghost" onClick={() => setShowSrc((s) => !s)}>{showSrc ? '隐藏源码' : '查看源码'}</button>
-                  </div>
-                  {showSrc && <pre>{text}</pre>}
+            <div style={{ width: '100%', maxWidth: 1100 }}>
+              {mmSvgs && !showSrc && mmSvgs.map((svg, i) => (
+                <div key={i} className="mermaid-box" style={{ display: 'flex', justifyContent: 'center', padding: '8px 0', overflow: 'auto' }}
+                  dangerouslySetInnerHTML={{ __html: svg }} />
+              ))}
+              {isMd && !showSrc
+                ? <div className="md-body" dangerouslySetInnerHTML={{ __html: mdBody }} />
+                : <pre>{text}</pre>}
+              {(isMd || mmSvgs) && (
+                <div style={{ textAlign: 'center', margin: '12px 0 2px' }}>
+                  <button className="btn ghost" onClick={() => setShowSrc((s) => !s)}>{showSrc ? '看渲染' : '查看源码'}</button>
                 </div>
-              : <pre>{text}</pre>
+              )}
+            </div>
           )}
           {m.kind === 'overview' && <Overview />}
         </div>
+        {m.kind === 'artifact' && m.type !== 'image' && m.type !== 'mindmap' && (
+          <div style={{ padding: '0 16px 14px' }}>
+            <ArtifactFeedback url={m.url} title={m.title} />
+          </div>
+        )}
       </div>
     </div>
   )

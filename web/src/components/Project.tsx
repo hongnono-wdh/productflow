@@ -11,7 +11,7 @@ import { BriefPanel } from './BriefPanel'
 import { RefsPanel } from './RefsPanel'
 import { Canvas } from './Canvas'
 import { IcBack } from '../icons'
-import { post } from '../lib'
+import { post, PF_BASE } from '../lib'
 import type { StateChannel, InboxPayload } from '../types'
 
 const CANVAS_STAGES = [3, 4]
@@ -22,6 +22,7 @@ export function Project() {
   const [selected, setSelected] = useState<number | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
   const [seen, setSeen] = useState(0)
+  const [bfMods, setBfMods] = useState<number | null>(null) // backend-flow 后端模块数（判无后端；null=未知）
 
   useEffect(() => {
     if (state && selected === null) {
@@ -45,6 +46,14 @@ export function Project() {
   useEffect(() => {
     if (chatOpen) setSeen(inbox?.messages.length || 0)
   }, [chatOpen, inbox])
+
+  // 无后端判定：⑤ 已 done 且 backend-flow 无后端模块 → 隐藏 ⑦ 后端实现·测试
+  useEffect(() => {
+    fetch(PF_BASE + '/api/backend-flow').then((r) => r.json())
+      .then((d) => setBfMods((d?.nodes || []).filter((n: { type?: string }) => n.type === 'module').length))
+      .catch(() => setBfMods(null))
+    // 只在阶段切换 / ⑤ 状态变化时重拉（⑤ 生成 backend-flow、且 ⑤ done 才是 noBackend 生效点）——不必每条日志都拉
+  }, [state?.current_phase, state?.phases?.find((p) => p.id === 5)?.status])
 
   const selectStage = (id: number) => {
     setSelected(id)
@@ -74,11 +83,14 @@ export function Project() {
   }
 
   const phases = state.phases || []
+  // 无后端（⑤ done 且 backend-flow 无后端模块）→ 隐藏 ⑦，stepper / 计数 / 导航都跳过
+  const noBackend = phases.find((p) => p.id === 5)?.status === 'done' && bfMods === 0
+  const vphases = noBackend ? phases.filter((p) => p.id !== 7) : phases
   const phase = phases.find((p) => p.id === selected) || phases.find((p) => p.id === state.current_phase) || phases[0]
   const sel = phase ? phase.id : null
-  const ni = phases.findIndex((p) => p.id === sel)
-  const nextPh = phases[ni + 1]
-  const done = phases.filter((p) => p.status === 'done').length
+  const ni = vphases.findIndex((p) => p.id === sel)
+  const nextPh = vphases[ni + 1]
+  const done = vphases.filter((p) => p.status === 'done').length
   const isCanvas = sel != null && CANVAS_STAGES.includes(sel)
 
   const stageExtra =
@@ -86,7 +98,7 @@ export function Project() {
       <BriefPanel phase={phase} />
     ) : sel === 2 ? (
       <RefsPanel />
-    ) : sel === 5 || sel === 6 || sel === 7 ? (
+    ) : sel === 5 || sel === 6 || sel === 7 || sel === 8 ? (
       <StageRunPanel phase={sel} phaseStatus={phase.status} />
     ) : (
       <div style={{ color: 'var(--dim)', fontSize: 13, padding: '4px 0 14px' }} />
@@ -103,7 +115,7 @@ export function Project() {
             {state.product}
           </span>
         </span>
-        <Stepper phases={phases} selected={sel} onSelect={selectStage} />
+        <Stepper phases={vphases} selected={sel} onSelect={selectStage} />
         <div className="right">
           <button className={'btn ghost sm' + (unread ? ' has-unread' : '')} id="chat-btn" onClick={toggleChat} title="给 Agent 留言（任何阶段都可用）">
             💬 留言
@@ -112,7 +124,7 @@ export function Project() {
             📋 全部产物
           </button>
           <span className="meta" id="meta">
-            {done}/{phases.length} 完成
+            {done}/{vphases.length} 完成
           </span>
           {nextPh ? (
             <button
@@ -136,11 +148,11 @@ export function Project() {
         </div>
       </div>
 
-      {phases.length !== 7 && (
+      {phases.length !== 8 && (
         <div id="compat-banner">
           <div className="compat-warn">
-            ⚠️ 此项目是<b>旧版数据（{phases.length} 阶段）</b>，与当前 7 阶段流程不兼容，下面的步骤/按钮会显示异常。请回 <a href="/">全部项目</a> 点「＋ 新建项目」重新开始（旧项目可在总览页删除）。当前 7
-            阶段：市场调研 → 找参考 → 首图设计 → 页面设计 → 功能与数据设计 → 开发实现 → 部署上线。
+            ⚠️ 此项目是<b>旧版数据（{phases.length} 阶段）</b>，与当前 8 阶段流程不兼容，下面的步骤/按钮会显示异常。请回 <a href="/">全部项目</a> 点「＋ 新建项目」重新开始（旧项目可在总览页删除）。当前 8
+            阶段：市场调研 → 找参考 → 首图设计 → 页面设计 → 功能与数据设计 → 前端实现 → 后端实现·测试 → 部署上线。
           </div>
         </div>
       )}

@@ -60,13 +60,13 @@ class TestInit(PfStateBase):
         s = read_state(self.dir)
         self.assertEqual(s["product"], self.PRODUCT)
         self.assertEqual(s["id"], self.pid)
-        self.assertEqual(s["v"], 1)
+        self.assertEqual(s["v"], 2)
         self.assertEqual(s["current_phase"], 1)
         self.assertEqual(s["project_dir"], os.path.abspath(self.dir))
-        self.assertEqual(len(s["phases"]), 7)
+        self.assertEqual(len(s["phases"]), 8)
         self.assertEqual([ph["name"] for ph in s["phases"]],
                          ["市场调研", "找参考", "首图设计", "页面设计",
-                          "功能与数据设计", "开发实现", "部署上线"])
+                          "功能与数据设计", "前端实现", "后端实现 · 测试", "部署上线"])
         # phases / steps all start pending
         self.assertTrue(all(ph["status"] == "pending" for ph in s["phases"]))
         self.assertTrue(all(st["status"] == "pending"
@@ -163,11 +163,23 @@ class TestPhaseStep(PfStateBase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("unknown step", r.stderr)
 
+    def test_step_add_appends_and_is_idempotent(self):
+        # ⑤ 判无后端时给 ⑥ 前端实现补测试步骤——step-add 追加 + 幂等
+        self.run_ok(["step-add", "6", "unit-test", "单元测试"])
+        self.run_ok(["step-add", "6", "integration-test", "集成测试"])
+        s = read_state(self.dir)
+        ph6 = next(p for p in s["phases"] if p["id"] == 6)
+        ids = [x["id"] for x in ph6["steps"]]
+        self.assertEqual(ids, ["scaffold", "frontend", "unit-test", "integration-test"])
+        self.run_ok(["step-add", "6", "unit-test", "单元测试"])  # 幂等：不再追加
+        ph6b = next(p for p in read_state(self.dir)["phases"] if p["id"] == 6)
+        self.assertEqual([x["id"] for x in ph6b["steps"]], ids)
+
     def test_status_human_readable_contains_product(self):
         # status is NOT json — assert it prints product + phase counter
         r = self.run_ok(["status"])
         self.assertIn(self.PRODUCT, r.stdout)
-        self.assertIn("phase 1/7", r.stdout)
+        self.assertIn("phase 1/8", r.stdout)
 
 
 class TestArtifactLog(PfStateBase):
@@ -759,6 +771,117 @@ class TestChoice(PfStateBase):
         c = json.loads(r.stdout)
         self.assertTrue(c.get("timeout"))
         self.assertIsNone(c.get("answer"))
+
+
+class TestBackendFlow(PfStateBase):
+    """backend-flow.json 薄关系层 CLI：节点/边/页面链接/状态/入口。"""
+
+    def bf(self):
+        return read_json_file(self.dir, "backend-flow.json")
+
+    def test_add_nodes_edges_links_status_entry(self):
+        self.run_ok(["backend-flow", "add-node", "--id", "module:auth", "--type", "module"])
+        self.run_ok(["backend-flow", "add-node", "--id", "api:login", "--type", "interface", "--module", "module:auth"])
+        self.run_ok(["backend-flow", "add-node", "--id", "table:users", "--type", "table"])
+        self.run_ok(["backend-flow", "add-edge", "--from", "api:login", "--to", "table:users", "--type", "writes_to"])
+        self.run_ok(["backend-flow", "link-page", "--page", "page:login", "--module", "module:auth"])
+        self.run_ok(["backend-flow", "set-status", "--id", "module:auth", "--status", "doing"])
+        self.run_ok(["backend-flow", "set-entry", "--id", "module:auth"])
+        bf = self.bf()
+        ids = {n["id"]: n for n in bf["nodes"]}
+        self.assertEqual(set(ids), {"module:auth", "api:login", "table:users"})
+        self.assertEqual(ids["module:auth"]["status"], "doing")
+        self.assertEqual(ids["api:login"]["module"], "module:auth")
+        self.assertEqual(ids["api:login"]["status"], "todo")  # 默认 todo
+        self.assertEqual(bf["edges"], [{"from": "api:login", "to": "table:users", "type": "writes_to", "label": ""}])
+        self.assertEqual(bf["pageLinks"], [{"page": "page:login", "module": "module:auth"}])
+        self.assertEqual(bf["entry"], "module:auth")
+
+    def test_add_node_is_idempotent_update(self):
+        self.run_ok(["backend-flow", "add-node", "--id", "module:x", "--type", "module"])
+        self.run_ok(["backend-flow", "add-node", "--id", "module:x", "--type", "module", "--status", "done"])
+        bf = self.bf()
+        self.assertEqual(len(bf["nodes"]), 1)          # 同 id 更新、不重复
+        self.assertEqual(bf["nodes"][0]["status"], "done")
+
+    def test_add_node_with_name_and_fields(self):
+        self.run_ok(["backend-flow", "add-node", "--id", "table:users", "--type", "table", "--name", "用户表",
+                     "--field", "id INTEGER PK", "--field", "email TEXT UNIQUE"])
+        n = self.bf()["nodes"][0]
+        self.assertEqual(n["name"], "用户表")   # 中文显示名
+        self.assertEqual(n["fields"], ["id INTEGER PK", "email TEXT UNIQUE"])
+
+    def test_proc_on_off(self):
+        self.run_ok(["backend-flow", "add-node", "--id", "module:x", "--type", "module"])
+        self.run_ok(["backend-flow", "proc", "--id", "module:x", "--state", "on"])
+        self.assertTrue(self.bf()["nodes"][0].get("proc"))     # 处理中标记
+        self.run_ok(["backend-flow", "proc", "--id", "module:x", "--state", "off"])
+        self.assertNotIn("proc", self.bf()["nodes"][0])        # 清除
+
+    def test_edge_dedup_and_rm(self):
+        for _ in range(2):
+            self.run_ok(["backend-flow", "add-edge", "--from", "a", "--to", "b", "--type", "calls"])
+        self.assertEqual(len(self.bf()["edges"]), 1)   # 去重
+        self.run_ok(["backend-flow", "rm-edge", "--from", "a", "--to", "b"])
+        self.assertEqual(self.bf()["edges"], [])
+
+    def test_rm_node_cascades_edges_and_links(self):
+        self.run_ok(["backend-flow", "add-node", "--id", "module:auth", "--type", "module"])
+        self.run_ok(["backend-flow", "add-edge", "--from", "module:auth", "--to", "table:t", "--type", "reads_from"])
+        self.run_ok(["backend-flow", "link-page", "--page", "p1", "--module", "module:auth"])
+        self.run_ok(["backend-flow", "rm-node", "--id", "module:auth"])
+        bf = self.bf()
+        self.assertEqual(bf["nodes"], [])
+        self.assertEqual(bf["edges"], [])              # 连带删边
+        self.assertEqual(bf["pageLinks"], [])          # 连带删页面链接
+
+    def test_set_status_unknown_node_fails(self):
+        r = cli(["backend-flow", "set-status", "--id", "nope", "--status", "done"], self.home, project=self.dir)
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_bad_type_rejected(self):
+        r = cli(["backend-flow", "add-node", "--id", "x", "--type", "widget"], self.home, project=self.dir)
+        self.assertNotEqual(r.returncode, 0)           # choices=module/interface/table
+
+    def test_clear_and_show(self):
+        self.run_ok(["backend-flow", "add-node", "--id", "m", "--type", "module"])
+        self.run_ok(["backend-flow", "clear"])
+        bf = json.loads(self.run_ok(["backend-flow", "show"]).stdout)
+        self.assertEqual(bf["nodes"], [])
+        self.assertEqual(bf["edges"], [])
+        self.assertIsNone(bf["entry"])
+
+
+class TestProductKey(PfStateBase):
+    """产品级第三方 key 需求 CLI（product-keys.json；值另存 secrets、不在此）。"""
+    def _pk(self):
+        return read_json_file(self.dir, "product-keys.json")
+
+    def test_add_and_fields(self):
+        self.run_ok(["product-key", "add", "--key", "STRIPE_SECRET_KEY", "--desc", "Stripe 支付", "--module", "payment"])
+        keys = self._pk()["keys"]
+        self.assertEqual(len(keys), 1)
+        self.assertEqual(keys[0]["key"], "STRIPE_SECRET_KEY")
+        self.assertEqual(keys[0]["desc"], "Stripe 支付")
+        self.assertEqual(keys[0]["module"], "payment")
+
+    def test_add_dedups_by_key_updates_desc(self):
+        self.run_ok(["product-key", "add", "--key", "K", "--desc", "old"])
+        self.run_ok(["product-key", "add", "--key", "K", "--desc", "new"])
+        keys = self._pk()["keys"]
+        self.assertEqual(len(keys), 1)
+        self.assertEqual(keys[0]["desc"], "new")
+
+    def test_rm(self):
+        self.run_ok(["product-key", "add", "--key", "A"])
+        self.run_ok(["product-key", "add", "--key", "B"])
+        self.run_ok(["product-key", "rm", "--key", "A"])
+        self.assertEqual([k["key"] for k in self._pk()["keys"]], ["B"])
+
+    def test_clear(self):
+        self.run_ok(["product-key", "add", "--key", "A"])
+        self.run_ok(["product-key", "clear"])
+        self.assertEqual(self._pk()["keys"], [])
 
 
 class TestArch(PfStateBase):
