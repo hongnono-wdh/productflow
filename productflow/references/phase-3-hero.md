@@ -52,7 +52,18 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 3 pick-hero --status active
 
   CLI：用户报编号 → 换成 id → `select-hero`。全自动：自选与 `selectedRefs` 风格最贴合、最能承载产品调性的一张 → `select-hero` → log 理由。
 
-选定后，**把这张首图的视觉基调显式落成一段文字**——色板（几个 hex）、标题/正文字体气质、留白密度、圆角与阴影、构图语言——写进 `explore` 的 styleSummary（若协作节里已写则确认/补全），并在 log 里点明"此为 Phase 4 页面设计的视觉基调输入"。这一段就是交给 Phase 4 的合同，不要只留"按 hero 2"。
+选定后，**把这张首图的视觉基调显式落成一段文字**——色板（几个 hex）、标题/正文字体气质、留白密度、圆角与阴影、构图语言——写进 `explore` 的 styleSummary（若协作节里已写则确认/补全），并在 log 里点明"此为 Phase 4 页面设计的视觉基调输入"。这一段就是交给 Phase 4 的合同，不要只留“按 hero 2”。
+
+**并反萃取成精确 token 加精 design-spec（还原度脊椎，专题 A · R-③b）**：styleSummary 是给人看的文字，但 ③ 定稿首图是全程视觉精度最高的产物之一——`Read` 打开定稿首图（`selectedHero` 指向的文件），把真实的**色值（逐个 hex）、字体气质、圆角/阴影**反萃取出来，用 `spec set-token` 写进 design-spec，把 ② 的 token 草案**加精为精确值**（下游 ④ 定稿、⑥ 直接照抄，不再肉眼猜）：
+
+```bash
+# 读定稿首图，把真实视觉值写成精确 token（覆盖/补全 ② 的草案）
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.primary --value "#3498db" --type color
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.bg --value "#0e1420" --type color
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token radius.md --value "8px" --type dimension
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.title --value "Montserrat" --type fontFamily
+# …按首图实际值逐个写：主色/辅色/背景/文字色、圆角、字体气质…
+```
 
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" step 3 pick-hero --status done
