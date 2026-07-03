@@ -321,6 +321,16 @@ def cmd_phase(args) -> None:
                 "确实本阶段不做的页用 `page set <id> --impl-skip \"原因\"` 显式豁免；"
                 "或加 `--force` 强行标 done（不推荐，会留痕）。先跑 `impl-check` 看缺哪些。"
             )
+        # 还原度裁判闸（专题 C6）：design-spec 里 type=product 的页都要有 verdict==pass 的 fidelity 裁判。
+        # 无 spec/无 product 页（未接入还原度脊椎的老项目）自动跳过。
+        _ok, fid_failing = _fidelity_coverage(args.dir)
+        if fid_failing:
+            fl = "\n".join(f"  - {m['id']}（{m['reason']}）" for m in fid_failing)
+            raise SystemExit(
+                f"⑥ 还有 {len(fid_failing)} 个产品页还原度裁判未通过（verdict≠pass 或缺），不能标 done：\n{fl}\n"
+                "→ 跑三层闸门第 1 层视觉裁判、出 verdict==pass 的 `fidelity-<页>.json`（含 page id）；"
+                "或加 `--force` 越闸（留痕）。"
+            )
     # 每次（重新）进入本阶段 = 新「一代」：之后登记的产物都带这个版本号，
     # 这样重做后产物画廊一眼看出哪批是哪一版（老批留痕、可对比）。只在 pending/done→active 时 +1。
     if args.status == "active" and ph.get("status") != "active":
@@ -1253,6 +1263,38 @@ def _spec_check(d: str, spec: dict, strict: bool = False) -> None:
     if not errors:
         print("✅ spec check 通过" + ("（有警告）" if warns else ""))
     raise SystemExit(1 if errors else 0)
+
+
+def _fidelity_coverage(d: str):
+    """⑥ 还原度裁判校验：design-spec 里 type=product 的页，是否都有 verdict==pass 的
+    fidelity-*.json（含 "page":<id>）。返回 (ok_ids, failing)——failing 元素 {id, reason}。
+    无 product 页（老项目 / 无 spec）→ 全过（向后兼容，不影响未接入还原度脊椎的项目）。"""
+    product = [p for p in _load_spec(d).get("pages", []) if p.get("type") == "product"]
+    if not product:
+        return [], []
+    fid_dir = os.path.join(_root(d), "artifacts", "phase-6")
+    verdicts = {}
+    try:
+        for fn in os.listdir(fid_dir):
+            if fn.startswith("fidelity-") and fn.endswith(".json"):
+                try:
+                    with open(os.path.join(fid_dir, fn), encoding="utf-8") as f:
+                        j = json.load(f)
+                    if j.get("page"):
+                        verdicts[j["page"]] = j.get("verdict")
+                except (OSError, json.JSONDecodeError):
+                    pass
+    except OSError:
+        pass
+    ok, failing = [], []
+    for p in product:
+        pid = p.get("id")
+        v = verdicts.get(pid)
+        if v == "pass":
+            ok.append(pid)
+        else:
+            failing.append({"id": pid, "reason": "缺还原度裁判" if v is None else f"verdict={v}"})
+    return ok, failing
 
 
 def cmd_spec(args) -> None:
