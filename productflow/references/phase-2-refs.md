@@ -68,6 +68,43 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 2 select-refs --status done
 python3 "$SKILL_DIR/scripts/pf_state.py" log "Refs selected: 3 张冷色玻璃拟态参考已定，传给 Phase 3 生首图"
 ```
 
+## Step 4: extract-lock — 萃取视觉 token + 锁定组件库（还原度脊椎起点）
+
+> 还原度方案（专题 A/B）在 ② 的落点：把选中参考图里**最有价值的真实视觉信息**萃取成结构化 token，并锁定各平台组件库——让 ③④⑥ 有精确数值可照、有同款组件可用，而不是靠肉眼猜。此步是 `design-spec` 脊椎的起点。
+
+```bash
+python3 "$SKILL_DIR/scripts/pf_state.py" step-add 2 extract-lock "萃取视觉token + 锁组件库"
+python3 "$SKILL_DIR/scripts/pf_state.py" step 2 extract-lock --status active
+```
+
+1. **从选中参考图萃取结构化 token**：`Read` 逐张打开 `selectedRefs` 指向的参考图（`explore show` 里 `selectedRefs` 的 id → 对应 `refs[].file`），提取——主色板（几个 hex）、字体气质（无衬线/衬线 + 字重）、间距节奏、圆角/阴影。写成一份 DTCG 骨架的 tokens JSON（primitive 层纯描述，如 `color.blue.500`；**先不做 semantic**），存 `artifacts/phase-2/tokens-draft.json`，再导入 design-spec：
+   ```bash
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-tokens --file artifacts/phase-2/tokens-draft.json
+   ```
+   （这是**草案**——③ 首图定稿后反萃取加精、④ 定稿；此处先给下游一个真实锚点，好过一路模糊文字。）
+
+2. **锁定各平台组件库**（按产品类型 + 平台 + 参考风格）：先按 `wizard.json` 的 `platforms` 和产品类型定候选，再**请用户拍板**（与 ⑤ 选模板 / ⑧ 选部署目标同一套用户拍板机制；**全自动模式跳过、按推荐自动选并 log**）：
+   ```bash
+   # 非全自动：抛 choice 让用户点选（每个选定平台各一次，或合并问）
+   ID=$(python3 "$SKILL_DIR/scripts/pf_state.py" choice ask --stage 2 \
+         --question "Web 端组件库建议 shadcn/ui + Tailwind（理由：<产品类型> + 参考风格<…>），采用？" \
+         --option "采用 shadcn/ui + Tailwind" --option "改用 Ant Design" --option "改用 MUI")
+   python3 "$SKILL_DIR/scripts/pf_state.py" choice wait "$ID" --timeout 600   # 解析 stdout JSON 判超时
+   ```
+   **默认推荐**（可按参考风格调）：Web/桌面 = `shadcn/ui + tailwind`；iOS = SwiftUI 系统组件 + HIG（不引三方）；Android = Material 3 Compose。用户点定（或全自动）后锁进 design-spec（每个选定平台各一条）：
+   ```bash
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-lib --platform PC --lib "shadcn/ui + tailwind" --theme neutral --catalog artifacts/phase-2/component-catalog.md
+   ```
+
+3. **生成组件目录**：按 `references/component-catalog-template.md` 的格式，对选定库列出本项目会用到的组件（按预期页面裁剪，不必全库照搬），写 `artifacts/phase-2/component-catalog.md`——这是 ④⑥「用哪个组件」的单一事实来源。
+
+```bash
+python3 "$SKILL_DIR/scripts/pf_state.py" step 2 extract-lock --status done
+python3 "$SKILL_DIR/scripts/pf_state.py" log "已萃取视觉 token 草案 + 锁定组件库 + 生成组件目录（还原度脊椎起点）"
+```
+
+> **降级**：某平台无成熟组件库生态时，回退「token + direction 文字」手写，log 说明、不 block（专题 B6）。
+
 ## 找参考协作
 
 用户在操作台走到「找参考」步时，会在网页上请求 Agent 协作。请求出现在 `inbox`（`type: "explore-request"`），同时 `.productflow/explore.json` 的 `request` 字段按 kind 分槽记录——本阶段对应 `search-refs` 槽。**会话里每个检查点都顺手 `$PF inbox`，看到 `search-refs` 请求就处理**：
