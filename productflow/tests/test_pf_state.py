@@ -998,6 +998,19 @@ class TestSpec(PfStateBase):
         self.assertEqual(tk["space"]["4"]["$value"], "16px")
         self.assertEqual(tk["radius"]["md"]["$value"], "8px")  # 深合并保留了前面的
 
+    def test_check_data_container_missing_state(self):
+        r = self.run_ok(["page", "add", "列表页"])
+        pgid = re.search(r"pg-[0-9a-f]+", r.stdout).group(0)
+        self.run_ok(["spec", "set-lib", "--platform", "PC", "--lib", "shadcn"])
+        self.run_ok(["spec", "set-page", pgid, "--type", "product", "--component", "feed:List:default"])
+        # 无 --strict：数据容器缺 empty/loading 只是警告，exit 0
+        r = cli(["spec", "check"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("数据容器", r.stdout)
+        # --strict：警告升 error，exit 1
+        r = cli(["spec", "check", "--strict"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
