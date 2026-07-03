@@ -1235,6 +1235,15 @@ def _spec_check(d: str, spec: dict, strict: bool = False) -> None:
         t = pg.get("type")
         if t is not None and t not in ("product", "marketing"):
             errors.append(f"page「{pid}」type 非法：{t}")
+        # 数据容器类组件应有 empty+loading 态（专题 D4；启发式按组件名匹配）
+        states = pg.get("states") or {}
+        for comp in pg.get("components") or []:
+            lib = (comp.get("lib") or "").lower()
+            if any(k in lib for k in ("list", "table", "grid", "feed")):
+                slot = comp.get("slot")
+                miss = [s for s in ("empty", "loading") if s not in (states.get(slot) or [])]
+                if miss:
+                    warns.append(f"page「{pid}」数据容器「{slot}({comp.get('lib')})」缺状态 {miss}（专题 D：数据容器应有 empty/loading）")
     if strict:
         errors, warns = errors + warns, []
     for w in warns:
