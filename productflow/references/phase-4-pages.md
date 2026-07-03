@@ -206,6 +206,29 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 4 finalize-direction --status acti
 
 另附一行：本阶段共出 N 个页面 × 哪些平台、首图基调来源（`artifacts/phase-3/heroes/<选中>`），便于回溯。
 
+**并落 design-spec 脊椎（还原度方案专题 A/B/D · R-④）——direction.md 给人读、design-spec 给 ⑥ 机器照抄**：direction.md 五节仍写（人读），但 ⑥ 的机器依据是 design-spec。在此把它定稿：
+
+1. **token 定稿**：把 ②③ 的 token 草案（`spec show` 看现状）补全为最终值——五节的色板/字体/圆角逐个落成 token（承接 ③ 反萃取，不另起）：
+   ```bash
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.primary --value "#3498db" --type color
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.action.primary --value color.primary --type color --ref
+   # …色板/字体/圆角/间距逐个定稿…
+   ```
+
+2. **每页组件映射（= ⑥ 主读的 sidecar，PNG 只作预览）**：对**产品 UI 页**，按 `artifacts/phase-2/component-catalog.md` 出「设计元素→组件」映射写进 design-spec（`spec set-page --type product --component slot:lib:variant`；匹配不上组件目录就报缺口、别硬凑）：
+   ```bash
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-page <pg-id> --type product \
+     --component "hero.cta:Button:primary" --component "list:Card:default"
+   ```
+
+3. **交互态矩阵（专题 D）**：按组件类型给必需交互态（交互控件 default/hover/focus/disabled，+Button loading、+Input error；数据容器 default/empty/loading）——设计稿只画 default，此处显式声明，⑥ 才不漏态：
+   ```bash
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-page <pg-id> \
+     --state "hero.cta:default,hover,focus,disabled,loading" --state "list:default,empty,loading"
+   ```
+
+（营销页的骨架组件 + 视觉素材见专题 B5 / 下一版手册补；数据态由 ⑤ 补，见 phase-5。移动端版本不要 hover 态——按平台裁剪。）
+
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" artifact 4 artifacts/phase-4/direction.md --title "Design direction (final)"
 python3 "$SKILL_DIR/scripts/pf_state.py" step 4 finalize-direction --status done
