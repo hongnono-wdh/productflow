@@ -1202,6 +1202,50 @@ def _set_by_path(tree: dict, path: str, value) -> None:
     node[parts[-1]] = value
 
 
+_SPEC_SEMANTIC_WORDS = {"primary", "secondary", "tertiary", "error", "success",
+                        "warning", "danger", "info", "brand", "action", "surface", "muted"}
+
+
+def _spec_check(d: str, spec: dict, strict: bool = False) -> None:
+    """校验 design-spec：悬空/成环 alias、primitive 禁语义词、缺 lib、page-id 对齐、type 合法。
+    有 error → 退出码 1；--strict 把警告也当 error。"""
+    import token_compile
+    errors, warns = [], []
+    flat = token_compile._flatten(spec.get("tokens", {}))
+    try:
+        token_compile._resolve(flat)
+    except ValueError as e:
+        errors.append(str(e))
+    for path, ent in flat.items():
+        val = ent.get("value")
+        if not (isinstance(val, str) and token_compile._ALIAS.fullmatch(val.strip())):
+            hit = [seg for seg in re.split(r"[.\-]", path) if seg in _SPEC_SEMANTIC_WORDS]
+            if hit:
+                warns.append(f"primitive token「{path}」含语义词 {hit}（primitive 应纯描述，语义放 semantic 层）")
+    for plat, ent in (spec.get("componentLib") or {}).items():
+        if not (isinstance(ent, dict) and ent.get("lib")):
+            errors.append(f"componentLib[{plat}] 缺 lib")
+    if not spec.get("componentLib"):
+        warns.append("componentLib 为空（还没锁组件库；②找参考阶段应锁定）")
+    page_ids = {p.get("id") for p in _load_pages(d).get("pages", [])}
+    for pg in spec.get("pages", []):
+        pid = pg.get("id")
+        if pid not in page_ids:
+            errors.append(f"design-spec.pages 的 id「{pid}」在 pages.json 不存在")
+        t = pg.get("type")
+        if t is not None and t not in ("product", "marketing"):
+            errors.append(f"page「{pid}」type 非法：{t}")
+    if strict:
+        errors, warns = errors + warns, []
+    for w in warns:
+        print(f"⚠️  {w}")
+    for e in errors:
+        print(f"❌ {e}")
+    if not errors:
+        print("✅ spec check 通过" + ("（有警告）" if warns else ""))
+    raise SystemExit(1 if errors else 0)
+
+
 def cmd_spec(args) -> None:
     _load(args.dir)  # 校验项目存在
     spec = _load_spec(args.dir)
@@ -1209,6 +1253,17 @@ def cmd_spec(args) -> None:
 
     if act == "show":
         print(json.dumps(spec, ensure_ascii=False, indent=2))
+        return
+
+    if act == "compile":
+        import token_compile
+        out_dir = args.out if os.path.isabs(args.out) else os.path.join(_root(args.dir), args.out)
+        for w in token_compile.compile_spec(spec, args.platform, out_dir):
+            print(f"✅ {w}")
+        return
+
+    if act == "check":
+        _spec_check(args.dir, spec, strict=getattr(args, "strict", False))
         return
 
     if act == "set-lib":
@@ -1498,6 +1553,11 @@ def main(argv: list[str]) -> int:
     ssp.add_argument("--component", action="append", help="slot:lib:variant，可多次（同 slot 覆盖）")
     ssp.add_argument("--state", action="append", help="comp:s1,s2,… 可多次")
     ssp.add_argument("--asset", action="append", help="slot:gen:file，可多次（营销页素材）")
+    sco = ssub.add_parser("compile", help="把 tokens 编译到三端（CSS/Swift/Compose）")
+    sco.add_argument("--platform", default="all", choices=["PC", "H5", "APP", "all"])
+    sco.add_argument("--out", required=True, help="输出目录（相对 .productflow/ 或绝对）")
+    sck = ssub.add_parser("check", help="校验 design-spec（悬空/成环 alias、缺 lib、page-id 对齐等）")
+    sck.add_argument("--strict", action="store_true", help="把警告也当错误（非 0 退出）")
     sp.set_defaults(fn=cmd_spec)
 
     # meta：改项目显示名（向导重入时「创建项目」步可改名，slug/目录不变）
