@@ -982,6 +982,22 @@ class TestSpec(PfStateBase):
             self.assertTrue(os.path.isfile(os.path.join(base, fn)), fn)
         self.assertIn("--color-blue-500: #3498db;", open(os.path.join(base, "tokens.css")).read())
 
+    def test_set_tokens_merge(self):
+        import json as _json
+        p1 = os.path.join(self.dir, "draft1.json")
+        with open(p1, "w", encoding="utf-8") as f:
+            _json.dump({"tokens": {"color": {"blue": {"500": {"$value": "#3498db", "$type": "color"}}},
+                                   "space": {"4": {"$value": "16px", "$type": "dimension"}}}}, f)
+        self.run_ok(["spec", "set-tokens", "--file", p1])
+        p2 = os.path.join(self.dir, "draft2.json")
+        with open(p2, "w", encoding="utf-8") as f:
+            _json.dump({"radius": {"md": {"$value": "8px", "$type": "dimension"}}}, f)  # 直接子树，无 tokens 包裹
+        self.run_ok(["spec", "set-tokens", "--file", p2])
+        tk = read_json_file(self.dir, "design-spec.json")["tokens"]
+        self.assertEqual(tk["color"]["blue"]["500"]["$value"], "#3498db")
+        self.assertEqual(tk["space"]["4"]["$value"], "16px")
+        self.assertEqual(tk["radius"]["md"]["$value"], "8px")  # 深合并保留了前面的
+
 
 if __name__ == "__main__":
     unittest.main()
