@@ -615,6 +615,12 @@ def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = No
                    "不要 ToolSearch 找浏览器 MCP、不要试 claude-in-chrome。需要截图/E2E 就直接用本机已装的 "
                    "Python Playwright（`from playwright.sync_api import sync_playwright`，chromium headless，桌面 1440 / 移动 390 整页截图），"
                    "或 webapp-testing / playwright-cli skill；E2E 落成项目内可复跑的 @playwright/test 文件。")
+    if phase == 6:
+        prompt += ("\n\n★还原度（专题 C，前端机器依据是 design-spec）：先 `pf_state spec check` + `spec compile` 注入 token、"
+                   "按 `spec show` 的 `pages[].components` 用同款组件库组件拼（不肉眼临摹 PNG）、逐组件分治、逐态实现；"
+                   "收尾跑三层闸门（LLM 视觉裁判出 `fidelity-<页>.json` 的 verdict + `fidelity_diff.py` 差异图 + DOM 断言）"
+                   "并按 3 轮护栏自纠（渲染失败=block / 只接受确有改进 / 3 轮上限 / 用量化信号，别无限重来）。"
+                   "`phase 6 --status done` 有 fidelity 硬闸（product 页需 verdict==pass）。详见 phase-6-frontend.md。")
     env = dict(os.environ)
     _inject_openai_env(env)   # ④ 批量出图等会调 gen.py，需要 OPENAI_API_KEY/BASE_URL（和 ③ 一致）
     if phase == 8:
