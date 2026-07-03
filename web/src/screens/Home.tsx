@@ -50,7 +50,7 @@ function ProjectCard({ p }: { p: Project }) {
           ))}
         </div>
         <div className="pmeta">
-          {p.done ?? 0}/{phases.length || 7} 阶段 · {relTime(p.updated)}
+          {p.done ?? 0}/{phases.length || 8} 阶段 · {relTime(p.updated)}
         </div>
       </div>
     </div>

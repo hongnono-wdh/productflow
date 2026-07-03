@@ -84,6 +84,34 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 5 er-diagram --status done
 python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/er.md --title "ER 图"
 ```
 
+## 产品流程图 + 业务逻辑状态图（REQ-1 · 两张 mermaid 产物）
+
+REQ-1 的四张图里，**数据关系 / 数据模型**已由 ER 图（上一步）+ schema 覆盖；这里补另外两张，同样用 **mermaid 写成 `.md` 产物**（操作台产物弹窗直接渲染 mermaid，和 ER 图一样，无需另出图片）：
+
+1. **产品流程图** `artifacts/phase-5/product-flow.md`——用户主流程 / 关键路径（mermaid `flowchart`）：从入口到核心转化的页面 / 步骤流转（结合 ④ 页面地图 + 模块）。
+2. **业务逻辑状态图** `artifacts/phase-5/state-diagram.md`——关键实体 / 流程的状态机（mermaid `stateDiagram-v2`）：如订单 待支付 → 已支付 → 已发货 → 完成 / 取消。**只画有明确状态流转的实体**，没有就跳过并说明。
+
+```bash
+python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/product-flow.md --title "产品流程图"
+python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/state-diagram.md --title "业务逻辑状态图"
+```
+
+（这两张是理解性设计图，与**系统流程图**[页面 → 接口 → 数据]互补：系统流程图讲"调用 / 数据链路"，这两张讲"用户流程"与"状态流转"。纯静态 / 简单产品可只画产品流程图、状态图按需。）
+
+## 选型前置门 — schema-ddl 前先定型 + 用户参与（涉后端 + DB + 栈）
+
+> **顺序要点（用户参与的关键点）**：Step 3 schema-ddl（数据层方言 / 是否 skip）、Step 4 api-contract（有无接口）、⑥ 系统流程图 **都依赖「涉不涉后端 + 什么 DB + 什么栈」**——所以选型决策要在**写 schema-ddl 之前**做掉，并**让用户（技术负责人）参与确认**，不能拖到本阶段最后。`pick-template` 的 step id 虽登记在最后（脚本注册名不变），但它的**调研 / 决策 / DB 选型流程（见 Step 5）要在这里就执行**；最后在 pick-template 步把最终选择写进 `template-choice.md`。
+
+1. **判涉后端（DEC-5）**：据 Step 1 的 module-list——有需要存数据 / 服务端的功能模块 = 涉后端（Web 走 T2/T3）；纯静态展示、无数据模块 = 无后端（Web = T1，schema-ddl / api-contract 后续标 skipped）。原生本地（iOS / Android / 纯本地桌面）= 无 HTTP 后端、但有本地数据层。
+   - **判为无后端时**（含原生本地）：后续 ⑦ 后端实现·测试阶段会在操作台**整体隐藏、跳过**，单元 / 集成测试并入 ⑥ 前端实现——所以此时**给 ⑥ 补两个测试步骤**，让步骤条显式可见（幂等，已存在则跳过）：
+     ```bash
+     python3 "$SKILL_DIR/scripts/pf_state.py" --dir "$PF_DIR" step-add 6 unit-test 单元测试
+     python3 "$SKILL_DIR/scripts/pf_state.py" --dir "$PF_DIR" step-add 6 integration-test 集成测试
+     ```
+     涉后端项目**不要**加（⑥ 只做前端，测试在 ⑦ 阶段有可见步骤）。
+2. **涉后端才选 DB + 定后端栈**：按 Step 5 的「实时联网调研选型 + 数据库选型」流程执行——agent 按场景实时调研 + 推荐，再用 `choice ask` 让用户确认（全自动模式直接用默认）。**先把 DB 方言定下来，再写 Step 3 的 DDL。**
+3. 定完再进 Step 3：schema-ddl 按选定平台 / DB 出数据层；无后端（T1）则 er-diagram / schema-ddl / api-contract 相应标 skipped。
+
 ## Step 3: schema-ddl — 数据层（Web → DDL / iOS → SwiftData @Model / Android → Room @Entity / PC 桌面应用 → SQLite DDL（同 Web））
 
 数据层产物按平台分叉。
@@ -229,6 +257,17 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/api.md --t
         └─ 否 → T1 static-landing（纯静态：er-diagram、schema-ddl 标 skipped；api-contract 视有无表单端点，详见 templates.md T1）
 ```
 
+**实时联网调研选型（REQ-6 · DEC-4，通用型优先）**：上面的预设/决策树是**默认起点、不是终点**——定稿前**用 WebSearch 实时联网调研**：按本产品的**场景**（产品类型 + 平台 + 规模/并发/团队）查当前**主流、维护活跃、通用性强**的框架/库与推荐默认参数，而不是凭记忆或死套固定预设。调研三点：① 该场景当前主流推荐的框架/技术栈（版本、维护状态、生态活跃度）；② 关键库的当前稳定版本 + 推荐默认配置参数；③ 有更通用/更省心的选择就采纳。在 `template-choice.md` 写明「预设默认 → 实时调研结论 → 最终选择 + 出处链接」。**降级**：拿不到联网/WebSearch 时退回预设默认，并 `log` 说明「未联网、用预设默认」——不硬报错。
+
+**数据库选型（REQ-9 · 仅当涉及后端）**：DEC-5 判定**涉及后端**（T2/T3、带云后端的桌面等）才做；纯静态 T1 / 原生本地（SwiftData / Room / 本地 SQLite）**无需另选、跳过**。做法：agent 按场景 + 上面实时调研**推荐一个数据库**（默认 SQLite 系——T2=Cloudflare D1、T3/单机=SQLite；仅当数据量/并发/关系复杂度确需时才上 Postgres/MySQL 并写明理由），再用 `choice ask` 让用户确认后定稿（**全自动模式**：直接采用推荐默认、不阻塞）：
+
+```bash
+python3 "$SKILL_DIR/scripts/pf_state.py" choice ask --stage 5 --question "数据库选型：推荐 <DB> —— <一句场景理由>。确认？" --option "用 <DB>（默认）" --option "换 <备选DB>"
+# 拿到 ch-xxxx 后：choice wait <id> --timeout 600 阻塞等确认；全自动/超时则按默认继续
+```
+
+DB 决定 **SQL 方言 / ORM**，须在 schema-ddl、api 契约锚稳前定好；**若最终选了非 SQLite 系**（如 Postgres），回 schema-ddl 步按新方言重出 DDL。把 DB 选择 + 理由写进 `template-choice.md`。
+
 为什么 Phase 5 就定栈：Phase 6 的 scaffold 步骤直接从所选预设起步，现在不定，前面的数据层/接口设计可能与运行时不匹配（比如选了 T1 却设计了一堆接口，或 APP 项目却出了 SQLite DDL）。
 
 把以下内容写进 `artifacts/phase-5/template-choice.md`：**打包了哪些资料 → 分析依据 → 选了什么 / 为什么**（平台、命中预设则走了哪条分支、若另选栈/换库写明为什么默认预设不满足这个产品）。
@@ -241,6 +280,44 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 5 pick-template --status done
 python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/template-choice.md --title "技术栈选择与理由"
 ```
 
+## 生成系统流程图 backend-flow.json（涉后端项目 · 本阶段顺手产出）
+
+> DEC-5：纯静态 T1 / 原生本地无 HTTP 后端（P-iOS / P-Android / 纯本地桌面）→ **跳过、不生成**。涉后端（T2/T3、带云后端桌面）才做。
+
+**系统流程图建立在 ④ 业务架构图之上**：④ 的 `arch.json` / `module-arch.mm.md`（业务模块架构树：页面 → 模块 → 功能点）是**模块清单的参考**——⑤ 读它拿到每个页面下有哪些模块。
+
+> ⚠️ **只放「后端服务模块」（有后端接口的）**：如 认证、部门管理、容器管理、审计…。④ 架构里那些**纯前端 UI 展示块 / 交互区块**——如「全局框架壳」「容器表格」「端口映射」「三级角色分配」「快捷操作」「资源监控曲线」这类页面内的展示区块——**不要放进系统流程图**：它们没有后端接口，塞进来就是一堆没有任何连线的光杆节点（污染）。判断标准：这个模块有没有对应的 API 接口？没有就是 UI 块，跳过。
+
+给选中的后端模块**配上接口（api.md）、数据表（er/schema）、页面链接（pages.json）**，用 backend-flow CLI 写成 backend-flow.json（不是另起"生成"动作、也不是 ⑥ 才建；操作台视图只读这份产物、不提供"生成"按钮）：
+
+```bash
+# ⚠️ 重做本阶段 / 重新生成时：先清空旧图再重画（= 一张干净的新图，不追加、绝不留旧模块残留）
+python3 "$SKILL_DIR/scripts/pf_state.py" backend-flow clear
+# 每个「后端服务模块」（有接口的才放；纯 UI 展示块跳过）——英文 id + --name 中文模块名
+python3 "$SKILL_DIR/scripts/pf_state.py" backend-flow add-node --id module:<英文id> --type module --name "<中文模块名>"
+# 每个接口（api.md 里的）→ 归属模块 + 模块 calls 接口（--name 给中文接口名）
+python3 "$SKILL_DIR/scripts/pf_state.py" backend-flow add-node --id "api:<METHOD 路径>" --type interface --module <模块> --name "<中文接口名>"
+python3 "$SKILL_DIR/scripts/pf_state.py" backend-flow add-edge --from module:<模块> --to "api:<...>" --type calls
+# 每张表（er/schema 里的）+ 接口读/写表（--name 中文表名；--field 关键字段供点表/节点对话框查看）
+python3 "$SKILL_DIR/scripts/pf_state.py" backend-flow add-node --id table:<表> --type table --name "<中文表名>" \
+  --field "id INTEGER PK" --field "email TEXT UNIQUE" --field "..."
+python3 "$SKILL_DIR/scripts/pf_state.py" backend-flow add-edge --from "api:<...>" --to table:<表> --type reads_from   # 或 writes_to
+# 页面 ↔ 模块（④ 页面地图，用 pages.json 的页面 id）——页面中心视图靠它下钻
+python3 "$SKILL_DIR/scripts/pf_state.py" backend-flow link-page --page <页面id> --module <模块>
+```
+
+节点只存 id / 类型 / 归属 / 中文名（`--name`）/ 数据表字段摘要（`--field`），定义仍以 ④ arch.json / modules.md / api.md / er 为准、**不重存**。写完操作台 ⑤ 面板即出可交互的系统流程图：**页面视图**（④ 真实设计图缩略排成画廊 → 点某页面就地展开它的 模块 → 接口 → 数据表链路、其它隐藏）/ **接口·数据全览**；节点**主显中文名、英文 id 灰字副显**，可拖 / 缩放 / hover 高亮；**点任一节点弹该节点对话框**（数据表含字段结构 +「这个节点要改什么」写一句发给 agent 改，走 design-feedback）；⑥ 开发时在这张图上更新状态、不重新生成。
+
+## 第三方 key 识别（涉后端项目 · 用户在操作台填）
+
+若某模块 / 接口用到**产品级第三方服务**（支付 Stripe、短信、地图、OAuth、对象存储…）需要 key，本阶段就**登记这些 key 需求**——操作台据此在页面上列出、让用户填（DEC-3：只做开发侧 key）：
+
+```bash
+python3 "$SKILL_DIR/scripts/pf_state.py" product-key add --key STRIPE_SECRET_KEY --desc "Stripe 支付" --module payment
+```
+
+只登记**需要哪些 key + 用途 + 归属模块**（从 api.md / 数据来源识别）；**绝不把 key 值写进任何产物 / 日志 / 留言**——值由用户在操作台填入、存 `~/.productflow/secrets/`（不进 git），⑥ 开发用到时从环境变量取。无第三方依赖则跳过本步。
+
 ## 检查点
 
 阶段收尾按固定顺序执行：
@@ -252,7 +329,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/template-c
    python3 "$SKILL_DIR/scripts/pf_state.py" reply "<对该条留言的回应>"   # 每条留言各回一次
    ```
 
-   有消息影响设计的，改产物、重新 artifact 登记后再继续。
+   有消息影响设计的，改产物、重新 artifact 登记后再继续。**`design-feedback` 类型的消息 = 用户在操作台某份产物上的定向修改意见**（含产物路径 `file` + 可能的选中片段「…」+ 意见）——**直接按它精确改对应产物的那一处、改完重新 `artifact` 登记**，比泛泛重做整份更省更准（对应操作台产物弹窗里的「对这份产物提修改意见」）。
 
 2. 确认产物齐全且互相一致，按平台分别核对：
    - **Web（PC / H5）**：modules.md ↔ er.md ↔ schema.sql ↔ api.md ↔ template-choice.md 五份；T1 时 er-diagram、schema-ddl 标 skipped，api-contract 视有无表单端点（无端点则也 skipped），口径以 templates.md 的 T1 节为准。
@@ -269,4 +346,4 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/template-c
 
 4. 在 CLI 向用户汇报：模块清单（P0/P1）、数据层规模（表数 / `@Model` 数 / Room `@Entity` 数 / SQLite 表数(P-Desktop)）、接口数量（原生 App / 纯本地桌面应用说明无网络后端）、平台与所选预设（T1/T2/T3/P-iOS/P-Android/P-Desktop）及理由，并明确说"这套设计将作为 Phase 6 的固定开发输入，确认后开始实现"。请用户在网页或 CLI 确认后进入 Phase 6；用户此前明确说过"全自动"则不停留。
 
-下一阶段见 phase-6-implement.md。
+下一阶段见 phase-6-frontend.md（前端实现）。

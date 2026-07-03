@@ -219,6 +219,7 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
   const [mode, setMode] = useState<'design' | 'arch'>('design') // ④ 设计稿 / 业务架构图（只读树）模式
   const [archNonce, setArchNonce] = useState(0) // 架构图重取信号（切到架构图 / agent 生成完成时 +1）
   const [pending, setPending] = useState<'pagemap' | 'genall' | 'arch' | null>(null) // 哪个 ④ 按钮触发了本次 stage-4 运行 → loading 显在对的按钮上
+  const [genPending, setGenPending] = useState(false) // ③「生成首图」乐观 loading：POST 成功才置，服务端 gen-heroes 槽消失/新首图落地时清
 
   const cv = useRef<CanvasCell & { loaded: boolean; stage: number }>({ view: defView(), items: {}, notes: [], loaded: false, stage })
   const [isLoaded, setIsLoaded] = useState(false)
@@ -243,6 +244,7 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
   const selectedHero = explore?.selectedHero || ''
   const pages: Page[] = pagesCh?.pages || []
   const genHero = !!exReq['gen-heroes']
+  const genBusy = genHero || genPending   // 服务端在生成 或 刚点了生成（乐观）→ 按钮置「生成中」
 
   // ② 选中的参考（摆到首图画布上 + 作为「本次参考」默认候选）
   const selRefList: ExploreRef[] = (() => {
@@ -368,6 +370,15 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
     if (prevRunning.current && !running) { setArchNonce((n) => n + 1); setPending(null) } // 跑完：架构图重取 + 清 loading 归属
     prevRunning.current = running
   }, [stage4Log?.running])
+
+  // ③ 生成首图收尾：服务端 gen-heroes 槽 true→false（完成/失败/超时）或有新首图落地 → 清乐观 loading
+  const prevGenHero = useRef(false)
+  const prevHeroCount = useRef(heroes.length)
+  useEffect(() => {
+    if ((prevGenHero.current && !genHero) || heroes.length > prevHeroCount.current) setGenPending(false)
+    prevGenHero.current = genHero
+    prevHeroCount.current = heroes.length
+  }, [genHero, heroes.length])
 
   // ---- pan / drag / wheel ----
   useEffect(() => {
@@ -525,7 +536,7 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
     if (busy) { toast('Agent 正在跑，稍等'); return }
     setPending('pagemap')
     post('/api/run-stage', { phase: 4, instruction: '重点先做第一步 page-map：读 brief.json / replicate-notes 推断本产品应有的所有页面，逐个 page add 占位（带 --note 写依据，按当前主平台）。先不急着出设计图——用户会逐页点平台格让你生成对应平台版本。' })
-      .then((r) => { if (!r.ok) { if (r.status === 409) toast('Agent 已在进行中'); setPending(null) } }).catch(() => setPending(null))
+      .then((r) => { if (!r.ok) { if (r.status === 409) toast('Agent 已在进行中'); else if (r.status === 428) toast('④ 出图需先配置生图 key（OPENAI_API_KEY），配置后重试'); setPending(null) } }).catch(() => setPending(null))
     toast('已让 Agent 按需求列出页面（完成后页面卡会出现在画布）')
   }
   const genAllPages = () => {
@@ -534,7 +545,7 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
     if (!confirm(`批量生成全部 ${pages.length} 个页面 ×「所有选定平台」的设计稿（按优先级逐平台，沿用③首图基调）？Agent 会逐平台逐页生成，较花时间。`)) return
     setPending('genall')
     post('/api/run-stage', { phase: 4, instruction: "批量**并发**出图，**覆盖所有选定平台**（别只出主平台、别一页一页串行——openai-image-gen 支持并发 20）：① 读 `.productflow/wizard.json` 的 `platforms`（所有选定平台）与 `priority`（优先级顺序）；**按 priority 逐平台**处理（主平台先，如 APP→PC→H5）。② 对**当前平台**：把页面地图里**每一个还没有该平台设计稿的页面**各写一个 prompt——每页 = 该页内容/功能 + ③ 选定首图的视觉基调（配色/字体气质/质感）+ **该平台**界面描述 + 纯 UI 约束（pure UI, fills the frame edge-to-edge, no background scene, no device frame, front view）。③ 用**一条 gen.py 命令并发生成该平台全部页面**：每页一个 `--prompt`，整条带 `--size <该平台尺寸: APP/H5=1080x2340, PC=1440x1080>` `--concurrency 20` `--model gpt-image-2 --out-dir artifacts/phase-4`。④ 生成完按 gen.py 写的 prompts.json 把每张图映射回对应页面，逐个 `page set <pg-id> --add-version <文件> --platform <该平台>` 关联。⑤ 一个平台出完再做下一个平台，直到所有选定平台都出齐。前端实时显示进度。" })
-      .then((r) => { if (!r.ok) { if (r.status === 409) toast('Agent 已在进行中'); setPending(null) } }).catch(() => setPending(null))
+      .then((r) => { if (!r.ok) { if (r.status === 409) toast('Agent 已在进行中'); else if (r.status === 428) toast('④ 出图需先配置生图 key（OPENAI_API_KEY），配置后重试'); setPending(null) } }).catch(() => setPending(null))
     toast(`已让 Agent 按优先级逐平台批量生成 ${pages.length} 个页面（逐平台逐页完成后平台格变亮）`)
   }
   const genArch = () => {
@@ -579,15 +590,23 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
     ta.focus(); ta.setSelectionRange(pos, pos)
   }
   const dialogGenerate = () => {
-    if (genHero) { toast('正在生成，稍等'); return }
+    if (genBusy) { toast('正在生成，稍等'); return }
     const instruction = (hdText.current?.value || '').trim()
     const usedFiles = Array.from(roundSet)
     const req: Record<string, unknown> = { kind: 'gen-heroes', selectedRefs }
     if (usedFiles.length) req.refFiles = usedFiles
     if (instruction) req.instruction = instruction
-    if (hdText.current) hdText.current.value = ''
-    post('/api/explore', { selectedRefs, request: req })
-    toast('已请 Agent 生成首图')
+    setGenPending(true)   // 乐观：按钮立刻置「生成中」
+    post('/api/explore', { selectedRefs, request: req }).then((r) => {
+      if (r.ok) {
+        if (hdText.current) hdText.current.value = ''   // 成功才清输入框
+        toast('已请 Agent 生成首图')
+      } else {
+        setGenPending(false)   // 没下发成功 → 回滚按钮，别假装在生成
+        if (r.status === 428) toast('还没配置生图 key（OPENAI_API_KEY），无法生成首图——配置后重试')
+        else toast(`生成请求被拒（HTTP ${r.status}），请重试`)
+      }
+    }).catch(() => { setGenPending(false); toast('网络错误，生成请求没发出去') })
   }
 
   const platforms = wizard?.platforms?.length ? wizard.platforms : ['APP']
@@ -740,7 +759,7 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
 
       {empty && !archView && <div id="cv-empty">画布还是空的 — 产物登记后会自动出现在这里</div>}
 
-      {stage === 3 && <HeroDialog roundRefs={roundRefCards()} toggleRound={toggleRound} hdText={hdText} hdCollapsed={hdCollapsed} gen={genHero} genFailed={!!explore?.heroGenFailed} log={(explore?.heroGenLog as HeroGenLogEntry[]) || []} insertRefCode={insertRefCode} dialogGenerate={dialogGenerate} force={force} />}
+      {stage === 3 && <HeroDialog roundRefs={roundRefCards()} toggleRound={toggleRound} hdText={hdText} hdCollapsed={hdCollapsed} gen={genBusy} genFailed={!!explore?.heroGenFailed} log={(explore?.heroGenLog as HeroGenLogEntry[]) || []} insertRefCode={insertRefCode} dialogGenerate={dialogGenerate} force={force} />}
 
       <div className="cv-hint">{hint}</div>
       {!archView && (

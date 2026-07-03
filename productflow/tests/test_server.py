@@ -106,7 +106,7 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(proj["name"], "Listing Probe")
         self.assertEqual(proj["done"], 0)
         self.assertEqual(proj["current_phase"], 1)
-        self.assertEqual(len(proj["phases"]), 7)
+        self.assertEqual(len(proj["phases"]), 8)
         self.assertFalse(proj["missing"])
         self.assertFalse(proj["error"])
         self.assertFalse(proj["archived"])
@@ -302,6 +302,53 @@ class ServerTest(unittest.TestCase):
         self.assertIn("explore-request", types)
         entry = next(m for m in inbox["messages"] if m.get("type") == "explore-request")
         self.assertEqual(entry["request"], {"kind": "search-refs", "keywords": ["fintech"]})
+
+    def test_search_refs_autoregisters_orphan_downloads(self):
+        # A1 兜底：agent 下载了图但（stub claude 空转）没 done-request → _auto_explore 收尾时
+        # 自动把 refs/ 里未登记的图 add-ref，避免超时/漏登记导致 refs=0、成果白丢。
+        cp = h.create_project(self.port, "Orphan Refs", slug="orphan-refs")
+        pid = cp["id"]
+        refs_dir = os.path.join(cp["dir"], ".productflow", "artifacts", "phase-2", "refs")
+        os.makedirs(refs_dir, exist_ok=True)
+        with open(os.path.join(refs_dir, "1.png"), "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\n")   # 已下载但未登记的参考图
+        h.http(self.port, f"/p/{pid}/api/explore", method="POST",
+               body={"request": {"kind": "search-refs", "keywords": ["x"]}})
+        # 轮询等后台 _auto_explore 收尾（stub claude 空转、很快退出）：refs 已登记 + 请求槽已复位
+        got = None
+        for _ in range(60):
+            _, e = h.http(self.port, f"/p/{pid}/api/explore")
+            if e.get("refs") and not e.get("request", {}).get("search-refs"):
+                got = e
+                break
+            time.sleep(0.1)
+        self.assertIsNotNone(got, "兜底未在超时内登记 refs / 复位请求槽")
+        self.assertIn("artifacts/phase-2/refs/1.png", [r.get("file") for r in got["refs"]])
+        self.assertTrue(any(r.get("auto") for r in got["refs"]), "兜底登记项应标 auto=True")
+
+    # ── 系统流程图 GET（生成已移到 ⑤ agent 内联，无 server 生成端点）──
+    def test_backend_flow_get_default_when_absent(self):
+        cp = h.create_project(self.port, "BF Get", slug="bf-get")
+        _, bf = h.http(self.port, f"/p/{cp['id']}/api/backend-flow")
+        self.assertEqual(bf, {"version": 1, "nodes": [], "edges": [], "pageLinks": [], "entry": None, "layout": {}})
+
+    def test_product_keys_needs_and_fill_status(self):
+        # W6：⑤ 登记第三方 key 需求 → GET 返回需求 + 填写状态；填值后 filled=True 且明文不回吐
+        cp = h.create_project(self.port, "PK", slug="pk-demo")
+        r = h.cli(["product-key", "add", "--key", "STRIPE_SECRET_KEY", "--desc", "Stripe 支付", "--module", "payment"],
+                  self.home, project=cp["dir"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        _, body = h.http(self.port, f"/p/{cp['id']}/api/product-keys")
+        self.assertEqual(len(body["keys"]), 1)
+        k = body["keys"][0]
+        self.assertEqual(k["key"], "STRIPE_SECRET_KEY")
+        self.assertEqual(k["desc"], "Stripe 支付")
+        self.assertFalse(k["filled"])
+        # 用户填值（复用 deploy-creds secrets 存储）
+        h.http(self.port, f"/p/{cp['id']}/api/deploy-creds", method="POST", body={"creds": {"STRIPE_SECRET_KEY": "sk_test_ABC123"}})
+        _, body2 = h.http(self.port, f"/p/{cp['id']}/api/product-keys")
+        self.assertTrue(body2["keys"][0]["filled"])
+        self.assertNotIn("sk_test_ABC123", json.dumps(body2))   # 明文绝不回吐
 
     def test_canvas_roundtrip_per_stage(self):
         cp = h.create_project(self.port, "Canvas RT", slug="canvas-rt")

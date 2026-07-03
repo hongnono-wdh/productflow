@@ -6,13 +6,16 @@ import { post } from '../lib'
 import { IcSpark } from '../icons'
 import { DeployCredsCard } from './DeployCredsCard'
 import { PreviewSection } from './PreviewSection'
+import { BackendFlowView } from './BackendFlowView'
+import { ProductKeysCard } from './ProductKeysCard'
 import type { AgentLogPayload, WizardPayload } from '../types'
 
-const NAMES: Record<number, string> = { 5: '功能与数据设计', 6: '开发实现', 7: '部署上线' }
+const NAMES: Record<number, string> = { 5: '功能与数据设计', 6: '前端实现', 7: '后端实现 · 测试', 8: '部署上线' }
 const HINTS: Record<number, string> = {
   5: '功能模块清单 → ER 图 → 表结构 DDL → API 契约 → 选开发模板。',
-  6: '按模板脚手架 → 前端 → 后端 → 测试 → 接口文档（产品代码写进项目目录）。',
-  7: '选部署目标 → 部署 → 线上冒烟 → 交付报告。',
+  6: '按模板脚手架 → 前端页面 / 交互实现 → 本地预览（严格还原 ④ 设计）。',
+  7: '后端接口 + 数据实现 → 单元测试 + 集成测试（确保功能完整跑通）→ 接口文档。',
+  8: '选部署目标 → 部署 → 线上冒烟 → 交付报告。',
 }
 const isMac = navigator.platform.indexOf('Mac') >= 0 // 独立于 wizard.primary 的 OS 嗅探（critic #4）
 
@@ -53,7 +56,7 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
     })
   const runPreview = () =>
     guard(() => {
-      post('/api/run-action', { phase: 6, action: 'preview' })
+      post('/api/run-action', { phase, action: 'preview' })
         .then((r) => {
           if (r.status === 409) toast('本阶段 Agent 已在进行中（服务端拦截了重复触发）')
         })
@@ -68,7 +71,7 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
   }
 
   let mainLabel = done ? '重做本阶段' : '让 Agent 做本阶段'
-  if (phase === 7 && !done) {
+  if (phase === 8 && !done) {
     mainLabel = prim === 'APP' ? '构建并产出上线分发包' : prim === 'PC' ? '构建并部署上线' : prim === 'H5' ? '部署上线' : '让 Agent 做本阶段'
   }
   const previewLabel = prim === 'APP' ? '📱 构建并在模拟器预览' : prim === 'PC' ? '🖥 本地运行预览' : prim === 'H5' ? '🌐 本地预览' : '▶ 构建并预览'
@@ -76,8 +79,8 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
 
   return (
     <>
-      {phase === 7 && <DeployCredsCard primary={prim} />}
-      {phase === 6 && <PreviewSection />}
+      {phase === 8 && <DeployCredsCard primary={prim} />}
+      {(phase === 6 || phase === 7) && <PreviewSection />}
       <div className="card">
         <h2>
           {NAMES[phase]} <span className="hint">交给 Agent 自动完成</span>
@@ -94,7 +97,7 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
           <IcSpark />
           {mainLabel}
         </button>
-        {phase === 6 && (
+        {(phase === 6 || phase === 7) && (
           <button className="btn ghost" disabled={running} style={disStyle} onClick={runPreview} title="让 Agent 把当前已实现的产品构建起来、跑到你屏幕/模拟器上实时预览（不重做整个阶段）">
             {previewLabel}
           </button>
@@ -131,6 +134,8 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
           </div>
         )}
       </div>
+      {phase === 5 && <BackendFlowView />}
+      {(phase === 5 || phase === 7) && <ProductKeysCard />}
     </>
   )
 }

@@ -68,17 +68,25 @@ PHASES = [
     },
     {
         "id": 6,
-        "name": "开发实现",
+        "name": "前端实现",
         "steps": [
             ("scaffold", "脚手架搭建"),
             ("frontend", "前端实现"),
-            ("backend", "后端实现"),
-            ("testing", "测试"),
-            ("api-docs", "接口文档"),
         ],
     },
     {
         "id": 7,
+        "name": "后端实现 · 测试",
+        # 无后端项目（DEC-5 判无后端）：本阶段整体隐藏，单元/集成测试并入 ⑥ 前端实现（见手册）
+        "steps": [
+            ("backend", "后端实现"),
+            ("unit-test", "单元测试"),
+            ("integration-test", "集成测试"),
+            ("api-docs", "接口文档"),
+        ],
+    },
+    {
+        "id": 8,
         "name": "部署上线",
         "steps": [
             ("pick-target", "选择部署目标"),
@@ -172,6 +180,33 @@ def _new_id(product: str, path: str) -> str:
         return pid
 
 
+def _migrate_phases_v2(old: list) -> list:
+    """旧 7 阶段（⑥开发实现 / ⑦部署上线）→ 新 8 阶段（⑥前端实现 / ⑦后端实现·测试 / ⑧部署上线）。
+    1–5 原样保留；旧⑥→新⑥(前端，延用状态+产物) + 新⑦(后端·测试，pending)；旧⑦部署→新⑧。"""
+    by_id = {p.get("id"): p for p in old}
+
+    def build(ph_def, src):
+        src = src or {}
+        step_status = {s.get("id"): s.get("status") for s in src.get("steps", [])}
+        steps = [{"id": sid, "title": t, "status": step_status.get(sid, "pending")} for sid, t in ph_def["steps"]]
+        node = {"id": ph_def["id"], "name": ph_def["name"], "status": src.get("status", "pending"),
+                "steps": steps, "artifacts": src.get("artifacts", [])}
+        if src.get("gen"):   # 保留产物版本计数（否则迁移后重做代次从 1 重来、产物版本错乱）
+            node["gen"] = src["gen"]
+        return node
+
+    new = []
+    for ph_def in PHASES:
+        i = ph_def["id"]
+        if i <= 5 or i == 6:            # 1–5 原样；新⑥前端 ← 旧⑥开发实现
+            new.append(build(ph_def, by_id.get(i)))
+        elif i == 7:                    # 新⑦后端·测试：旧结构没有，新建 pending
+            new.append(build(ph_def, None))
+        else:                           # 新⑧部署 ← 旧⑦部署
+            new.append(build(ph_def, by_id.get(7)))
+    return new
+
+
 def _load(d: str) -> dict:
     path = _state_path(d)
     try:
@@ -194,6 +229,13 @@ def _load(d: str) -> dict:
     if "v" not in state:
         state["v"] = 1
         changed = True
+    # 迁移：旧 7 阶段 → 新 8 阶段（拆⑥开发实现为⑥前端实现+⑦后端实现·测试、部署顺延⑧）
+    if state.get("v", 1) < 2 or any(ph.get("name") == "开发实现" for ph in state.get("phases", [])):
+        state["phases"] = _migrate_phases_v2(state.get("phases", []))
+        if state.get("current_phase") == 7:   # 旧部署⑦ → 新部署⑧
+            state["current_phase"] = 8
+        state["v"] = 2
+        changed = True
     if changed:
         _save(d, state)
     _registry_upsert(state["id"], abspath)
@@ -212,7 +254,7 @@ def _phase(state: dict, n: int) -> dict:
     for ph in state["phases"]:
         if ph["id"] == n:
             return ph
-    raise SystemExit(f"phase {n} not found (1-7)")
+    raise SystemExit(f"phase {n} not found (1-8)")
 
 
 def create_project(d: str, product: str, force: bool = False) -> str:
@@ -226,7 +268,7 @@ def create_project(d: str, product: str, force: bool = False) -> str:
     abspath = os.path.abspath(d)
     pid = _new_id(product, abspath)
     state = {
-        "id": pid, "v": 1, "product": product, "project_dir": abspath,
+        "id": pid, "v": 2, "product": product, "project_dir": abspath,
         "created": _now(), "updated": _now(), "current_phase": 1,
         "phases": [
             {
@@ -254,7 +296,7 @@ def cmd_init(args) -> None:
 
 def cmd_status(args) -> None:
     s = _load(args.dir)
-    print(f"{s['product']}  (phase {s['current_phase']}/7)  updated {s['updated']}")
+    print(f"{s['product']}  (phase {s['current_phase']}/{len(s['phases'])})  updated {s['updated']}")
     for ph in s["phases"]:
         mark = {"pending": "·", "active": "▶", "done": "✓"}.get(ph["status"], "?")
         steps = " ".join(
@@ -302,6 +344,18 @@ def cmd_step(args) -> None:
             return
     valid = ", ".join(st["id"] for st in ph["steps"])
     raise SystemExit(f"unknown step {args.step_id!r} in phase {args.n} (valid: {valid})")
+
+
+def cmd_step_add(args) -> None:
+    """给某阶段补一个步骤（幂等：已存在则跳过）。用于⑤判无后端时给⑥补 unit-test/integration-test。"""
+    s = _load(args.dir)
+    ph = _phase(s, args.n)
+    if any(st["id"] == args.step_id for st in ph["steps"]):
+        print(f"P{args.n}/{args.step_id} 已存在")
+        return
+    ph["steps"].append({"id": args.step_id, "title": args.title, "status": "pending"})
+    _save(args.dir, s)
+    print(f"P{args.n} +步骤 {args.step_id}（{args.title}）")
 
 
 def cmd_artifact(args) -> None:
@@ -925,6 +979,174 @@ def cmd_unregister(args) -> None:
     print(f"unregistered {args.id} (project files untouched)")
 
 
+# ── 后端流程图 backend-flow.json（薄关系层：引用 ⑤ 产物 id + 边 + 页面链接 + 状态）──
+# 节点=模块/接口/数据表（只存 id/type/所属模块/状态；定义仍以 ⑤ module-list/api-contract/er 为准，不在此重存）。
+# 边=calls/reads_from/writes_to；pageLinks=页面↔模块(N:N)。见「后端开发流程改造」设计文档。
+
+_BF_STATUS = ("todo", "doing", "done", "needfix")
+
+
+def _backend_flow_path(d: str) -> str:
+    return os.path.join(_root(d), "backend-flow.json")
+
+
+def _load_backend_flow(d: str) -> dict:
+    base = {"version": 1, "nodes": [], "edges": [], "pageLinks": [], "entry": None, "layout": {}}
+    try:
+        with open(_backend_flow_path(d), encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            base.update(data)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    for k in ("nodes", "edges", "pageLinks"):
+        if not isinstance(base.get(k), list):
+            base[k] = []
+    if not isinstance(base.get("layout"), dict):
+        base["layout"] = {}
+    return base
+
+
+def _save_backend_flow(d: str, data: dict) -> None:
+    tmp = _backend_flow_path(d) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, _backend_flow_path(d))
+
+
+def cmd_backend_flow(args) -> None:
+    """后端流程图 backend-flow.json 读写（薄关系层）：节点/边/页面链接/状态/入口。"""
+    _load(args.dir)  # 校验项目存在 + 自愈注册
+    bf = _load_backend_flow(args.dir)
+    act = args.action
+    if act == "add-node":
+        node = next((n for n in bf["nodes"] if n.get("id") == args.id), None)
+        if node is None:
+            node = {"id": args.id, "type": args.type}
+            bf["nodes"].append(node)
+        else:
+            node["type"] = args.type
+        if args.module:
+            node["module"] = args.module
+        node["status"] = args.status or node.get("status") or "todo"
+        if getattr(args, "name", None):
+            node["name"] = args.name      # 中文显示名（图上主显中文、英文 id 灰字副显）
+        if getattr(args, "field", None):
+            node["fields"] = args.field   # 数据表字段摘要（供操作台点表查看；定义仍以 ⑤ er/schema 为准）
+        _save_backend_flow(args.dir, bf)
+        print(f"节点：{args.id}（{args.type}，{node['status']}）")
+    elif act == "rm-node":
+        before = len(bf["nodes"])
+        bf["nodes"] = [n for n in bf["nodes"] if n.get("id") != args.id]
+        bf["edges"] = [e for e in bf["edges"] if e.get("from") != args.id and e.get("to") != args.id]
+        bf["pageLinks"] = [l for l in bf["pageLinks"] if l.get("module") != args.id]
+        bf["layout"].pop(args.id, None)
+        _save_backend_flow(args.dir, bf)
+        print(f"删节点 {before - len(bf['nodes'])} 个（连带其边/链接）")
+    elif act == "add-edge":
+        label = args.label or ""
+        if not any(e.get("from") == args.frm and e.get("to") == args.to and e.get("type") == args.type
+                   for e in bf["edges"]):
+            bf["edges"].append({"from": args.frm, "to": args.to, "type": args.type, "label": label})
+        _save_backend_flow(args.dir, bf)
+        print(f"边：{args.frm} —{args.type}→ {args.to}")
+    elif act == "rm-edge":
+        before = len(bf["edges"])
+        bf["edges"] = [e for e in bf["edges"]
+                       if not (e.get("from") == args.frm and e.get("to") == args.to
+                               and (args.type is None or e.get("type") == args.type))]
+        _save_backend_flow(args.dir, bf)
+        print(f"删边 {before - len(bf['edges'])} 条")
+    elif act == "set-status":
+        node = next((n for n in bf["nodes"] if n.get("id") == args.id), None)
+        if node is None:
+            raise SystemExit(f"no such node: {args.id}")
+        node["status"] = args.status
+        _save_backend_flow(args.dir, bf)
+        print(f"{args.id} → {args.status}")
+    elif act == "proc":
+        node = next((n for n in bf["nodes"] if n.get("id") == args.id), None)
+        if node is None:
+            raise SystemExit(f"no such node: {args.id}")
+        if args.state == "on":
+            node["proc"] = True          # agent 正在处理这个节点的改动（操作台显示"处理中"脉冲）
+        else:
+            node.pop("proc", None)
+        _save_backend_flow(args.dir, bf)
+        print(f"{args.id} proc={args.state}")
+    elif act == "link-page":
+        if not any(l.get("page") == args.page and l.get("module") == args.module for l in bf["pageLinks"]):
+            bf["pageLinks"].append({"page": args.page, "module": args.module})
+        _save_backend_flow(args.dir, bf)
+        print(f"页面链接：{args.page} ↔ {args.module}")
+    elif act == "set-entry":
+        bf["entry"] = args.id
+        _save_backend_flow(args.dir, bf)
+        print(f"入口设为 {args.id}")
+    elif act == "clear":
+        bf.update({"nodes": [], "edges": [], "pageLinks": [], "entry": None, "layout": {}})
+        _save_backend_flow(args.dir, bf)
+        print("已清空 backend-flow")
+    elif act == "show":
+        print(json.dumps(bf, ensure_ascii=False, indent=2))
+
+
+# ── 产品级第三方 key 需求（product-keys.json）──
+# ⑤ 识别出产品要用的第三方依赖（支付/短信/地图/OAuth…），登记「需要哪些 key + 说明/归属」，
+# 操作台据此让用户填；**key 值本身另存 ~/.productflow/secrets/（不在这、不进 git）**。DEC-3：只做开发侧 key。
+def _product_keys_path(d: str) -> str:
+    return os.path.join(_root(d), "product-keys.json")
+
+
+def _load_product_keys(d: str) -> dict:
+    base = {"version": 1, "keys": []}
+    try:
+        with open(_product_keys_path(d), encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            base.update(data)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    if not isinstance(base.get("keys"), list):
+        base["keys"] = []
+    return base
+
+
+def _save_product_keys(d: str, data: dict) -> None:
+    tmp = _product_keys_path(d) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, _product_keys_path(d))
+
+
+def cmd_product_key(args) -> None:
+    """产品级第三方 key 需求 product-keys.json：登记/删除/清空（key 值另存 secrets，不在此）。"""
+    _load(args.dir)  # 校验项目
+    pk = _load_product_keys(args.dir)
+    act = args.action
+    if act == "add":
+        entry = next((k for k in pk["keys"] if k.get("key") == args.key), None)
+        if entry is None:
+            entry = {"key": args.key}
+            pk["keys"].append(entry)
+        entry["desc"] = (args.desc or entry.get("desc") or "")
+        if args.module:
+            entry["module"] = args.module
+        _save_product_keys(args.dir, pk)
+        print(f"登记第三方 key 需求：{args.key}（{entry['desc'] or '-'}）")
+    elif act == "rm":
+        before = len(pk["keys"])
+        pk["keys"] = [k for k in pk["keys"] if k.get("key") != args.key]
+        _save_product_keys(args.dir, pk)
+        print(f"删除 key 需求 {args.key}" if len(pk["keys"]) < before else f"未找到 {args.key}")
+    elif act == "list":
+        print(json.dumps(pk, ensure_ascii=False, indent=2))
+    elif act == "clear":
+        pk["keys"] = []
+        _save_product_keys(args.dir, pk)
+        print("已清空第三方 key 需求")
+
+
 def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(prog="pf_state", description="ProductFlow pipeline state")
     # 默认取环境变量 PF_PROJECT（启动时 export 一次，全程命令免写 --dir，避免落错目录）；都没有才退到 cwd
@@ -957,6 +1179,12 @@ def main(argv: list[str]) -> int:
     sp.add_argument("step_id")
     sp.add_argument("--status", required=True, choices=["pending", "active", "done", "skipped"])
     sp.set_defaults(fn=cmd_step)
+
+    sp = sub.add_parser("step-add", help="给某阶段补一个步骤（幂等）")
+    sp.add_argument("n", type=int)
+    sp.add_argument("step_id")
+    sp.add_argument("title")
+    sp.set_defaults(fn=cmd_step_add)
 
     sp = sub.add_parser("artifact")
     sp.add_argument("n", type=int)
@@ -1015,6 +1243,55 @@ def main(argv: list[str]) -> int:
     ps.add_argument("--platform", choices=["PC", "H5", "APP"], help="该版本对应的平台（配合 --add-version / --remove-version）")
     ps.add_argument("--impl-skip", dest="impl_skip", help="（⑥用）声明该页本阶段不实现的原因；写了则 ⑥ 覆盖校验豁免该页。传空串 '' 清除豁免")
     sp.set_defaults(fn=cmd_page)
+
+    # backend-flow：后端流程图（薄关系层，backend-flow.json）——节点/边/页面链接/状态/入口
+    sp = sub.add_parser("backend-flow", help="后端流程图 backend-flow.json：节点/边/页面链接/状态/入口（薄关系层）")
+    bsub = sp.add_subparsers(dest="action", required=True)
+    bn = bsub.add_parser("add-node", help="加/更新节点（模块/接口/数据表）")
+    bn.add_argument("--id", required=True, help="节点 id（引用 ⑤ 产物，如 module:auth / api:POST-login / table:users）")
+    bn.add_argument("--type", required=True, choices=["module", "interface", "table"])
+    bn.add_argument("--module", help="所属模块 id（接口/表的归属）")
+    bn.add_argument("--status", choices=list(_BF_STATUS), help="状态（默认 todo）")
+    bn.add_argument("--name", help="中文显示名（图上主显中文、英文 id 灰字副显）")
+    bn.add_argument("--field", action="append", help="数据表字段（可多次），如 --field \"email TEXT UK\"；仅数据表用，供点表查看")
+    brn = bsub.add_parser("rm-node", help="删节点（连带其边/链接）")
+    brn.add_argument("--id", required=True)
+    ba = bsub.add_parser("add-edge", help="加边（calls / reads_from / writes_to）")
+    ba.add_argument("--from", dest="frm", required=True)
+    ba.add_argument("--to", required=True)
+    ba.add_argument("--type", required=True, help="calls / reads_from / writes_to …")
+    ba.add_argument("--label", help="标注（可选）")
+    bre = bsub.add_parser("rm-edge", help="删边")
+    bre.add_argument("--from", dest="frm", required=True)
+    bre.add_argument("--to", required=True)
+    bre.add_argument("--type", help="只删该类型；不给则删 from→to 的全部")
+    bss = bsub.add_parser("set-status", help="设节点状态（进度）")
+    bss.add_argument("--id", required=True)
+    bss.add_argument("--status", required=True, choices=list(_BF_STATUS))
+    bpr = bsub.add_parser("proc", help="标记/清除节点「处理中」（改动进行时操作台脉冲提示）")
+    bpr.add_argument("--id", required=True)
+    bpr.add_argument("--state", required=True, choices=["on", "off"])
+    bl = bsub.add_parser("link-page", help="页面 ↔ 模块 关联（N:N）")
+    bl.add_argument("--page", required=True, help="页面 id")
+    bl.add_argument("--module", required=True, help="模块 id")
+    bfe = bsub.add_parser("set-entry", help="设入口节点")
+    bfe.add_argument("--id", required=True)
+    bsub.add_parser("clear", help="清空 backend-flow")
+    bsub.add_parser("show", help="打印 backend-flow.json")
+    sp.set_defaults(fn=cmd_backend_flow)
+
+    # product-key：产品级第三方 key 需求（值存 secrets，不在此）
+    sp = sub.add_parser("product-key", help="产品级第三方 key 需求 product-keys.json：登记/删除/清空")
+    pksub = sp.add_subparsers(dest="action", required=True)
+    pka = pksub.add_parser("add", help="登记一个需要的第三方 key")
+    pka.add_argument("--key", required=True, help="环境变量名，如 STRIPE_SECRET_KEY")
+    pka.add_argument("--desc", help="用途说明，如 Stripe 支付")
+    pka.add_argument("--module", help="所属模块（可选）")
+    pkr = pksub.add_parser("rm", help="删除一个 key 需求")
+    pkr.add_argument("--key", required=True)
+    pksub.add_parser("list", help="打印 product-keys.json")
+    pksub.add_parser("clear", help="清空")
+    sp.set_defaults(fn=cmd_product_key)
 
     # explore：视觉探索（agent 写 Dribbble 参考 / 首图 / 风格总结）
     sp = sub.add_parser("explore")
