@@ -143,15 +143,22 @@ export function PreviewOverlay() {
       toast('先在图上框选区域并写一句意见')
       return
     }
+    // 设计图侧（④ 只读对照）随圈选一起过河——否则 Agent 只拿到实现图，无法真做「设计↔实现」对比。
+    const designFile = pv.mode === 'feedback' ? pv.designFile : undefined
     const regions = boxes.current.map((b, i) => ({ n: i + 1, x: +b.x.toFixed(4), y: +b.y.toFixed(4), w: +b.w.toFixed(4), h: +b.h.toFixed(4), text: b.text }))
-    const text =
-      `成品预览反馈 @ ${pv.title}（${pv.file}），${regions.length} 处：\n` +
-      regions.map((r) => `${r.n}. 区域(左${Math.round(r.x * 100)}% 上${Math.round(r.y * 100)}% 宽${Math.round(r.w * 100)}% 高${Math.round(r.h * 100)}%)：${r.text}`).join('\n')
-    post('/api/inbox', { text, type: 'preview-feedback', file: pv.file, regions })
+    const text = designFile
+      ? `成品预览反馈 @ ${pv.title}\n实现截图：${pv.file}\n对照设计稿（只读目标）：${designFile}\n下面坐标都相对【实现截图】（左上为原点），共 ${regions.length} 处：\n` +
+        regions.map((r) => `${r.n}. 区域(左${Math.round(r.x * 100)}% 上${Math.round(r.y * 100)}% 宽${Math.round(r.w * 100)}% 高${Math.round(r.h * 100)}%)：${r.text}`).join('\n')
+      : `成品预览反馈 @ ${pv.title}（${pv.file}），${regions.length} 处：\n` +
+        regions.map((r) => `${r.n}. 区域(左${Math.round(r.x * 100)}% 上${Math.round(r.y * 100)}% 宽${Math.round(r.w * 100)}% 高${Math.round(r.h * 100)}%)：${r.text}`).join('\n')
+    post('/api/inbox', { text, type: 'preview-feedback', file: pv.file, designFile, regions })
       .then(() => {
         closePreview()
         if (confirm(`已记录 ${regions.length} 处圈选意见。让 Agent 现在就针对性修复这些区域吗？\n（重跑 ⑥ 开发实现、带上你的圈选；⑥ 面板会显示「Agent 进行中」。选"取消"=只进收件箱，Agent 下个检查点再读。）`)) {
-          const fixInstr = `用户在成品预览上圈选了以下要改的区域，**针对性只改这些点**（不是从头重做整个阶段），改完跑测试确认无回归：\n${text}`
+          const cmpHint = designFile
+            ? `先用 Read 打开这两张图逐一对比——设计稿 ${designFile}（目标长相）对比实现截图 ${pv.file}（当前现状），确认差异后再改：\n`
+            : ''
+          const fixInstr = `用户在成品预览上圈选了以下要改的区域，**针对性只改这些点**（不是从头重做整个阶段），改完跑测试确认无回归：\n${cmpHint}${text}`
           post('/api/run-stage', { phase: 6, instruction: fixInstr })
             .then((r) => {
               if (r.status === 409) toast('⑥ Agent 已在进行中——你的圈选已进收件箱，它会读到')
