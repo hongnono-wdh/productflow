@@ -84,6 +84,26 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 5 er-diagram --status done
 python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/er.md --title "ER 图"
 ```
 
+## 数据态 + UI 数据边界 → design-spec（还原度方案专题 D · R-⑤a/b）
+
+数据模型定完，顺带定「数据驱动的 UI 边界」——④ 已定组件的**交互态**，⑤ 补**数据态**，一起进 design-spec 的 `pages[].states`，供 ⑥ 用真实边界数据渲染 + 验收。不定这些，⑥ 只会用理想假数据撑出跟设计稿不同的布局。
+
+对承载数据的关键页/组件，补数据态与边界：
+- **空数据**：列表/表格/仪表盘为空时的空态（`empty`）。
+- **多数据/溢出**：典型条数 vs 最大条数（决定要不要虚拟滚动/分页，`overflow`）。
+- **长文本截断**：长标题/长正文的省略号 vs 换行规则。
+- **加载**：数据在途的 `loading`/skeleton。
+
+写进 design-spec（承接 ④ 的交互态，追加数据态）：
+
+```bash
+# 数据容器类组件补数据态（与 ④ 的交互态合并存入 states）
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-page <pg-id> --state "list:default,empty,loading,overflow"
+# 长文本/条数边界写进该页 note 或 modules.md，⑥ 用真实边界数据渲染（别用「3 条完美假数据」撑布局）
+```
+
+> iOS/Android/Desktop 同理：Room / SwiftData / SQLite 的实体条数与字段长度就是 UI 数据边界，一并交代给 ⑥。
+
 ## 产品流程图 + 业务逻辑状态图（REQ-1 · 两张 mermaid 产物）
 
 REQ-1 的四张图里，**数据关系 / 数据模型**已由 ER 图（上一步）+ schema 覆盖；这里补另外两张，同样用 **mermaid 写成 `.md` 产物**（操作台产物弹窗直接渲染 mermaid，和 ER 图一样，无需另出图片）：
