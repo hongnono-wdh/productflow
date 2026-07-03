@@ -1437,7 +1437,7 @@ import struct as _struct
 _WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 # 推送频道集（见 web/MIGRATION_PLAN.md）。canvas/deploy-creds 不在此列——保持 request/response。
 _WS_PROJECT_CHANNELS = [
-    "state", "inbox", "health", "pages", "choices", "brief", "explore", "wizard",
+    "state", "inbox", "health", "pages", "choices", "brief", "explore", "wizard", "spec",
     "agent-log:research", "agent-log:search-refs",
     "agent-log:stage-4", "agent-log:stage-5", "agent-log:stage-6", "agent-log:stage-7", "agent-log:stage-8",
 ]
@@ -1483,6 +1483,8 @@ def _ws_channel_payload(pf: str, pid: str, channel: str):
                              "styleSummary": "", "heroes": [], "selectedHero": ""})
     if channel == "wizard":
         return _read_json_or(pf, "wizard.json", {"brief": "", "platforms": [], "primary": None, "priority": [], "stylePrefs": []})
+    if channel == "spec":
+        return _read_json_or(pf, "design-spec.json", {"v": 1, "componentLib": {}, "tokens": {}, "pages": [], "provenance": {}})
     if channel.startswith("agent-log:"):
         phase = channel.split(":", 1)[1]
         lines = []
@@ -1899,6 +1901,12 @@ class Handler(BaseHTTPRequestHandler):
                 except FileNotFoundError:
                     self._json({"brief": "", "platforms": [], "primary": None,
                                 "priority": [], "stylePrefs": []})
+            elif sub == "/api/spec":
+                try:
+                    with open(os.path.join(pf, "design-spec.json"), encoding="utf-8") as f:
+                        self._send(200, f.read().encode(), "application/json; charset=utf-8")
+                except FileNotFoundError:
+                    self._json({"v": 1, "componentLib": {}, "tokens": {}, "pages": [], "provenance": {}})
             elif sub.startswith("/artifacts/"):
                 rel = os.path.normpath(sub[len("/artifacts/"):].lstrip("/"))
                 base = os.path.realpath(os.path.join(pf, "artifacts"))

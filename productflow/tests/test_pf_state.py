@@ -927,5 +927,61 @@ class TestArch(PfStateBase):
         self.assertNotEqual(r.returncode, 0)        # 无 arch.json → 非 0 退出（不静默）
 
 
+class TestSpec(PfStateBase):
+    def test_set_and_show_roundtrip(self):
+        self.run_ok(["spec", "set-lib", "--platform", "PC", "--lib", "shadcn/ui + tailwind", "--theme", "neutral"])
+        self.run_ok(["spec", "set-token", "color.blue.500", "--value", "#3498db", "--type", "color"])
+        self.run_ok(["spec", "set-token", "color.action.primary", "--value", "color.blue.500", "--type", "color", "--ref"])
+        spec = read_json_file(self.dir, "design-spec.json")
+        self.assertEqual(spec["componentLib"]["PC"]["lib"], "shadcn/ui + tailwind")
+        self.assertEqual(spec["tokens"]["color"]["blue"]["500"]["$value"], "#3498db")
+        self.assertEqual(spec["tokens"]["color"]["action"]["primary"]["$value"], "{color.blue.500}")
+
+    def test_set_page_component_state_asset(self):
+        r = self.run_ok(["page", "add", "首页"])
+        pgid = re.search(r"pg-[0-9a-f]+", r.stdout).group(0)
+        self.run_ok(["spec", "set-page", pgid, "--type", "product",
+                     "--component", "hero.cta:Button:primary",
+                     "--state", "list:default,empty,loading",
+                     "--asset", "hero.bg:gpt-image:x.png"])
+        pg = read_json_file(self.dir, "design-spec.json")["pages"][0]
+        self.assertEqual(pg["id"], pgid)
+        self.assertEqual(pg["type"], "product")
+        self.assertEqual(pg["components"][0], {"slot": "hero.cta", "lib": "Button", "variant": "primary"})
+        self.assertEqual(pg["states"]["list"], ["default", "empty", "loading"])
+        self.assertEqual(pg["assets"][0], {"slot": "hero.bg", "gen": "gpt-image", "file": "x.png"})
+
+    def test_check_pass(self):
+        r = self.run_ok(["page", "add", "首页"])
+        pgid = re.search(r"pg-[0-9a-f]+", r.stdout).group(0)
+        self.run_ok(["spec", "set-lib", "--platform", "PC", "--lib", "shadcn"])
+        self.run_ok(["spec", "set-token", "color.blue.500", "--value", "#3498db", "--type", "color"])
+        self.run_ok(["spec", "set-page", pgid, "--type", "product"])
+        r = cli(["spec", "check"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_check_dangling_alias_fails(self):
+        self.run_ok(["spec", "set-lib", "--platform", "PC", "--lib", "shadcn"])
+        self.run_ok(["spec", "set-token", "color.bad", "--value", "nope.token", "--type", "color", "--ref"])
+        r = cli(["spec", "check"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("悬空 alias", r.stdout)
+
+    def test_check_page_id_mismatch_fails(self):
+        self.run_ok(["spec", "set-lib", "--platform", "PC", "--lib", "shadcn"])
+        self.run_ok(["spec", "set-page", "pg-nonexist", "--type", "product"])
+        r = cli(["spec", "check"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("pages.json 不存在", r.stdout)
+
+    def test_compile_writes_three_ends(self):
+        self.run_ok(["spec", "set-token", "color.blue.500", "--value", "#3498db", "--type", "color"])
+        self.run_ok(["spec", "compile", "--platform", "all", "--out", "artifacts/phase-6/tokens"])
+        base = os.path.join(self.dir, ".productflow", "artifacts", "phase-6", "tokens")
+        for fn in ("tokens.css", "Tokens.swift", "Tokens.kt"):
+            self.assertTrue(os.path.isfile(os.path.join(base, fn)), fn)
+        self.assertIn("--color-blue-500: #3498db;", open(os.path.join(base, "tokens.css")).read())
+
+
 if __name__ == "__main__":
     unittest.main()
