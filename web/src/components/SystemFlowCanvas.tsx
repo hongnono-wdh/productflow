@@ -258,6 +258,7 @@ export function SystemFlowCanvas({ bf, pages, mode, onChanged, missKeyMods, onRe
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 16, fontWeight: 600 }}>{ICON[sel.type] || ''} {sel.name || shortLabel(sel.id)}</div>
             <div style={{ fontSize: 12, color: 'var(--dim)', fontFamily: 'monospace' }}>{shortLabel(sel.id)}　·　{sel.type}{sel.status ? '　·　' + sel.status : ''}</div>
+            {sel.note ? <div style={{ fontSize: 12.5, color: '#b93a32', marginTop: 5, lineHeight: 1.5 }}>⚠ {sel.note}</div> : null}
           </div>
           <span onClick={closeDialog} style={{ cursor: 'pointer', color: 'var(--dim)', fontSize: 18 }}>✕</span>
         </div>

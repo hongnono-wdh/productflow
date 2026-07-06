@@ -1145,8 +1145,12 @@ def cmd_backend_flow(args) -> None:
         if node is None:
             raise SystemExit(f"no such node: {args.id}")
         node["status"] = args.status
+        if args.note:
+            node["note"] = args.note              # 出错/待修原因（needfix 时），点节点弹窗显示
+        elif args.status in ("done", "todo"):
+            node.pop("note", None)                # 恢复正常/重置时清掉原因
         _save_backend_flow(args.dir, bf)
-        print(f"{args.id} → {args.status}")
+        print(f"{args.id} → {args.status}" + (f"（{args.note}）" if args.note else ""))
     elif act == "proc":
         node = next((n for n in bf["nodes"] if n.get("id") == args.id), None)
         if node is None:
@@ -1423,6 +1427,7 @@ def main(argv: list[str]) -> int:
     bss = bsub.add_parser("set-status", help="设节点状态（进度）")
     bss.add_argument("--id", required=True)
     bss.add_argument("--status", required=True, choices=list(_BF_STATUS))
+    bss.add_argument("--note", help="出错/待修原因（needfix 时）——如「短信模板 code 不对」，⑦ 成品预览点节点弹窗直接显示")
     bpr = bsub.add_parser("proc", help="标记/清除节点「处理中」（改动进行时操作台脉冲提示）")
     bpr.add_argument("--id", required=True)
     bpr.add_argument("--state", required=True, choices=["on", "off"])
