@@ -84,6 +84,8 @@ python3 "$SKILL_DIR/scripts/pf_state.py" --dir "$PF_DIR" backend-flow set-status
 
 写法：真 provider 分支返回的对象，每个方法 try 真适配器、catch 后按上面分环境处理；dev 适配器保留（既做「无 key 降级」、又做「开发期真 key 不通的回退」）。
 
+**provider 判据是「有真 key 就真发」——别让 dev 启动命令写死的强制回显盖过用户的 key**：选 provider 的优先级应是「显式指定 > 有真 key 就真发 > 没 key 才回显/dev」。给 dev 加个 `X_DEV_ECHO=1` 强制回显开关（联调不误发真短信/邮件）本身没错，但**别把它写进 `npm run dev` 默认命令、也别让它优先级压过「有没有 key」**——否则用户在操作台填了 key、本地预览却还回显假验证码（「配了 key 怎么没用？」）。正确做法：`npm run dev` 只留 fake 数据驱动 / seed、**不默认设 `X_DEV_ECHO`**（本地就按「有 key 真发、没 key 回显」走，ProductFlow 已把 secrets 注入 dev server）；`X_DEV_ECHO=1` 只写在 **E2E 的 `playwright.config` webServer** 里（测试要拿回显码、即使有 key 也强制回显，不误发真邮件/短信）。
+
 **key 按需动态登记（开发中真用到才加、别等 ⑤ 一次登全）**：写某模块真适配器、真正需要某第三方 key 时，就地 `product-key add` 登记它——`--desc` 写成「给用户看的富文本说明」：**为什么需要、去哪个后台申请、什么格式、关键步骤**（多行写清，操作台会渲染多行）。让用户看到的是「现在要接微信支付、需要商户号 mchid（商户平台 → 账户中心 → API 安全 里拿）」而非干巴巴一个变量名。开发中需要哪个就加哪个、随进展变化；已填的模块继续真实对接、缺的按上文「缺 key 判失败 / 占位」处理。
 
 **iOS 分支（P-iOS，数据层 = SwiftData，无网络后端）**：iOS 纯本地 App 没有"后端服务"——这一步实现的是**本地数据层**。
