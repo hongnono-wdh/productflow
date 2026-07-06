@@ -88,6 +88,8 @@ python3 "$SKILL_DIR/scripts/pf_state.py" --dir "$PF_DIR" backend-flow set-status
 
 **key 按需动态登记（开发中真用到才加、别等 ⑤ 一次登全）**：写某模块真适配器、真正需要某第三方 key 时，就地 `product-key add` 登记它——`--desc` 写成「给用户看的富文本说明」：**为什么需要、去哪个后台申请、什么格式、关键步骤**（多行写清，操作台会渲染多行）。让用户看到的是「现在要接微信支付、需要商户号 mchid（商户平台 → 账户中心 → API 安全 里拿）」而非干巴巴一个变量名。开发中需要哪个就加哪个、随进展变化；已填的模块继续真实对接、缺的按上文「缺 key 判失败 / 占位」处理。
 
+**换服务商 / 改实现时，key 登记必须跟着改**：把某模块的第三方服务从 A 换到 B（如短信 163 → 邮件 Gmail、支付宝 → 微信支付）时，别只改代码——用 `product-key add`（覆盖式）同步更新对应 key 的 `--provider` / `--desc` / `--url`，把「去哪拿、什么格式、关键步骤」改成新服务商的说法。否则操作台还显示旧服务商的提示、用户照旧的填必然失败（真实反例：代码已连 `smtp.gmail.com`、要 Gmail「应用专用密码」，key 说明却还写「163 客户端授权码」→ 用户填 163 凭证 → SMTP 535 认证失败）。
+
 **iOS 分支（P-iOS，数据层 = SwiftData，无网络后端）**：iOS 纯本地 App 没有"后端服务"——这一步实现的是**本地数据层**。
 
 1. 按 `artifacts/phase-5/models.swift` 把每个实体落成 SwiftData `@Model class` 放进 `Models/`，关系用 `@Relationship`；不要临场改实体结构，发现模型有问题先回去更新 Phase 5 的 models.swift 再实现，保持单一事实来源。
