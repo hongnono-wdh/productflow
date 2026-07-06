@@ -648,11 +648,11 @@ def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = No
                    "或 webapp-testing / playwright-cli skill；E2E 落成项目内可复跑的 @playwright/test 文件。")
     env = dict(os.environ)
     _inject_openai_env(env)   # ④ 批量出图等会调 gen.py，需要 OPENAI_API_KEY/BASE_URL（和 ③ 一致）
+    if pid:
+        _inject_deploy_creds(env, pid)   # 注入用户填的第三方 key / 部署凭证（secrets）——⑦ 单测 / ⑧ 测试 / dev server 都能读到真 key（否则 process.env 里没有、代码退 dev）；⑨ 部署凭证同理
     if phase == 9:
-        # 部署阶段：把用户在网页凭证表单填的值注入 env，agent 直接 $PF_SSH_HOST 等使用
         creds = _load_deploy_creds(pid) if pid else {}
         if creds:
-            _inject_deploy_creds(env, pid)
             prompt += ("\n\n部署凭证已作为环境变量注入（用户在⑨凭证表单填的），命令里直接引用即可："
                        + "、".join("$" + k for k in creds)
                        + "。例如 ssh -p \"$PF_SSH_PORT\" \"$PF_SSH_USER@$PF_SSH_HOST\"。"
@@ -738,6 +738,8 @@ def _auto_action(pf: str, phase: int, action: str, pid: str | None = None) -> No
     )
     env = dict(os.environ)
     _inject_openai_env(env)
+    if pid:
+        _inject_deploy_creds(env, pid)   # 本地预览的 dev server 用真 key（用户填了就走真 provider，否则代码读不到、退 dev）
     _log_reset(pf, f"stage-{phase}", f"{name}：构建并预览")
     try:
         _run_claude_streaming(pf, f"stage-{phase}", prompt, project_root, env=env, timeout=1800)
