@@ -1,5 +1,3 @@
-条镇
-
 # Phase 3 — 首图设计
 
 进入 Phase 3（首图设计）时读本文件：本阶段的目标是**按 Phase 2 选定的参考（`selectedRefs`）生成首图候选——即「选定平台的关键屏纯 UI 设计稿」，让用户定下一张作为整套设计的视觉基调**。
@@ -64,6 +62,8 @@ python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.primary --value "#
 python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.bg --value "#0e1420" --type color
 python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token radius.md --value "8px" --type dimension
 python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.title --value "Montserrat" --type fontFamily
+# 语义 token 用 alias 指向 primitive（DTCG {..} 语法传给 --value；`--ref` 是布尔 flag、不接值，别拿它当值传）：
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.action.primary --value "{color.blue.500}" --type color
 # …按首图实际值逐个写：主色/辅色/背景/文字色、圆角、字体气质…
 ```
 

@@ -134,6 +134,14 @@ class TestPhaseStep(PfStateBase):
         # done does NOT touch current_phase
         self.assertEqual(s["current_phase"], 2)
 
+    def test_phase_done_warns_unfinished_steps(self):
+        # 收尾软校验：phase done 时有未收尾 step → 警告到 stderr，但 done 仍成功（不 block）
+        r = cli(["phase", "1", "--status", "done"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 0, r.stderr)   # 软警告不阻止 done（新建项目 phase 1 步骤全 pending）
+        self.assertIn("未收尾", r.stderr)
+        s = read_state(self.dir)
+        self.assertEqual(next(p for p in s["phases"] if p["id"] == 1)["status"], "done")
+
     def test_phase_logs_appended(self):
         before = len(read_state(self.dir)["log"])
         self.run_ok(["phase", "3", "--status", "active"])

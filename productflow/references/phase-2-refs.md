@@ -77,7 +77,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step-add 2 extract-lock "萃取视觉to
 python3 "$SKILL_DIR/scripts/pf_state.py" step 2 extract-lock --status active
 ```
 
-1. **从选中参考图萃取结构化 token**：`Read` 逐张打开 `selectedRefs` 指向的参考图（`explore show` 里 `selectedRefs` 的 id → 对应 `refs[].file`），提取——主色板（几个 hex）、字体气质（无衬线/衬线 + 字重）、间距节奏、圆角/阴影。写成一份 DTCG 骨架的 tokens JSON（primitive 层纯描述，如 `color.blue.500`；**先不做 semantic**），存 `artifacts/phase-2/tokens-draft.json`，再导入 design-spec：
+1. **从选中参考图萃取结构化 token**：`Read` 逐张打开 `selectedRefs` 指向的参考图（`explore show` 里 `selectedRefs` 的 id → 对应 `refs[].file`），提取——主色板（几个 hex）、字体气质（无衬线/衬线 + 字重）、间距节奏、圆角/阴影。写成一份 DTCG 骨架的 tokens JSON（**primitive 层只放描述性命名**——✅ `color.blue.500` / `color.slate.900` / `space.4` / `radius.md`，❌ 别把语义词放 primitive：`color.primary` / `color.action` / `color.bg` 是 **semantic 层**的事，③④ 再用 alias `{color.blue.500}` 建语义层，`spec check` 会警告 primitive 里的语义词；**②先不做 semantic**），存 `artifacts/phase-2/tokens-draft.json`，再导入 design-spec：
    ```bash
    python3 "$SKILL_DIR/scripts/pf_state.py" spec set-tokens --file artifacts/phase-2/tokens-draft.json
    ```

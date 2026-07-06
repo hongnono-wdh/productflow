@@ -335,6 +335,14 @@ def cmd_phase(args) -> None:
     # 这样重做后产物画廊一眼看出哪批是哪一版（老批留痕、可对比）。只在 pending/done→active 时 +1。
     if args.status == "active" and ph.get("status") != "active":
         ph["gen"] = ph.get("gen", 0) + 1
+    # 收尾软校验（不 block、只警告）：标 done 时若有步骤未收尾（非 done/skipped），提醒——
+    # 防反复踩的「漏标 step done」坑，否则操作台步骤条显示不全、看不出真实进展。
+    if args.status == "done":
+        _pending = [st["id"] for st in ph.get("steps", []) if st.get("status") not in ("done", "skipped")]
+        if _pending:
+            sys.stderr.write(
+                f"⚠️ P{args.n} 标 done，但 {len(_pending)} 个步骤未收尾（非 done/skipped）："
+                f"{', '.join(_pending)} —— 每步做完记得 `step {args.n} <id> --status done`。\n")
     ph["status"] = args.status
     if args.status == "active":
         s["current_phase"] = args.n
