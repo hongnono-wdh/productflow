@@ -1228,9 +1228,12 @@ def cmd_scan_keys(args) -> None:
     import re
     root = os.path.abspath(args.dir)  # 项目根（代码在此）；_root 是 .productflow，别拿来 walk 代码
     ref = re.compile(r'(?:process\.env\.|os\.environ\.get\(["\']|os\.environ\[["\']|getenv\(["\']|System\.getenv\(["\']|\benv\.)([A-Z_][A-Z0-9_]{2,})')
+    # 有默认 fallback 的引用（X || 默认 / X ?? 默认 / getenv('X', 默认)）→ 可选配置、非必填凭证，不算 missing
+    optre = re.compile(r'(?:process\.env\.|\benv\.)([A-Z_][A-Z0-9_]{2,})\s*(?:\|\||\?\?)|(?:os\.environ\.get|getenv)\(["\']([A-Z_][A-Z0-9_]{2,})["\']\s*,')
     exts = ('.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs', '.py', '.go', '.java', '.kt', '.rs', '.vue', '.svelte')
     skip = {'node_modules', '.git', '.productflow', 'dist', 'build', 'vendor', '.next', 'target', '__pycache__'}
     found: set = set()
+    optional: set = set()
     for dp, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if d not in skip]
         for f in files:
@@ -1239,6 +1242,8 @@ def cmd_scan_keys(args) -> None:
                     txt = open(os.path.join(dp, f), encoding='utf-8', errors='ignore').read()
                     for m in ref.finditer(txt):
                         found.add(m.group(1))
+                    for m in optre.finditer(txt):
+                        optional.add(m.group(1) or m.group(2))
                 except Exception:
                     pass
     # 只留「像第三方凭证」的：含这些片段；排除常见基建噪声
@@ -1248,7 +1253,7 @@ def cmd_scan_keys(args) -> None:
     cand = {k for k in found if third.search(k) and k not in noise and not re.search(r'PROVIDER|_DEV|DEV_|MOCK|FAKE|ECHO|_TEST|DISABLE|ENABLE|COOLDOWN', k)}
     pk = _load_product_keys(args.dir)
     registered = {e.get('key') for e in pk.get('keys', []) if e.get('key')}
-    missing = sorted(cand - registered)
+    missing = sorted(cand - registered - optional)   # 排除有默认值的可选配置（X || 默认）——只留真正必填的凭证
     stale = sorted(registered - found)   # 登记了、但代码里完全没引用 → 疑似过时（功能删了、key 没删；也可能是真适配器还没写的占位）
     print(json.dumps({'referenced': sorted(cand), 'registered': sorted(registered), 'missing': missing, 'stale': stale}, ensure_ascii=False, indent=2))
     if missing:
