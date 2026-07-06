@@ -234,6 +234,16 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 4 finalize-direction --status acti
      --component "hero.cta:Button:primary" --component "list:Card:default"
    ```
 
+   **同时对每个有设计稿 PNG 的页做规格提取（redline，还原度方案 A③——⑥/裁判照它做，别只留文字）**：`redline.py` 把设计稿逆向成精确规格（逐像素取色 snap 到 token + designWidth 基准），存进该页：
+   ```bash
+   # designWidth 与 ⑥ 截图/裁判同坐标系：PC 1440 / H5 375
+   python3 "$SKILL_DIR/scripts/redline.py" --design artifacts/phase-4/<页设计稿>.png \
+     --spec design-spec.json --width 1440 --out artifacts/phase-4/redline-<页名>.json
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-page <pg-id> --redline artifacts/phase-4/redline-<页名>.json
+   ```
+   - 脚本只做**能程序量的**（颜色 snap + designWidth）；**icon 语义→lucide 组件名、字号/行高目测 snap** 由你 `Read` 设计稿补进该页 redline 的 `icons`/`typeScale`（脚本留了占位与提示）。
+   - 看 `palette[].avgDist`：某档 dist 很大＝设计色离系统档远 → 回上面 token 定稿补一个品牌色档（token 梯度密度原则）。
+
 3. **交互态矩阵（专题 D）**：按组件类型给必需交互态（交互控件 default/hover/focus/disabled，+Button loading、+Input error；数据容器 default/empty/loading）——设计稿只画 default，此处显式声明，⑥ 才不漏态：
    ```bash
    python3 "$SKILL_DIR/scripts/pf_state.py" spec set-page <pg-id> \

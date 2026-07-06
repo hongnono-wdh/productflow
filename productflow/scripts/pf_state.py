@@ -1374,6 +1374,12 @@ def cmd_spec(args) -> None:
             assets = [x for x in pg.get("assets", []) if x.get("slot") != slot]
             assets.append({"slot": slot, "gen": gen, "file": fpath})
             pg["assets"] = assets
+        if getattr(args, "redline", None):
+            try:
+                with open(args.redline, encoding="utf-8") as f:
+                    pg["redline"] = json.load(f)  # redline.py 产出：palette snap / designWidth / icons
+            except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+                raise SystemExit(f"读 redline 文件失败：{e}")
     else:
         raise SystemExit(f"未知 spec 动作：{act}")
 
@@ -1613,6 +1619,7 @@ def main(argv: list[str]) -> int:
     ssp.add_argument("--component", action="append", help="slot:lib:variant，可多次（同 slot 覆盖）")
     ssp.add_argument("--state", action="append", help="comp:s1,s2,… 可多次")
     ssp.add_argument("--asset", action="append", help="slot:gen:file，可多次（营销页素材）")
+    ssp.add_argument("--redline", help="redline 规格 JSON（scripts/redline.py 产出：palette snap / designWidth / icons）")
     sco = ssub.add_parser("compile", help="把 tokens 编译到三端（CSS/Swift/Compose）")
     sco.add_argument("--platform", default="all", choices=["PC", "H5", "APP", "all"])
     sco.add_argument("--out", required=True, help="输出目录（相对 .productflow/ 或绝对）")

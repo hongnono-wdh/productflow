@@ -959,6 +959,17 @@ class TestSpec(PfStateBase):
         self.assertEqual(pg["states"]["list"], ["default", "empty", "loading"])
         self.assertEqual(pg["assets"][0], {"slot": "hero.bg", "gen": "gpt-image", "file": "x.png"})
 
+    def test_set_page_redline_stored(self):
+        r = self.run_ok(["page", "add", "首页"])
+        pgid = re.search(r"pg-[0-9a-f]+", r.stdout).group(0)
+        rl = os.path.join(self.dir, "rl.json")
+        with open(rl, "w", encoding="utf-8") as f:
+            json.dump({"designWidth": 1440, "palette": [{"token": "color.blue.500", "value": "#2563eb"}]}, f)
+        self.run_ok(["spec", "set-page", pgid, "--type", "product", "--redline", rl])
+        pg = read_json_file(self.dir, "design-spec.json")["pages"][0]
+        self.assertEqual(pg["redline"]["designWidth"], 1440)
+        self.assertEqual(pg["redline"]["palette"][0]["token"], "color.blue.500")
+
     def test_check_pass(self):
         r = self.run_ok(["page", "add", "首页"])
         pgid = re.search(r"pg-[0-9a-f]+", r.stdout).group(0)
