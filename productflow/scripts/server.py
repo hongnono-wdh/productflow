@@ -614,7 +614,7 @@ def _flag_missing_key_modules(pf: str, pid: str | None):
     return out
 
 
-def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = None) -> None:
+def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = None, redo: bool = False) -> None:
     """后台 spawn claude 当完整 agent，按 phase-N-*.md 跑某个面板阶段（⑤⑥⑦，及④兜底）全流程。
     遇歧义点提示用 choice ask 抛给用户点选；instruction = 用户对本次（重）做的额外要求。
     phase 9（部署）会把用户填的部署凭证作为环境变量注入 agent 的运行环境。"""
@@ -668,6 +668,11 @@ def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = No
                        "别把占位值瞎填进命令。）")
     if instruction:
         prompt += f"\n\n★用户对本阶段的额外要求（务必优先遵循，不要无视）：{instruction}"
+    if redo:
+        prompt += ("\n\n⚠️ **这是「重做本阶段」**——用户明确要你把本阶段**从头重新做一遍、覆盖旧产物**，"
+                   "**不是复核确认现状**。即使看到阶段/步骤原本标着 done、或旧裁判结果是 pass，也**必须**按手册重新执行每一步、"
+                   "用**最新标准**重新逐页比对 / 重新自纠——**绝不允许因为『旧结果是 done/pass』就跳过、只复核一下就结束**。"
+                   "步骤已被重置为 pending，逐个真做、逐个重新登记 done；还原度裁判要按当前手册**最新 checklist** 重新出 verdict，别沿用旧的 fidelity 结果。")
     chan = f"stage-{phase}"
     _log_reset(pf, chan, f"开始{name}")
     # 自动续跑：⑥/⑦ 是长循环，单轮易撞墙钟上限。撞了不当「失败」——只要还在推进，就自动起
@@ -2573,11 +2578,16 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"error": "already_running"}, 409)
                     return
                 _STAGE_RUNNING.add((pid, phase))
-            # 重做已完成的 ⑦（done→重跑）：把 backend-flow 模块/接口进度归零，让重做时成品预览真实重走
-            # （模块卡从「完成」→「待做」，随 agent 逐个 set-status done 变绿），而非一直停在「完成」。
-            if phase == 7:
-                _node = _phase_node(pf, phase)
-                if _node and _node.get("status") == "done":
+            # 重做已完成的阶段（done→重跑）：把该阶段打回 active + steps 归零 pending，让 agent 真的重做，
+            # 别被「旧 done / 裁判 pass」蒙混成「只复核确认、跳过重做」（通用，不只 ⑦）。⑦ 额外归零 backend-flow 进度。
+            _node = _phase_node(pf, phase)
+            _is_redo = bool(_node and _node.get("status") == "done")
+            if _is_redo:
+                try:
+                    pf_state.reset_stage_for_redo(os.path.dirname(pf), phase)
+                except Exception:
+                    pass
+                if phase == 7:
                     try:
                         pf_state.reset_backend_flow_progress(os.path.dirname(pf))
                     except Exception:
@@ -2598,7 +2608,7 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(pf, "inbox.jsonl"), "a", encoding="utf-8") as f:
                 f.write(json.dumps({"ts": _now(), "from": "web", "type": "stage-request",
                                     "text": note}, ensure_ascii=False) + "\n")
-            threading.Thread(target=_auto_stage, args=(pf, phase, instruction, pid), daemon=True).start()
+            threading.Thread(target=_auto_stage, args=(pf, phase, instruction, pid, _is_redo), daemon=True).start()
             self._json({"ok": True})
             return
         if sub == "/api/run-action":

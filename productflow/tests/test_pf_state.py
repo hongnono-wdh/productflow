@@ -1050,5 +1050,26 @@ class TestSpec(PfStateBase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
+class TestRedoReset(PfStateBase):
+    def test_reset_stage_for_redo_only_on_done(self):
+        """重做重置：已 done 的阶段 → 打回 active + steps 归零 pending；非 done → 不动、返回 False。
+
+        reset_stage_for_redo 是纯 project-dir 函数（只改传入 dir 的 state.json、不碰 ~/.productflow），
+        故此处 in-process 验证安全（不违反测试隔离精神）。"""
+        for c in (["phase", "6", "--status", "active"],
+                  ["step", "6", "scaffold", "--status", "done"],
+                  ["step", "6", "frontend", "--status", "done"],
+                  ["phase", "6", "--status", "done"]):
+            self.run_ok(c)
+        import sys as _sys, os as _os
+        _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "scripts"))
+        import pf_state as _pf
+        self.assertTrue(_pf.reset_stage_for_redo(self.dir, 6))       # done → 重置
+        ph6 = next(p for p in read_state(self.dir)["phases"] if p["id"] == 6)
+        self.assertEqual(ph6["status"], "active")
+        self.assertTrue(all(st["status"] == "pending" for st in ph6["steps"]))
+        self.assertFalse(_pf.reset_stage_for_redo(self.dir, 5))      # 非 done → 不动
+
+
 if __name__ == "__main__":
     unittest.main()
