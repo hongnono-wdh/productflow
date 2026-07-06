@@ -1099,6 +1099,22 @@ def reset_test_progress(d: str) -> int:
     return n
 
 
+def reset_stage_for_redo(d: str, phase: int) -> bool:
+    """重做某已完成阶段（done→重跑）：把该阶段打回 active、其 steps 全归零 pending，
+    让重做真的从头逐步走，别被「旧 done / 裁判 pass」蒙混成「只复核确认、跳过重做」。
+    只在阶段原本 done 时重置（返回 True）；否则不动（返回 False）。产物文件不删（重做会覆盖，新一代 gen 留痕可对比）。"""
+    s = _load(d)
+    ph = next((p for p in s["phases"] if p["id"] == phase), None)
+    if not ph or ph.get("status") != "done":
+        return False
+    ph["status"] = "active"
+    ph["gen"] = ph.get("gen", 0) + 1          # 新一代，和 cmd_phase 进 active 的语义一致
+    for st in ph.get("steps", []):
+        st["status"] = "pending"
+    s["current_phase"] = phase
+    _save(d, s)
+    return True
+
 def sync_backend_flow_done(d: str) -> int:
     """阶段（⑦）标 done 收尾时，把 backend-flow 里还没 done 的模块/接口补成 done（清 proc）——兜底：
     agent 复核式重做常只标 phase done、不逐个 set-status，若不补，成品预览会停在「待做」。
