@@ -2,8 +2,8 @@
 // 侧重「测过了吗、哪挂了」：顶部 pass/fail 分段条 + 每模块状态徽章（色 + 文字双指标，挂的整行标红醒目）。
 // 数据同 backend-flow.json：module.status（done=测过通过 / needfix=挂 / todo|doing=待测）+ module.proc（回修中脉冲）。
 import { useEffect, useMemo, useState } from 'react'
-import { PF_BASE } from '../lib'
-import { useChannel } from '../store'
+import { PF_BASE, post } from '../lib'
+import { useChannel, toast } from '../store'
 import type { BackendFlow, BFNode, StateChannel } from '../types'
 
 const EMPTY: BackendFlow = { version: 1, nodes: [], edges: [], pageLinks: [], entry: null, layout: {} }
@@ -19,6 +19,8 @@ const TST: Record<TState, { label: string; dot: string }> = {
 const tstate = (n: BFNode): TState => (n.proc ? 'fixing' : n.test === 'pass' ? 'pass' : n.test === 'fail' ? 'fail' : 'pending')
 const modId = (m?: string) => (m ? (m.startsWith('module:') ? m : 'module:' + m) : '')
 const strip = (id: string, p: string) => (id.startsWith(p) ? id.slice(p.length) : id)
+// 单模块重测：复用 node-change 通道，发预设指令让 agent 只重跑这一个模块的测试、更新测试态
+const RERUN_TEST_TEXT = (id: string) => `【重新测试本模块】只重测「${id}」这个模块——跑它的集成 / E2E / 回归测试（配了第三方 key 就切真 provider 真测）。先 backend-flow proc --id ${id} --state on 脉冲，按结果 backend-flow set-test --id ${id} --status pass/fail（挂了带 --note 写清原因），测完 proc --state off。别动其它模块、别改代码（除非测出 bug 要修）。`
 
 export function TestProgressView({ running }: { running?: boolean }) {
   const [bf, setBf] = useState<BackendFlow>(EMPTY)
@@ -47,6 +49,14 @@ export function TestProgressView({ running }: { running?: boolean }) {
     const ifaces = bf.nodes.filter((n) => n.type === 'interface')
     return modules.map((m) => ({ m, its: ifaces.filter((i) => modId(i.module) === m.id), ts: tstate(m) }))
   }, [bf])
+
+  const rerunTest = (m: BFNode) => {
+    if (m.proc) { toast('该模块正在测 / 回修中'); return }
+    if (!confirm(`重新测试「${m.name || strip(m.id, 'module:')}」模块？\nAgent 会只重跑这一个模块的测试（配了 key 就真测），不动其它模块。`)) return
+    post('/api/node-change', { node: m.id, text: RERUN_TEST_TEXT(m.id) })
+      .then((r) => { if (r.ok) { toast(`已让 Agent 重测「${m.name || strip(m.id, 'module:')}」`); setNonce((n) => n + 1) } else toast('触发失败，请重试') })
+      .catch(() => toast('触发失败，请重试'))
+  }
 
   if (!bf.nodes.length || !mods.length) return null // 无后端流程图 → 不渲染（无后端项目在此展示前端 E2E 时另说）
 
@@ -86,6 +96,7 @@ export function TestProgressView({ running }: { running?: boolean }) {
                 <span className="tp-id">{strip(m.id, 'module:')}</span>
                 <span className={'tp-badge ' + ts}>{m.proc ? '回修中' : s.label}</span>
                 {its.length > 0 && <span className="tp-count">接口 {passN}/{its.length} 通过</span>}
+                <button className="tp-retest-btn" title="只重测这一个模块（配了 key 就真测）——不影响其它模块" onClick={(e) => { e.stopPropagation(); rerunTest(m) }}>↻ 重测</button>
                 {its.length > 0 && <span className="tp-caret">{isOpen ? '▾' : '▸'}</span>}
               </div>
               {ts === 'fail' && m.test_note && <div className="tp-failreason">⚠ {m.test_note}</div>}
