@@ -133,6 +133,10 @@ Desktop 单元测试 = 前端逻辑（Vitest/Jest）+ Rust `cargo test`（SQLite
 
 - **①单元 = 前端 Vitest/Jest + Rust `cargo test`**：前端业务逻辑（表单校验、数据处理纯函数）用 Vitest/Jest 覆盖；Rust `#[tauri::command]` 核心逻辑用 `cargo test` 覆盖。每类逻辑至少一条成功路径 + 一条边界/失败路径（如写入查重命中时不重复插入）。**SQLite 持久化往返、桌面 E2E 旅程、回归锁属于 ⑧**（见 `phase-8-test.md`）。
 
+**配了真 key 就顺带验一下 key 对不对（没配则保持 dev、不验、不阻塞单测）**：单元测试主体仍用 fake 适配器 / 内存库（快、隔离，没 key 也全绿）。但**若用户已在操作台填了某第三方 key**（secrets 里有值），就多加一条「真 key 连通性检查」——切真 provider、对第三方做一次最小真实调用（发一条测试短信 / ping 鉴权接口 / 查账户余额），确认 key 是真能用的：
+- key 对 → 通过；
+- **key 错**（鉴权失败 / 签名不对）→ `backend-flow set-status --id module:X --status needfix` + `log「X 模块 SMS key 鉴权失败：key 不对或已过期，请在操作台重填」`，成品预览标红、明确提示是 key 不对——**别等到 ⑧ 才发现填错了**。
+
 后端单元测试全绿后（本阶段只有 `unit-test` 一个测试步；集成 / E2E / 回归 + test-report 四类门禁在 ⑧ 测试阶段统一做与审计，见 `phase-8-test.md`）：
 
 ```bash

@@ -605,8 +605,8 @@ def _flag_missing_key_modules(pf: str, pid: str | None):
     for mod, keys in missing.items():
         mid = mod if str(mod).startswith("module:") else "module:" + str(mod)
         node = next((n for n in bf.get("nodes", []) if n.get("id") == mid), None)
-        if node and node.get("status") != "needfix":
-            node["status"] = "needfix"
+        if node and node.get("test") != "fail":
+            node["test"] = "fail"   # 缺 key = 测试态挂（不动 status ⑦ 开发态）
             changed = True
         out.append((mod, keys))
     if changed:
@@ -2548,6 +2548,12 @@ class Handler(BaseHTTPRequestHandler):
             instruction = (data.get("instruction") or "").strip()
             # ⑧测试开跑前：系统自动扫「需 key 的模块 key 齐没齐」，缺的标 needfix（测试进度立即标红）+ 提示 agent 测试时判失败说明
             if phase == 8:
+                _node8 = _phase_node(pf, phase)
+                if _node8 and _node8.get("status") == "done":   # 重做 ⑧：清测试态、让进度重头（回「待测」）
+                    try:
+                        pf_state.reset_test_progress(os.path.dirname(pf))
+                    except Exception:
+                        pass
                 try:
                     _miss = _flag_missing_key_modules(pf, pid)
                     if _miss:

@@ -1066,6 +1066,21 @@ def reset_backend_flow_progress(d: str) -> int:
     return n
 
 
+def reset_test_progress(d: str) -> int:
+    """重做 ⑧ 测试阶段时，清空 backend-flow 的测试态（module/interface 的 test 字段 + proc），
+    让测试进度重头（全部回「待测」），而非停在上轮的 pass/fail。test 独立于 status(⑦ 开发态)。返回清的节点数。"""
+    bf = _load_backend_flow(d)
+    n = 0
+    for node in bf.get("nodes", []):
+        if node.get("type") in ("module", "interface") and (node.get("test") or node.get("proc")):
+            node.pop("test", None)
+            node.pop("proc", None)
+            n += 1
+    if n:
+        _save_backend_flow(d, bf)
+    return n
+
+
 def sync_backend_flow_done(d: str) -> int:
     """阶段（⑦）标 done 收尾时，把 backend-flow 里还没 done 的模块/接口补成 done（清 proc）——兜底：
     agent 复核式重做常只标 phase done、不逐个 set-status，若不补，成品预览会停在「待做」。
@@ -1152,6 +1167,16 @@ def cmd_backend_flow(args) -> None:
             node["stub"] = args.note or "真实对接未实现（当前 dev / mock 占位）"
         _save_backend_flow(args.dir, bf)
         print(f"{args.id} stub={'cleared' if args.clear else node.get('stub')}")
+    elif act == "set-test":
+        node = next((n for n in bf["nodes"] if n.get("id") == args.id), None)
+        if node is None:
+            raise SystemExit(f"no such node: {args.id}")
+        if args.status == "clear":
+            node.pop("test", None)
+        else:
+            node["test"] = args.status
+        _save_backend_flow(args.dir, bf)
+        print(f"{args.id} test={args.status}")
     elif act == "link-page":
         if not any(l.get("page") == args.page and l.get("module") == args.module for l in bf["pageLinks"]):
             bf["pageLinks"].append({"page": args.page, "module": args.module})
@@ -1395,6 +1420,9 @@ def main(argv: list[str]) -> int:
     bst.add_argument("--id", required=True)
     bst.add_argument("--note", help="占位说明，如「微信支付真实对接未实现，当前 dev 占位」")
     bst.add_argument("--clear", action="store_true", help="清除占位标记（真实对接补齐后）")
+    btt = bsub.add_parser("set-test", help="设节点 ⑧ 测试态（pass/fail/clear），独立于 set-status（⑦ 开发态）")
+    btt.add_argument("--id", required=True)
+    btt.add_argument("--status", required=True, choices=["pass", "fail", "clear"])
     bl = bsub.add_parser("link-page", help="页面 ↔ 模块 关联（N:N）")
     bl.add_argument("--page", required=True, help="页面 id")
     bl.add_argument("--module", required=True, help="模块 id")

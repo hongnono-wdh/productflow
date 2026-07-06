@@ -15,8 +15,8 @@ const TST: Record<TState, { label: string; dot: string }> = {
   fixing: { label: '回修中', dot: '#f0a500' },
   pending: { label: '待测', dot: '#c4c8cf' },
 }
-// 测试状态从模块的 status/proc 派生：proc → 回修中；done → 通过；needfix → 挂；其余 → 待测
-const tstate = (n: BFNode): TState => (n.proc ? 'fixing' : n.status === 'done' ? 'pass' : n.status === 'needfix' ? 'fail' : 'pending')
+// 测试态从独立的 test 字段派生（不复用 status = ⑦ 开发态）：proc → 回修中；test=pass → 通过；test=fail → 挂；未设 → 待测
+const tstate = (n: BFNode): TState => (n.proc ? 'fixing' : n.test === 'pass' ? 'pass' : n.test === 'fail' ? 'fail' : 'pending')
 const modId = (m?: string) => (m ? (m.startsWith('module:') ? m : 'module:' + m) : '')
 const strip = (id: string, p: string) => (id.startsWith(p) ? id.slice(p.length) : id)
 
