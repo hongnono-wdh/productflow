@@ -77,7 +77,7 @@ export function TestProgressView({ running }: { running?: boolean }) {
         {mods.map(({ m, its, ts }) => {
           const s = TST[ts]
           const isOpen = !!open[m.id]
-          const passN = its.filter((i) => i.status === 'done').length
+          const passN = ts === 'pass' ? its.length : 0   // 通过数按模块测试态：模块通过 = 接口全通过，否则 0（⑧ 测试是模块级）
           return (
             <div key={m.id} className={'tp-row ' + ts + (m.proc ? ' proc' : '')}>
               <div className="tp-head" onClick={() => setOpen((o) => ({ ...o, [m.id]: !o[m.id] }))}>
@@ -91,7 +91,7 @@ export function TestProgressView({ running }: { running?: boolean }) {
               {isOpen && its.length > 0 && (
                 <ul className="tp-ifaces">
                   {its.map((i) => {
-                    const it = tstate(i)
+                    const it = ts   // 接口测试态跟随所属模块（模块通过→接口都通过、挂→挂、回修中→回修中），⑧ 测试是模块级、不单独标接口
                     return (
                       <li key={i.id} className={it}>
                         <span className="tp-dot sm" style={{ background: TST[it].dot }} />
