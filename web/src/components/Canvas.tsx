@@ -814,12 +814,41 @@ function HeroDialog(props: {
     }).catch(() => {})
     return () => { cancelled = true }
   }, [sig])
+  // P3-1：用户上传/拖入/粘贴自定义首图 → 直接存盘 + 定基调（跳过生图，可再点生成覆盖）
+  const [heroDrag, setHeroDrag] = useState(false)
+  const uploadHeroFiles = (files: File[]) => {
+    const imgs = files.filter((f) => f.type.startsWith('image/'))
+    if (!imgs.length) return
+    imgs.forEach((f) => {
+      const rd = new FileReader()
+      rd.onload = () => post('/api/explore', { uploadHero: { dataUrl: String(rd.result), style: (f.name || '').replace(/\.[^.]+$/, '') || '用户上传的首图', setBase: true } }).then(() => force())
+      rd.readAsDataURL(f)
+    })
+    toast(`已上传 ${imgs.length} 张自定义首图（已设为视觉基调，可再点「生成」覆盖）`)
+  }
+  useEffect(() => {
+    const onPaste = (ev: ClipboardEvent) => {
+      const t = ev.target as HTMLElement | null
+      if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return
+      const fs = Array.from(ev.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'))
+      if (fs.length) { ev.preventDefault(); uploadHeroFiles(fs) }
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [])
   return (
     <div id="hero-dialog" className={'on' + (hdCollapsed.current ? ' collapsed' : '')}>
       <div className="hd-head" onClick={() => { hdCollapsed.current = !hdCollapsed.current; force() }}>
         <IcSpark /> 生成首图 <button className="hd-x" title="折叠/展开">—</button>
       </div>
       <div className="hd-body">
+        <div className="hd-sec-t">自定义首图 <span className="hd-sec-hint">传了就直接当视觉基调、跳过生图；不传则在下面生成</span></div>
+        <div className={'wz-drop' + (heroDrag ? ' over' : '')}
+          onDragOver={(ev) => { ev.preventDefault(); setHeroDrag(true) }}
+          onDragLeave={() => setHeroDrag(false)}
+          onDrop={(ev) => { ev.preventDefault(); setHeroDrag(false); uploadHeroFiles(Array.from(ev.dataTransfer.files)) }}>
+          🖼️ 拖入 / ⌘·Ctrl+V 粘贴自定义首图，或 <label className="hd-upload-lbl" style={{ textDecoration: 'underline', cursor: 'pointer' }}>选择文件<input type="file" accept="image/*" multiple hidden onChange={(ev) => { uploadHeroFiles(Array.from(ev.target.files || [])); ev.currentTarget.value = '' }} /></label>
+        </div>
         <div className="hd-sec-t">本次参考 <span className="hd-sec-hint">在画布点图片的「+ 本次参考」加入</span></div>
         <div className="hd-refs">
           {roundRefs.length ? (

@@ -2366,6 +2366,29 @@ class Handler(BaseHTTPRequestHandler):
                             "id": "ref-" + os.urandom(3).hex(), "file": rel,
                             "title": (up.get("title") or "我加的参考"), "source": "",
                             "desc": (up.get("desc") or "用户手动粘贴/拖入的参考")})
+            # 用户上传/拖入自定义首图（③ 没传才生图；传了即定基调，可再生成覆盖）——直接存盘 + 登记，标 source=user
+            up_hero = data.get("uploadHero")
+            if isinstance(up_hero, dict) and isinstance(up_hero.get("dataUrl"), str):
+                import base64 as _b64h
+                import re as _reh
+                mh = _reh.match(r"data:image/(png|jpe?g|webp|gif);base64,(.+)$", up_hero["dataUrl"], _reh.S)
+                if mh:
+                    exth = "jpg" if mh.group(1) in ("jpeg", "jpg") else mh.group(1)
+                    try:
+                        rawh = _b64h.b64decode(mh.group(2))
+                    except Exception:  # noqa: BLE001
+                        rawh = b""
+                    if 0 < len(rawh) <= 12 * 1024 * 1024:   # ≤12MB
+                        relh = f"artifacts/phase-3/heroes/upload-{os.urandom(4).hex()}.{exth}"
+                        dsth = os.path.join(pf, relh)
+                        os.makedirs(os.path.dirname(dsth), exist_ok=True)
+                        with open(dsth, "wb") as _fh:
+                            _fh.write(rawh)
+                        ex.setdefault("heroes", []).append({
+                            "id": "hero-" + os.urandom(3).hex(), "file": relh,
+                            "style": (up_hero.get("style") or "用户上传的首图"), "source": "user"})
+                        if up_hero.get("setBase", True):   # 默认上传即定基调（可再点生成覆盖）
+                            ex["selectedHero"] = relh
             # 用户在面板编辑了搜索关键词 → 持久化（前端始终可见可改；找参考时以这些为准）
             sp = data.get("setSearchPlan")
             if isinstance(sp, dict) and isinstance(sp.get("keywords"), list):

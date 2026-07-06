@@ -26,6 +26,8 @@ python3 "$SKILL_DIR/scripts/pf_state.py" log "Phase 3 started: generating hero i
 
 ## Step 1: gen-heroes — 生成首图候选
 
+**⓪ 先检测用户自定义首图（P3-1 · 没传才生图）**：读 `explore.json` 的 `heroes[]`——若存在 `source == "user"` 的条目（用户在操作台③画布「生成首图」对话框里**上传/拖入/粘贴**的自定义首图），说明**用户已提供首图 → 跳过生图**：它通常已由 server 设为 `selectedHero`（视觉基调），直接进 Step 2 `pick-hero` 定稿 + 反萃取 token（R-③b 对上传首图同样适用，还原度更高——照抄用户真稿而非 AI 幻想图）。只有**没有** `source==user` 首图时才走下面的生图流程。（server `_auto_explore` 收到 gen-heroes 请求时，若发现已有 `source==user` 首图也应跳过生成、直接以其为基调；用户上传后仍可再点「生成」覆盖。）
+
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" step 3 gen-heroes --status active
 ```

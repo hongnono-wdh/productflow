@@ -800,7 +800,7 @@ def cmd_explore(args) -> None:
         e["searchPlan"] = {"keywords": kws, "basis": (args.basis or ""), "ts": _now()}
     elif args.eaction == "add-hero":
         e["heroes"].append({"id": "hero-" + os.urandom(3).hex(), "file": args.file,
-                           "style": args.style or ""})
+                           "style": args.style or "", "source": getattr(args, "source", "") or ""})
     elif args.eaction == "set-summary":
         e["styleSummary"] = args.text
     elif args.eaction == "select-refs":   # 设定选中的参考（按 ref id，喂给③首图）——headless/CLI 用，对齐网页选稿
@@ -1534,6 +1534,7 @@ def main(argv: list[str]) -> int:
     eh = esub.add_parser("add-hero", help="登记一张生成的首图")
     eh.add_argument("file")
     eh.add_argument("--style", help="该首图的风格名/描述")
+    eh.add_argument("--source", help="来源标记：user=用户自定义上传（③ 据此跳过生图、直接定基调）")
     es = esub.add_parser("set-summary", help="写风格总结")
     es.add_argument("text")
     esel = esub.add_parser("select-refs", help="设定选中的参考（按 ref id，可多个；喂给③首图）")
