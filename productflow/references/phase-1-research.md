@@ -218,6 +218,18 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 1 artifacts/phase-1/replicate-
 python3 "$SKILL_DIR/scripts/pf_state.py" step 1 replicate-report --status done
 ```
 
+## 起 design-spec 脊椎骨架（还原度方案 · R-①）
+
+还原度是贯穿 ①→⑥ 的主线，从 ① 就起个头（专题 A/B）：
+
+1. **萌芽候选组件库**（按产品类型，供 ② 定稿）：SaaS/dashboard/工具 → 组件密集库（shadcn/Material）；纯营销/落地 → 轻库/偏定制。按 `wizard.json` 的 platforms 给候选（`--lib` 先填候选，② extract-lock 再用 `choice` 定稿）：
+   ```bash
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-lib --platform PC --lib "shadcn/ui + tailwind（候选，待②定稿）"
+   ```
+2. **（可选）截存竞品关键页真图**当原始像素锚点：分析竞品时若截了图，存 `artifacts/phase-1/refs/`，② 找参考可复用（版权红线：仅内部分析参照，不进产品）。
+
+> 这是骨架起头——tokens 由 ②③ 萃取加精、④ 定稿；组件库由 ② `choice` 锁定。不接入还原度脊椎的项目跳过本节即可，不影响流水线。
+
 ## 版权红线
 
 复刻竞品只学**布局结构、信息架构、风格思路**。不抄文案（连改写一两词也不行）、不下载/盗用竞品图片素材、不复制 logo 或品牌元素。竞品页面仅作内部分析参照，不进入最终产品。分析卡片里描述文案"骨架"（结构与逻辑），不摘录原句。

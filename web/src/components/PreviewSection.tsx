@@ -48,9 +48,11 @@ export function PreviewSection() {
   const imgs: Artifact[] = ph ? ph.artifacts.filter((a) => a.type === 'image') : []
   if (!imgs.length) return null
 
+  const isFidelity = (a: Artifact) => /fidelity/i.test(a.file) // ⑥ 还原度裁判差异图（专题 C）
   const pages: Page[] = pagesP?.pages || []
-  const paired = imgs.filter((a) => a.pageId) // 带页面关联的实现图
-  const loose = imgs.filter((a) => !a.pageId) // 未关联页面的旧截图
+  const paired = imgs.filter((a) => a.pageId && !isFidelity(a)) // 带页面关联的实现图
+  const loose = imgs.filter((a) => !a.pageId && !isFidelity(a)) // 未关联页面的旧截图
+  const fidelity = imgs.filter(isFidelity) // 还原度差异图（软证据，专题 C3）
 
   // 配对分组：仅当 ⑥ 已有带 pageId 的实现截图（生产端升级后）才走对比视图，
   // 否则旧项目会满屏空占位——回退到平铺。
@@ -139,6 +141,22 @@ export function PreviewSection() {
           <div className="pv-group-h" style={{ marginTop: 18 }}>其它成品预览</div>
           <div className="pv-thumbs">
             {loose.map((a, i) => (
+              <div key={i} className="pv-thumb" onClick={() => openPreview(a.file, a.title)}>
+                <img src={artUrl(a.file, a.ts)} loading="lazy" />
+                <div className="cap">{a.title}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {fidelity.length > 0 && (
+        <>
+          <div className="pv-group-h" style={{ marginTop: 18 }}>🚦 还原度裁判 · 差异图</div>
+          <div className="wz-hint2" style={{ margin: '0 0 8px' }}>
+            设计稿 ↔ 实现的像素差异热力图（软证据，仅供参考）；判定以 LLM 视觉裁判 fidelity-*.json + DOM 断言为准。
+          </div>
+          <div className="pv-thumbs">
+            {fidelity.map((a, i) => (
               <div key={i} className="pv-thumb" onClick={() => openPreview(a.file, a.title)}>
                 <img src={artUrl(a.file, a.ts)} loading="lazy" />
                 <div className="cap">{a.title}</div>

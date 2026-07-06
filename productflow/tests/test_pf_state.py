@@ -134,6 +134,14 @@ class TestPhaseStep(PfStateBase):
         # done does NOT touch current_phase
         self.assertEqual(s["current_phase"], 2)
 
+    def test_phase_done_warns_unfinished_steps(self):
+        # 收尾软校验：phase done 时有未收尾 step → 警告到 stderr，但 done 仍成功（不 block）
+        r = cli(["phase", "1", "--status", "done"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 0, r.stderr)   # 软警告不阻止 done（新建项目 phase 1 步骤全 pending）
+        self.assertIn("未收尾", r.stderr)
+        s = read_state(self.dir)
+        self.assertEqual(next(p for p in s["phases"] if p["id"] == 1)["status"], "done")
+
     def test_phase_logs_appended(self):
         before = len(read_state(self.dir)["log"])
         self.run_ok(["phase", "3", "--status", "active"])
@@ -930,6 +938,116 @@ class TestArch(PfStateBase):
     def test_arch_build_missing_json_errors(self):
         r = cli(["arch", "build"], self.home, project=self.dir)
         self.assertNotEqual(r.returncode, 0)        # 无 arch.json → 非 0 退出（不静默）
+
+
+class TestSpec(PfStateBase):
+    def test_set_and_show_roundtrip(self):
+        self.run_ok(["spec", "set-lib", "--platform", "PC", "--lib", "shadcn/ui + tailwind", "--theme", "neutral"])
+        self.run_ok(["spec", "set-token", "color.blue.500", "--value", "#3498db", "--type", "color"])
+        self.run_ok(["spec", "set-token", "color.action.primary", "--value", "color.blue.500", "--type", "color", "--ref"])
+        spec = read_json_file(self.dir, "design-spec.json")
+        self.assertEqual(spec["componentLib"]["PC"]["lib"], "shadcn/ui + tailwind")
+        self.assertEqual(spec["tokens"]["color"]["blue"]["500"]["$value"], "#3498db")
+        self.assertEqual(spec["tokens"]["color"]["action"]["primary"]["$value"], "{color.blue.500}")
+
+    def test_set_page_component_state_asset(self):
+        r = self.run_ok(["page", "add", "首页"])
+        pgid = re.search(r"pg-[0-9a-f]+", r.stdout).group(0)
+        self.run_ok(["spec", "set-page", pgid, "--type", "product",
+                     "--component", "hero.cta:Button:primary",
+                     "--state", "list:default,empty,loading",
+                     "--asset", "hero.bg:gpt-image:x.png"])
+        pg = read_json_file(self.dir, "design-spec.json")["pages"][0]
+        self.assertEqual(pg["id"], pgid)
+        self.assertEqual(pg["type"], "product")
+        self.assertEqual(pg["components"][0], {"slot": "hero.cta", "lib": "Button", "variant": "primary"})
+        self.assertEqual(pg["states"]["list"], ["default", "empty", "loading"])
+        self.assertEqual(pg["assets"][0], {"slot": "hero.bg", "gen": "gpt-image", "file": "x.png"})
+
+    def test_set_page_redline_stored(self):
+        r = self.run_ok(["page", "add", "首页"])
+        pgid = re.search(r"pg-[0-9a-f]+", r.stdout).group(0)
+        rl = os.path.join(self.dir, "rl.json")
+        with open(rl, "w", encoding="utf-8") as f:
+            json.dump({"designWidth": 1440, "palette": [{"token": "color.blue.500", "value": "#2563eb"}]}, f)
+        self.run_ok(["spec", "set-page", pgid, "--type", "product", "--redline", rl])
+        pg = read_json_file(self.dir, "design-spec.json")["pages"][0]
+        self.assertEqual(pg["redline"]["designWidth"], 1440)
+        self.assertEqual(pg["redline"]["palette"][0]["token"], "color.blue.500")
+
+    def test_check_pass(self):
+        r = self.run_ok(["page", "add", "首页"])
+        pgid = re.search(r"pg-[0-9a-f]+", r.stdout).group(0)
+        self.run_ok(["spec", "set-lib", "--platform", "PC", "--lib", "shadcn"])
+        self.run_ok(["spec", "set-token", "color.blue.500", "--value", "#3498db", "--type", "color"])
+        self.run_ok(["spec", "set-page", pgid, "--type", "product"])
+        r = cli(["spec", "check"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_check_dangling_alias_fails(self):
+        self.run_ok(["spec", "set-lib", "--platform", "PC", "--lib", "shadcn"])
+        self.run_ok(["spec", "set-token", "color.bad", "--value", "nope.token", "--type", "color", "--ref"])
+        r = cli(["spec", "check"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("悬空 alias", r.stdout)
+
+    def test_check_page_id_mismatch_fails(self):
+        self.run_ok(["spec", "set-lib", "--platform", "PC", "--lib", "shadcn"])
+        self.run_ok(["spec", "set-page", "pg-nonexist", "--type", "product"])
+        r = cli(["spec", "check"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("pages.json 不存在", r.stdout)
+
+    def test_compile_writes_three_ends(self):
+        self.run_ok(["spec", "set-token", "color.blue.500", "--value", "#3498db", "--type", "color"])
+        self.run_ok(["spec", "compile", "--platform", "all", "--out", "artifacts/phase-6/tokens"])
+        base = os.path.join(self.dir, ".productflow", "artifacts", "phase-6", "tokens")
+        for fn in ("tokens.css", "Tokens.swift", "Tokens.kt"):
+            self.assertTrue(os.path.isfile(os.path.join(base, fn)), fn)
+        self.assertIn("--color-blue-500: #3498db;", open(os.path.join(base, "tokens.css")).read())
+
+    def test_set_tokens_merge(self):
+        import json as _json
+        p1 = os.path.join(self.dir, "draft1.json")
+        with open(p1, "w", encoding="utf-8") as f:
+            _json.dump({"tokens": {"color": {"blue": {"500": {"$value": "#3498db", "$type": "color"}}},
+                                   "space": {"4": {"$value": "16px", "$type": "dimension"}}}}, f)
+        self.run_ok(["spec", "set-tokens", "--file", p1])
+        p2 = os.path.join(self.dir, "draft2.json")
+        with open(p2, "w", encoding="utf-8") as f:
+            _json.dump({"radius": {"md": {"$value": "8px", "$type": "dimension"}}}, f)  # 直接子树，无 tokens 包裹
+        self.run_ok(["spec", "set-tokens", "--file", p2])
+        tk = read_json_file(self.dir, "design-spec.json")["tokens"]
+        self.assertEqual(tk["color"]["blue"]["500"]["$value"], "#3498db")
+        self.assertEqual(tk["space"]["4"]["$value"], "16px")
+        self.assertEqual(tk["radius"]["md"]["$value"], "8px")  # 深合并保留了前面的
+
+    def test_check_data_container_missing_state(self):
+        r = self.run_ok(["page", "add", "列表页"])
+        pgid = re.search(r"pg-[0-9a-f]+", r.stdout).group(0)
+        self.run_ok(["spec", "set-lib", "--platform", "PC", "--lib", "shadcn"])
+        self.run_ok(["spec", "set-page", pgid, "--type", "product", "--component", "feed:List:default"])
+        # 无 --strict：数据容器缺 empty/loading 只是警告，exit 0
+        r = cli(["spec", "check"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("数据容器", r.stdout)
+        # --strict：警告升 error，exit 1
+        r = cli(["spec", "check", "--strict"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 1)
+
+    def test_phase6_fidelity_gate(self):
+        # design-spec 有 type=product 页、无裁判 → phase 6 done 被拒
+        self.run_ok(["spec", "set-page", "pgx", "--type", "product"])
+        r = cli(["phase", "6", "--status", "done"], self.home, project=self.dir)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("还原度裁判", r.stdout + r.stderr)
+        # 出 verdict==pass 的 fidelity json → 通过
+        fid_dir = os.path.join(self.dir, ".productflow", "artifacts", "phase-6")
+        os.makedirs(fid_dir, exist_ok=True)
+        with open(os.path.join(fid_dir, "fidelity-x.json"), "w", encoding="utf-8") as f:
+            f.write('{"page":"pgx","verdict":"pass"}')
+        r = cli(["phase", "6", "--status", "done"], self.home, project=self.dir)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
 if __name__ == "__main__":

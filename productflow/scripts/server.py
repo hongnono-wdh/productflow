@@ -646,6 +646,12 @@ def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = No
                    "不要 ToolSearch 找浏览器 MCP、不要试 claude-in-chrome。需要截图/E2E 就直接用本机已装的 "
                    "Python Playwright（`from playwright.sync_api import sync_playwright`，chromium headless，桌面 1440 / 移动 390 整页截图），"
                    "或 webapp-testing / playwright-cli skill；E2E 落成项目内可复跑的 @playwright/test 文件。")
+    if phase == 6:
+        prompt += ("\n\n★还原度（专题 C，前端机器依据是 design-spec）：先 `pf_state spec check` + `spec compile` 注入 token、"
+                   "按 `spec show` 的 `pages[].components` 用同款组件库组件拼（不肉眼临摹 PNG）、逐组件分治、逐态实现；"
+                   "收尾跑三层闸门（LLM 视觉裁判出 `fidelity-<页>.json` 的 verdict + `fidelity_diff.py` 差异图 + DOM 断言）"
+                   "并按 3 轮护栏自纠（渲染失败=block / 只接受确有改进 / 3 轮上限 / 用量化信号，别无限重来）。"
+                   "`phase 6 --status done` 有 fidelity 硬闸（product 页需 verdict==pass）。详见 phase-6-frontend.md。")
     env = dict(os.environ)
     _inject_openai_env(env)   # ④ 批量出图等会调 gen.py，需要 OPENAI_API_KEY/BASE_URL（和 ③ 一致）
     if pid:
@@ -1521,7 +1527,7 @@ import struct as _struct
 _WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 # 推送频道集（见 web/MIGRATION_PLAN.md）。canvas/deploy-creds 不在此列——保持 request/response。
 _WS_PROJECT_CHANNELS = [
-    "state", "inbox", "health", "pages", "choices", "brief", "explore", "wizard",
+    "state", "inbox", "health", "pages", "choices", "brief", "explore", "wizard", "spec",
     "agent-log:research", "agent-log:search-refs",
     "agent-log:stage-4", "agent-log:stage-5", "agent-log:stage-6", "agent-log:stage-7", "agent-log:stage-8",
 ]
@@ -1567,6 +1573,8 @@ def _ws_channel_payload(pf: str, pid: str, channel: str):
                              "styleSummary": "", "heroes": [], "selectedHero": ""})
     if channel == "wizard":
         return _read_json_or(pf, "wizard.json", {"brief": "", "platforms": [], "primary": None, "priority": [], "stylePrefs": []})
+    if channel == "spec":
+        return _read_json_or(pf, "design-spec.json", {"v": 1, "componentLib": {}, "tokens": {}, "pages": [], "provenance": {}})
     if channel.startswith("agent-log:"):
         phase = channel.split(":", 1)[1]
         lines = []
@@ -1984,6 +1992,12 @@ class Handler(BaseHTTPRequestHandler):
                 except FileNotFoundError:
                     self._json({"brief": "", "platforms": [], "primary": None,
                                 "priority": [], "stylePrefs": []})
+            elif sub == "/api/spec":
+                try:
+                    with open(os.path.join(pf, "design-spec.json"), encoding="utf-8") as f:
+                        self._send(200, f.read().encode(), "application/json; charset=utf-8")
+                except FileNotFoundError:
+                    self._json({"v": 1, "componentLib": {}, "tokens": {}, "pages": [], "provenance": {}})
             elif sub.startswith("/artifacts/"):
                 rel = os.path.normpath(sub[len("/artifacts/"):].lstrip("/"))
                 base = os.path.realpath(os.path.join(pf, "artifacts"))
@@ -2446,6 +2460,29 @@ class Handler(BaseHTTPRequestHandler):
                             "id": "ref-" + os.urandom(3).hex(), "file": rel,
                             "title": (up.get("title") or "我加的参考"), "source": "",
                             "desc": (up.get("desc") or "用户手动粘贴/拖入的参考")})
+            # 用户上传/拖入自定义首图（③ 没传才生图；传了即定基调，可再生成覆盖）——直接存盘 + 登记，标 source=user
+            up_hero = data.get("uploadHero")
+            if isinstance(up_hero, dict) and isinstance(up_hero.get("dataUrl"), str):
+                import base64 as _b64h
+                import re as _reh
+                mh = _reh.match(r"data:image/(png|jpe?g|webp|gif);base64,(.+)$", up_hero["dataUrl"], _reh.S)
+                if mh:
+                    exth = "jpg" if mh.group(1) in ("jpeg", "jpg") else mh.group(1)
+                    try:
+                        rawh = _b64h.b64decode(mh.group(2))
+                    except Exception:  # noqa: BLE001
+                        rawh = b""
+                    if 0 < len(rawh) <= 12 * 1024 * 1024:   # ≤12MB
+                        relh = f"artifacts/phase-3/heroes/upload-{os.urandom(4).hex()}.{exth}"
+                        dsth = os.path.join(pf, relh)
+                        os.makedirs(os.path.dirname(dsth), exist_ok=True)
+                        with open(dsth, "wb") as _fh:
+                            _fh.write(rawh)
+                        ex.setdefault("heroes", []).append({
+                            "id": "hero-" + os.urandom(3).hex(), "file": relh,
+                            "style": (up_hero.get("style") or "用户上传的首图"), "source": "user"})
+                        if up_hero.get("setBase", True):   # 默认上传即定基调（可再点生成覆盖）
+                            ex["selectedHero"] = relh
             # 用户在面板编辑了搜索关键词 → 持久化（前端始终可见可改；找参考时以这些为准）
             sp = data.get("setSearchPlan")
             if isinstance(sp, dict) and isinstance(sp.get("keywords"), list):

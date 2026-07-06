@@ -303,6 +303,24 @@ class ServerTest(unittest.TestCase):
         entry = next(m for m in inbox["messages"] if m.get("type") == "explore-request")
         self.assertEqual(entry["request"], {"kind": "search-refs", "keywords": ["fintech"]})
 
+    def test_upload_hero_custom_image(self):
+        # P3-1：用户上传自定义首图 → 存盘 + heroes 标 source=user + 默认设为视觉基调（selectedHero）
+        cp = h.create_project(self.port, "Upload Hero", slug="upload-hero")
+        pid = cp["id"]
+        png1x1 = ("data:image/png;base64,"
+                  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+        status, _ = h.http(self.port, f"/p/{pid}/api/explore", method="POST",
+                           body={"uploadHero": {"dataUrl": png1x1, "style": "我的稿"}})
+        self.assertEqual(status, 200)
+        _, ex = h.http(self.port, f"/p/{pid}/api/explore")
+        heroes = ex.get("heroes", [])
+        self.assertEqual(len(heroes), 1)
+        self.assertEqual(heroes[0].get("source"), "user")
+        self.assertTrue(heroes[0]["file"].startswith("artifacts/phase-3/heroes/upload-"))
+        self.assertEqual(ex.get("selectedHero"), heroes[0]["file"])   # 默认上传即定基调
+        dst = os.path.join(cp["dir"], ".productflow", heroes[0]["file"])
+        self.assertTrue(os.path.exists(dst))
+
     def test_search_refs_autoregisters_orphan_downloads(self):
         # A1 兜底：agent 下载了图但（stub claude 空转）没 done-request → _auto_explore 收尾时
         # 自动把 refs/ 里未登记的图 add-ref，避免超时/漏登记导致 refs=0、成果白丢。

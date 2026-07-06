@@ -206,6 +206,62 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 4 finalize-direction --status acti
 
 另附一行：本阶段共出 N 个页面 × 哪些平台、首图基调来源（`artifacts/phase-3/heroes/<选中>`），便于回溯。
 
+**并落 design-spec 脊椎（还原度方案专题 A/B/D · R-④）——direction.md 给人读、design-spec 给 ⑥ 机器照抄**：direction.md 五节仍写（人读），但 ⑥ 的机器依据是 design-spec。在此把它定稿：
+
+1. **token 定稿**：把 ②③ 的 token 草案（`spec show` 看现状）补全为最终值——五节的色板/字体/圆角逐个落成 token（承接 ③ 反萃取，不另起）：
+   ```bash
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.primary --value "#3498db" --type color
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.action.primary --value color.primary --type color --ref
+   # 字号建完整 type scale——尤其含超大标题 display 档（缺档→主标题被迫 snap 到偏小档→还原度崩，实测教训）：
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.size.body --value "16px" --type dimension
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.size.hero --value "60px" --type dimension
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.size.display --value "76px" --type dimension
+   # 行高独立维度（--type number，别用 dimension——会被当尺寸编译成 dp/CGFloat）：
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token lineHeight.tight --value "1.1" --type number
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token lineHeight.normal --value "1.5" --type number
+   # …色板/圆角/间距逐个定稿…
+   ```
+
+   > **token 梯度密度原则（还原度关键，实测教训）**：梯度覆盖设计里真实出现的语义层级、且到此为止——
+   > - **字号必须建完整 type scale、含超大标题档**（`display`/`hero`）：设计稿主标题往往很大，缺档→被迫 snap 到偏小档→还原度崩。判据：每档对应一个反复出现的文字角色、能命名（`display`/`h2`/`body`/`caption`）。
+   > - **别给间距/颜色盲目加密**：4px 基数的 `space`、50→900 的色阶已够；过密反把生图噪声固化、丢掉节奏一致性。
+   > - **行高独立成档**（`lineHeight.tight/normal/relaxed`），标题/正文各一档，别让 ⑥ 临场估。
+   > - 进阶：把实测字号/间距**聚类**，聚成几堆设几档（档位＝真实语义聚类数）；`scripts/redline.py` 辅助取色 snap 与度量。
+
+2. **每页组件映射（= ⑥ 主读的 sidecar，PNG 只作预览）**：对**产品 UI 页**，按 `artifacts/phase-2/component-catalog.md` 出「设计元素→组件」映射写进 design-spec（`spec set-page --type product --component slot:lib:variant`；匹配不上组件目录就报缺口、别硬凑）：
+   ```bash
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-page <pg-id> --type product \
+     --component "hero.cta:Button:primary" --component "list:Card:default"
+   ```
+
+   **同时对每个有设计稿 PNG 的页做规格提取（redline，还原度方案 A③——⑥/裁判照它做，别只留文字）**：`redline.py` 把设计稿逆向成精确规格（逐像素取色 snap 到 token + designWidth 基准），存进该页：
+   ```bash
+   # designWidth 与 ⑥ 截图/裁判同坐标系：PC 1440 / H5 375
+   python3 "$SKILL_DIR/scripts/redline.py" --design artifacts/phase-4/<页设计稿>.png \
+     --spec design-spec.json --width 1440 --out artifacts/phase-4/redline-<页名>.json
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-page <pg-id> --redline artifacts/phase-4/redline-<页名>.json
+   ```
+   - 脚本只做**能程序量的**（颜色 snap + designWidth）；**icon 语义→lucide 组件名、字号/行高目测 snap** 由你 `Read` 设计稿补进该页 redline 的 `icons`/`typeScale`（脚本留了占位与提示）。
+   - 看 `palette[].avgDist`：某档 dist 很大＝设计色离系统档远 → 回上面 token 定稿补一个品牌色档（token 梯度密度原则）。
+
+3. **交互态矩阵（专题 D）**：按组件类型给必需交互态（交互控件 default/hover/focus/disabled，+Button loading、+Input error；数据容器 default/empty/loading）——设计稿只画 default，此处显式声明，⑥ 才不漏态：
+   ```bash
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-page <pg-id> \
+     --state "hero.cta:default,hover,focus,disabled,loading" --state "list:default,empty,loading"
+   ```
+
+4. **营销页专属（`type=marketing`，专题 B5 · 已定「骨架组件化 + 只生素材」）**：营销/落地页**不整页生图**——排版/CTA/栅格/间距同样用组件 + token（骨架组件化），只把**独特视觉素材**（hero 大图、背景纹理、氛围图）交 gpt-image 生成，再嵌进组件骨架。素材登记进 design-spec：
+   ```bash
+   # 生成独立视觉素材（prompt 收窄：只出素材、非整页 UI）
+   python3 "$GEN" --prompt "<素材描述>, 独立视觉素材, 纯色/透明背景, 无 UI 控件/无文字/无按钮, 单一主体" --size <按用途> --model gpt-image-2 --out-dir artifacts/phase-4
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-page <pg-id> --type marketing \
+     --component "hero:Hero:default" --component "cta:Button:primary" \
+     --asset "hero.bg:gpt-image:artifacts/phase-4/<素材文件>.png"
+   ```
+   好处：改文案不用重生图、可 A/B、token 不漂移、不遗传「AI 临摹整页」的还原度病（这是 v2 推翻 v1「营销页整页生图」的落点）。
+
+（数据态由 ⑤ 补，见 phase-5。移动端版本不要 hover 态——按平台裁剪。）
+
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" artifact 4 artifacts/phase-4/direction.md --title "Design direction (final)"
 python3 "$SKILL_DIR/scripts/pf_state.py" step 4 finalize-direction --status done

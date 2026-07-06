@@ -544,7 +544,7 @@ export function Canvas({ stage, product }: { stage: number; product: string }) {
     if (!pages.length) { toast('先「让 Agent 列出页面」'); return }
     if (!confirm(`批量生成全部 ${pages.length} 个页面 ×「所有选定平台」的设计稿（按优先级逐平台，沿用③首图基调）？Agent 会逐平台逐页生成，较花时间。`)) return
     setPending('genall')
-    post('/api/run-stage', { phase: 4, instruction: "批量**并发**出图，**覆盖所有选定平台**（别只出主平台、别一页一页串行——openai-image-gen 支持并发 20）：① 读 `.productflow/wizard.json` 的 `platforms`（所有选定平台）与 `priority`（优先级顺序）；**按 priority 逐平台**处理（主平台先，如 APP→PC→H5）。② 对**当前平台**：把页面地图里**每一个还没有该平台设计稿的页面**各写一个 prompt——每页 = 该页内容/功能 + ③ 选定首图的视觉基调（配色/字体气质/质感）+ **该平台**界面描述 + 纯 UI 约束（pure UI, fills the frame edge-to-edge, no background scene, no device frame, front view）。③ 用**一条 gen.py 命令并发生成该平台全部页面**：每页一个 `--prompt`，整条带 `--size <该平台尺寸: APP/H5=1080x2340, PC=1440x1080>` `--concurrency 20` `--model gpt-image-2 --out-dir artifacts/phase-4`。④ 生成完按 gen.py 写的 prompts.json 把每张图映射回对应页面，逐个 `page set <pg-id> --add-version <文件> --platform <该平台>` 关联。⑤ 一个平台出完再做下一个平台，直到所有选定平台都出齐。前端实时显示进度。" })
+    post('/api/run-stage', { phase: 4, instruction: "⚠️本次是**批量出图任务**（不是 page-map、不是等用户逐页点触发）——直接对所有页面并发调 gen.py **真出图、生成真实 png 文件**，别只写 prompt、别只 page set 不出图。批量**并发**出图，**覆盖所有选定平台**（别只出主平台、别一页一页串行——openai-image-gen 支持并发 20）：① 读 `.productflow/wizard.json` 的 `platforms`（所有选定平台）与 `priority`（优先级顺序）；**按 priority 逐平台**处理（主平台先，如 APP→PC→H5）。② 对**当前平台**：把页面地图里**每一个还没有该平台设计稿的页面**各写一个 prompt——每页 = 该页内容/功能 + ③ 选定首图的视觉基调（配色/字体气质/质感）+ **该平台**界面描述 + 纯 UI 约束（pure UI, fills the frame edge-to-edge, no background scene, no device frame, front view）。③ 用**一条 gen.py 命令并发生成该平台全部页面**：每页一个 `--prompt`，整条带 `--size <该平台尺寸: APP/H5=1080x2340, PC=1440x1080>` `--concurrency 20` `--model gpt-image-2 --out-dir .productflow/artifacts/phase-4`（**out-dir 务必带 `.productflow/` 前缀——落到项目的 .productflow 下，不是项目根！否则前端按 .productflow 路径找图会 404**）。④ 生成完按 gen.py 写的 prompts.json 把每张图映射回对应页面，逐个 `page set <pg-id> --add-version artifacts/phase-4/<文件名> --platform <该平台>` 关联（add-version 路径写相对 .productflow 的 `artifacts/phase-4/<文件名>`，与图实际落盘位置一致）。⑤ 一个平台出完再做下一个平台，直到所有选定平台都出齐。⑥ **出图后落地自查**：`ls .productflow/artifacts/phase-4/*.png` 确认每页 png 真实存在、数量对得上页面数——缺图/0 图就补生成，别只 page set 或空转就当完成。前端实时显示进度。" })
       .then((r) => { if (!r.ok) { if (r.status === 409) toast('Agent 已在进行中'); else if (r.status === 428) toast('④ 出图需先配置生图 key（OPENAI_API_KEY），配置后重试'); setPending(null) } }).catch(() => setPending(null))
     toast(`已让 Agent 按优先级逐平台批量生成 ${pages.length} 个页面（逐平台逐页完成后平台格变亮）`)
   }
@@ -814,12 +814,41 @@ function HeroDialog(props: {
     }).catch(() => {})
     return () => { cancelled = true }
   }, [sig])
+  // P3-1：用户上传/拖入/粘贴自定义首图 → 直接存盘 + 定基调（跳过生图，可再点生成覆盖）
+  const [heroDrag, setHeroDrag] = useState(false)
+  const uploadHeroFiles = (files: File[]) => {
+    const imgs = files.filter((f) => f.type.startsWith('image/'))
+    if (!imgs.length) return
+    imgs.forEach((f) => {
+      const rd = new FileReader()
+      rd.onload = () => post('/api/explore', { uploadHero: { dataUrl: String(rd.result), style: (f.name || '').replace(/\.[^.]+$/, '') || '用户上传的首图', setBase: true } }).then(() => force())
+      rd.readAsDataURL(f)
+    })
+    toast(`已上传 ${imgs.length} 张自定义首图（已设为视觉基调，可再点「生成」覆盖）`)
+  }
+  useEffect(() => {
+    const onPaste = (ev: ClipboardEvent) => {
+      const t = ev.target as HTMLElement | null
+      if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return
+      const fs = Array.from(ev.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'))
+      if (fs.length) { ev.preventDefault(); uploadHeroFiles(fs) }
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [])
   return (
     <div id="hero-dialog" className={'on' + (hdCollapsed.current ? ' collapsed' : '')}>
       <div className="hd-head" onClick={() => { hdCollapsed.current = !hdCollapsed.current; force() }}>
         <IcSpark /> 生成首图 <button className="hd-x" title="折叠/展开">—</button>
       </div>
       <div className="hd-body">
+        <div className="hd-sec-t">自定义首图 <span className="hd-sec-hint">传了就直接当视觉基调、跳过生图；不传则在下面生成</span></div>
+        <div className={'wz-drop' + (heroDrag ? ' over' : '')}
+          onDragOver={(ev) => { ev.preventDefault(); setHeroDrag(true) }}
+          onDragLeave={() => setHeroDrag(false)}
+          onDrop={(ev) => { ev.preventDefault(); setHeroDrag(false); uploadHeroFiles(Array.from(ev.dataTransfer.files)) }}>
+          🖼️ 拖入 / ⌘·Ctrl+V 粘贴自定义首图，或 <label className="hd-upload-lbl" style={{ textDecoration: 'underline', cursor: 'pointer' }}>选择文件<input type="file" accept="image/*" multiple hidden onChange={(ev) => { uploadHeroFiles(Array.from(ev.target.files || [])); ev.currentTarget.value = '' }} /></label>
+        </div>
         <div className="hd-sec-t">本次参考 <span className="hd-sec-hint">在画布点图片的「+ 本次参考」加入</span></div>
         <div className="hd-refs">
           {roundRefs.length ? (

@@ -1,5 +1,3 @@
-条镇
-
 # Phase 3 — 首图设计
 
 进入 Phase 3（首图设计）时读本文件：本阶段的目标是**按 Phase 2 选定的参考（`selectedRefs`）生成首图候选——即「选定平台的关键屏纯 UI 设计稿」，让用户定下一张作为整套设计的视觉基调**。
@@ -25,6 +23,8 @@ python3 "$SKILL_DIR/scripts/pf_state.py" log "Phase 3 started: generating hero i
 ```
 
 ## Step 1: gen-heroes — 生成首图候选
+
+**⓪ 先检测用户自定义首图（P3-1 · 没传才生图）**：读 `explore.json` 的 `heroes[]`——若存在 `source == "user"` 的条目（用户在操作台③画布「生成首图」对话框里**上传/拖入/粘贴**的自定义首图），说明**用户已提供首图 → 跳过生图**：它通常已由 server 设为 `selectedHero`（视觉基调），直接进 Step 2 `pick-hero` 定稿 + 反萃取 token（R-③b 对上传首图同样适用，还原度更高——照抄用户真稿而非 AI 幻想图）。只有**没有** `source==user` 首图时才走下面的生图流程。（server `_auto_explore` 收到 gen-heroes 请求时，若发现已有 `source==user` 首图也应跳过生成、直接以其为基调；用户上传后仍可再点「生成」覆盖。）
 
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" step 3 gen-heroes --status active
@@ -52,7 +52,25 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 3 pick-hero --status active
 
   CLI：用户报编号 → 换成 id → `select-hero`。全自动：自选与 `selectedRefs` 风格最贴合、最能承载产品调性的一张 → `select-hero` → log 理由。
 
-选定后，**把这张首图的视觉基调显式落成一段文字**——色板（几个 hex）、标题/正文字体气质、留白密度、圆角与阴影、构图语言——写进 `explore` 的 styleSummary（若协作节里已写则确认/补全），并在 log 里点明"此为 Phase 4 页面设计的视觉基调输入"。这一段就是交给 Phase 4 的合同，不要只留"按 hero 2"。
+选定后，**把这张首图的视觉基调显式落成一段文字**——色板（几个 hex）、标题/正文字体气质、留白密度、圆角与阴影、构图语言——写进 `explore` 的 styleSummary（若协作节里已写则确认/补全），并在 log 里点明"此为 Phase 4 页面设计的视觉基调输入"。这一段就是交给 Phase 4 的合同，不要只留“按 hero 2”。
+
+**并反萃取成精确 token 加精 design-spec（还原度脊椎，专题 A · R-③b）**：styleSummary 是给人看的文字，但 ③ 定稿首图是全程视觉精度最高的产物之一——`Read` 打开定稿首图（`selectedHero` 指向的文件），把真实的**色值（逐个 hex）、字体气质、圆角/阴影**反萃取出来，用 `spec set-token` 写进 design-spec，把 ② 的 token 草案**加精为精确值**（下游 ④ 定稿、⑥ 直接照抄，不再肉眼猜）：
+
+```bash
+# 读定稿首图，把真实视觉值写成精确 token（覆盖/补全 ② 的草案）
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.primary --value "#3498db" --type color
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.bg --value "#0e1420" --type color
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token radius.md --value "8px" --type dimension
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.title --value "Montserrat" --type fontFamily
+# 字号梯度——尤其超大标题 display 档（缺档会让主标题被迫 snap 到偏小档、还原度崩）：
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.size.hero --value "60px" --type dimension
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.size.display --value "76px" --type dimension
+# 行高独立维度（用 --type number，别用 dimension——那会被当尺寸编译成 dp/CGFloat）：
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token lineHeight.tight --value "1.1" --type number
+# 语义 token 用 alias 指向 primitive（DTCG {..} 语法传给 --value；`--ref` 是布尔 flag、不接值，别拿它当值传）：
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.action.primary --value "{color.blue.500}" --type color
+# …按首图实际值逐个写：主色/辅色/背景/文字色、圆角、字体气质、字号梯度（含 display）、行高…
+```
 
 ```bash
 python3 "$SKILL_DIR/scripts/pf_state.py" step 3 pick-hero --status done

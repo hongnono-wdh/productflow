@@ -351,10 +351,28 @@ def cmd_phase(args) -> None:
                 "确实本阶段不做的页用 `page set <id> --impl-skip \"原因\"` 显式豁免；"
                 "或加 `--force` 强行标 done（不推荐，会留痕）。先跑 `impl-check` 看缺哪些。"
             )
+        # 还原度裁判闸（专题 C6）：design-spec 里 type=product 的页都要有 verdict==pass 的 fidelity 裁判。
+        # 无 spec/无 product 页（未接入还原度脊椎的老项目）自动跳过。
+        _ok, fid_failing = _fidelity_coverage(args.dir)
+        if fid_failing:
+            fl = "\n".join(f"  - {m['id']}（{m['reason']}）" for m in fid_failing)
+            raise SystemExit(
+                f"⑥ 还有 {len(fid_failing)} 个产品页还原度裁判未通过（verdict≠pass 或缺），不能标 done：\n{fl}\n"
+                "→ 跑三层闸门第 1 层视觉裁判、出 verdict==pass 的 `fidelity-<页>.json`（含 page id）；"
+                "或加 `--force` 越闸（留痕）。"
+            )
     # 每次（重新）进入本阶段 = 新「一代」：之后登记的产物都带这个版本号，
     # 这样重做后产物画廊一眼看出哪批是哪一版（老批留痕、可对比）。只在 pending/done→active 时 +1。
     if args.status == "active" and ph.get("status") != "active":
         ph["gen"] = ph.get("gen", 0) + 1
+    # 收尾软校验（不 block、只警告）：标 done 时若有步骤未收尾（非 done/skipped），提醒——
+    # 防反复踩的「漏标 step done」坑，否则操作台步骤条显示不全、看不出真实进展。
+    if args.status == "done":
+        _pending = [st["id"] for st in ph.get("steps", []) if st.get("status") not in ("done", "skipped")]
+        if _pending:
+            sys.stderr.write(
+                f"⚠️ P{args.n} 标 done，但 {len(_pending)} 个步骤未收尾（非 done/skipped）："
+                f"{', '.join(_pending)} —— 每步做完记得 `step {args.n} <id> --status done`。\n")
         # 重做已完成的阶段（done→active）：把本阶段步骤归位为 pending，让重做时步骤真实逐步重走，
         # 而非停在上次的「完成」（操作台步骤卡据此实时显示在重做哪一步）。首次进入(pending→active)steps 本就 pending，无影响。
         if ph.get("status") == "done":
@@ -825,7 +843,7 @@ def cmd_explore(args) -> None:
         e["searchPlan"] = {"keywords": kws, "basis": (args.basis or ""), "ts": _now()}
     elif args.eaction == "add-hero":
         e["heroes"].append({"id": "hero-" + os.urandom(3).hex(), "file": args.file,
-                           "style": args.style or ""})
+                           "style": args.style or "", "source": getattr(args, "source", "") or ""})
     elif args.eaction == "set-summary":
         e["styleSummary"] = args.text
     elif args.eaction == "select-refs":   # 设定选中的参考（按 ref id，喂给③首图）——headless/CLI 用，对齐网页选稿
@@ -1306,6 +1324,228 @@ def cmd_product_key(args) -> None:
         print("已清空第三方 key 需求")
 
 
+# ── design-spec：还原度脊椎（贯穿 ②③④⑤⑥ 的结构化视觉规格）。独立于 state.json ──
+
+def _spec_path(d: str) -> str:
+    return os.path.join(_root(d), "design-spec.json")
+
+
+def _spec_skeleton() -> dict:
+    return {"v": 1, "componentLib": {}, "tokens": {}, "pages": [], "provenance": {}}
+
+
+def _load_spec(d: str) -> dict:
+    """读 design-spec.json；缺文件/损坏 → 空骨架（老项目向后兼容，不报错）。"""
+    try:
+        with open(_spec_path(d), encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                for k, v in _spec_skeleton().items():
+                    data.setdefault(k, v)
+                return data
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    return _spec_skeleton()
+
+
+def _save_spec(d: str, data: dict) -> None:
+    data["updated"] = _now()
+    tmp = _spec_path(d) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, _spec_path(d))
+
+
+def _deep_merge(dst: dict, src: dict) -> dict:
+    """把 src 深合并进 dst（dict 递归，其余覆盖）。"""
+    for k, v in src.items():
+        if isinstance(v, dict) and isinstance(dst.get(k), dict):
+            _deep_merge(dst[k], v)
+        else:
+            dst[k] = v
+    return dst
+
+
+def _set_by_path(tree: dict, path: str, value) -> None:
+    """按点分 path 在嵌套 dict 里设值（如 color.action.primary）。"""
+    parts = path.split(".")
+    node = tree
+    for seg in parts[:-1]:
+        nxt = node.get(seg)
+        if not isinstance(nxt, dict):
+            nxt = {}
+            node[seg] = nxt
+        node = nxt
+    node[parts[-1]] = value
+
+
+_SPEC_SEMANTIC_WORDS = {"primary", "secondary", "tertiary", "error", "success",
+                        "warning", "danger", "info", "brand", "action", "surface", "muted"}
+
+
+def _spec_check(d: str, spec: dict, strict: bool = False) -> None:
+    """校验 design-spec：悬空/成环 alias、primitive 禁语义词、缺 lib、page-id 对齐、type 合法。
+    有 error → 退出码 1；--strict 把警告也当 error。"""
+    import token_compile
+    errors, warns = [], []
+    flat = token_compile._flatten(spec.get("tokens", {}))
+    try:
+        token_compile._resolve(flat)
+    except ValueError as e:
+        errors.append(str(e))
+    for path, ent in flat.items():
+        val = ent.get("value")
+        if not (isinstance(val, str) and token_compile._ALIAS.fullmatch(val.strip())):
+            hit = [seg for seg in re.split(r"[.\-]", path) if seg in _SPEC_SEMANTIC_WORDS]
+            if hit:
+                warns.append(f"primitive token「{path}」含语义词 {hit}（primitive 应纯描述，语义放 semantic 层）")
+    for plat, ent in (spec.get("componentLib") or {}).items():
+        if not (isinstance(ent, dict) and ent.get("lib")):
+            errors.append(f"componentLib[{plat}] 缺 lib")
+    if not spec.get("componentLib"):
+        warns.append("componentLib 为空（还没锁组件库；②找参考阶段应锁定）")
+    page_ids = {p.get("id") for p in _load_pages(d).get("pages", [])}
+    for pg in spec.get("pages", []):
+        pid = pg.get("id")
+        if pid not in page_ids:
+            errors.append(f"design-spec.pages 的 id「{pid}」在 pages.json 不存在")
+        t = pg.get("type")
+        if t is not None and t not in ("product", "marketing"):
+            errors.append(f"page「{pid}」type 非法：{t}")
+        # 数据容器类组件应有 empty+loading 态（专题 D4；启发式按组件名匹配）
+        states = pg.get("states") or {}
+        for comp in pg.get("components") or []:
+            lib = (comp.get("lib") or "").lower()
+            if any(k in lib for k in ("list", "table", "grid", "feed")):
+                slot = comp.get("slot")
+                miss = [s for s in ("empty", "loading") if s not in (states.get(slot) or [])]
+                if miss:
+                    warns.append(f"page「{pid}」数据容器「{slot}({comp.get('lib')})」缺状态 {miss}（专题 D：数据容器应有 empty/loading）")
+    if strict:
+        errors, warns = errors + warns, []
+    for w in warns:
+        print(f"⚠️  {w}")
+    for e in errors:
+        print(f"❌ {e}")
+    if not errors:
+        print("✅ spec check 通过" + ("（有警告）" if warns else ""))
+    raise SystemExit(1 if errors else 0)
+
+
+def _fidelity_coverage(d: str):
+    """⑥ 还原度裁判校验：design-spec 里 type=product 的页，是否都有 verdict==pass 的
+    fidelity-*.json（含 "page":<id>）。返回 (ok_ids, failing)——failing 元素 {id, reason}。
+    无 product 页（老项目 / 无 spec）→ 全过（向后兼容，不影响未接入还原度脊椎的项目）。"""
+    product = [p for p in _load_spec(d).get("pages", []) if p.get("type") == "product"]
+    if not product:
+        return [], []
+    fid_dir = os.path.join(_root(d), "artifacts", "phase-6")
+    verdicts = {}
+    try:
+        for fn in os.listdir(fid_dir):
+            if fn.startswith("fidelity-") and fn.endswith(".json"):
+                try:
+                    with open(os.path.join(fid_dir, fn), encoding="utf-8") as f:
+                        j = json.load(f)
+                    if j.get("page"):
+                        verdicts[j["page"]] = j.get("verdict")
+                except (OSError, json.JSONDecodeError):
+                    pass
+    except OSError:
+        pass
+    ok, failing = [], []
+    for p in product:
+        pid = p.get("id")
+        v = verdicts.get(pid)
+        if v == "pass":
+            ok.append(pid)
+        else:
+            failing.append({"id": pid, "reason": "缺还原度裁判" if v is None else f"verdict={v}"})
+    return ok, failing
+
+
+def cmd_spec(args) -> None:
+    _load(args.dir)  # 校验项目存在
+    spec = _load_spec(args.dir)
+    act = args.saction
+
+    if act == "show":
+        print(json.dumps(spec, ensure_ascii=False, indent=2))
+        return
+
+    if act == "compile":
+        import token_compile
+        out_dir = args.out if os.path.isabs(args.out) else os.path.join(_root(args.dir), args.out)
+        for w in token_compile.compile_spec(spec, args.platform, out_dir):
+            print(f"✅ {w}")
+        return
+
+    if act == "check":
+        _spec_check(args.dir, spec, strict=getattr(args, "strict", False))
+        return
+
+    if act == "set-lib":
+        entry = {"lib": args.lib}
+        if args.theme is not None:
+            entry["theme"] = args.theme
+        if args.catalog is not None:
+            entry["catalog"] = args.catalog
+        spec["componentLib"][args.platform] = entry
+
+    elif act == "set-token":
+        rec = {"$value": ("{" + args.value + "}") if args.ref else args.value}
+        if args.type:
+            rec["$type"] = args.type
+        _set_by_path(spec["tokens"], args.path, rec)
+
+    elif act == "set-tokens":
+        try:
+            with open(args.file, encoding="utf-8") as f:
+                incoming = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+            raise SystemExit(f"读 tokens 文件失败：{e}")
+        if not isinstance(incoming, dict):
+            raise SystemExit("tokens 文件应是一个 JSON 对象")
+        if isinstance(incoming.get("tokens"), dict):
+            incoming = incoming["tokens"]
+        _deep_merge(spec["tokens"], incoming)
+
+    elif act == "set-page":
+        pg = next((p for p in spec["pages"] if p.get("id") == args.id), None)
+        if pg is None:
+            pg = {"id": args.id}
+            spec["pages"].append(pg)
+        if args.type:
+            pg["type"] = args.type
+        for c in (args.component or []):
+            slot, lib, variant = (c.split(":", 2) + ["", ""])[:3]
+            comps = [x for x in pg.get("components", []) if x.get("slot") != slot]
+            comp = {"slot": slot, "lib": lib}
+            if variant:
+                comp["variant"] = variant
+            comps.append(comp)
+            pg["components"] = comps
+        for stt in (args.state or []):
+            comp, _sep, states = stt.partition(":")
+            pg.setdefault("states", {})[comp] = [x for x in states.split(",") if x]
+        for a in (args.asset or []):
+            slot, gen, fpath = (a.split(":", 2) + ["", ""])[:3]
+            assets = [x for x in pg.get("assets", []) if x.get("slot") != slot]
+            assets.append({"slot": slot, "gen": gen, "file": fpath})
+            pg["assets"] = assets
+        if getattr(args, "redline", None):
+            try:
+                with open(args.redline, encoding="utf-8") as f:
+                    pg["redline"] = json.load(f)  # redline.py 产出：palette snap / designWidth / icons
+            except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+                raise SystemExit(f"读 redline 文件失败：{e}")
+    else:
+        raise SystemExit(f"未知 spec 动作：{act}")
+
+    _save_spec(args.dir, spec)
+    print(f"✅ spec {act}")
+
+
 def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(prog="pf_state", description="ProductFlow pipeline state")
     # 默认取环境变量 PF_PROJECT（启动时 export 一次，全程命令免写 --dir，避免落错目录）；都没有才退到 cwd
@@ -1480,6 +1720,7 @@ def main(argv: list[str]) -> int:
     eh = esub.add_parser("add-hero", help="登记一张生成的首图")
     eh.add_argument("file")
     eh.add_argument("--style", help="该首图的风格名/描述")
+    eh.add_argument("--source", help="来源标记：user=用户自定义上传（③ 据此跳过生图、直接定基调）")
     es = esub.add_parser("set-summary", help="写风格总结")
     es.add_argument("text")
     esel = esub.add_parser("select-refs", help="设定选中的参考（按 ref id，可多个；喂给③首图）")
@@ -1527,6 +1768,36 @@ def main(argv: list[str]) -> int:
     bs.add_argument("--scope", help="输出范围")
     bsub.add_parser("done-request", help="标记请求已处理")
     sp.set_defaults(fn=cmd_brief)
+
+    # spec：design-spec.json 还原度脊椎（token/组件库/每页规格；②③④⑤ 写、⑥ 读+编译）
+    sp = sub.add_parser("spec", help="design-spec：还原度脊椎（组件库/token/每页组件+状态）")
+    ssub = sp.add_subparsers(dest="saction", required=True)
+    ssub.add_parser("show", help="打印 design-spec.json")
+    sl = ssub.add_parser("set-lib", help="锁定某平台组件库")
+    sl.add_argument("--platform", required=True, choices=["PC", "H5", "APP"])
+    sl.add_argument("--lib", required=True, help="组件库，如 shadcn/ui + tailwind")
+    sl.add_argument("--theme", help="主题名")
+    sl.add_argument("--catalog", help="组件目录文件路径（相对 .productflow/）")
+    stk = ssub.add_parser("set-token", help="设一个 token（点分 path，如 color.action.primary）")
+    stk.add_argument("path", help="token 路径，如 color.action.primary")
+    stk.add_argument("--value", required=True, help="值（#3498db / 16px），或 --ref 时给别名路径")
+    stk.add_argument("--type", help="$type：color/dimension/fontFamily/shadow …")
+    stk.add_argument("--ref", action="store_true", help="value 为别名引用（存成 {value}）")
+    stks = ssub.add_parser("set-tokens", help="从 JSON 文件批量合并 token（②萃取草案用）")
+    stks.add_argument("--file", required=True, help='tokens JSON（tokens 子树或 {"tokens":{…}}）')
+    ssp = ssub.add_parser("set-page", help="设某页规格：类型/组件映射/状态/素材")
+    ssp.add_argument("id", help="页面 id（对齐 pages.json 的 pg-xxx）")
+    ssp.add_argument("--type", choices=["product", "marketing"])
+    ssp.add_argument("--component", action="append", help="slot:lib:variant，可多次（同 slot 覆盖）")
+    ssp.add_argument("--state", action="append", help="comp:s1,s2,… 可多次")
+    ssp.add_argument("--asset", action="append", help="slot:gen:file，可多次（营销页素材）")
+    ssp.add_argument("--redline", help="redline 规格 JSON（scripts/redline.py 产出：palette snap / designWidth / icons）")
+    sco = ssub.add_parser("compile", help="把 tokens 编译到三端（CSS/Swift/Compose）")
+    sco.add_argument("--platform", default="all", choices=["PC", "H5", "APP", "all"])
+    sco.add_argument("--out", required=True, help="输出目录（相对 .productflow/ 或绝对）")
+    sck = ssub.add_parser("check", help="校验 design-spec（悬空/成环 alias、缺 lib、page-id 对齐等）")
+    sck.add_argument("--strict", action="store_true", help="把警告也当错误（非 0 退出）")
+    sp.set_defaults(fn=cmd_spec)
 
     # meta：改项目显示名（向导重入时「创建项目」步可改名，slug/目录不变）
     sp = sub.add_parser("meta")
