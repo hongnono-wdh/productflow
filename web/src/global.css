@@ -637,6 +637,10 @@
   .pk-paste { display: flex; gap: 8px; align-items: stretch; margin: 0 0 12px; }
   .pk-paste-ta { flex: 1; min-height: 58px; max-width: none; resize: vertical; font-size: 12.5px; line-height: 1.5; }
   .pk-paste .btn { flex: none; align-self: stretch; white-space: nowrap; }
+  .pk-parsing { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 8px 11px; background: #eef4ff; border: 1px solid #cfe0ff; border-radius: 8px; font-size: 12.5px; color: #3355aa; }
+  .pk-spin { flex: none; width: 12px; height: 12px; border: 2px solid #b8ccf0; border-top-color: #3b82f6; border-radius: 50%; animation: pk-spin 0.7s linear infinite; }
+  @keyframes pk-spin { to { transform: rotate(360deg); } }
+  .pk-parsing-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pk-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 3px 22px; padding: 4px 0 2px; }
   .pk-line { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12.5px; }
   .pk-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: #c4c8cf; }
