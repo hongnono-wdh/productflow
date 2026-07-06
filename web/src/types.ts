@@ -243,6 +243,7 @@ export interface BFNode {
   proc?: boolean // agent 正在处理这个节点的改动（操作台显示「处理中」脉冲）
   stub?: string | null // 占位·真实对接未实现（dev/mock 占位、真实第三方对接还是 TODO）；字符串为占位说明
   test?: string | null // ⑧ 测试态：'pass'/'fail'（未设 = pending 待测），独立于 status(⑦ 开发态 done)——⑧ 测过才 set、⑧ 重做清空
+  test_note?: string | null // ⑧ 测试挂了的原因（fail 时），测试进度直接显示
 }
 export interface BFEdge {
   from: string

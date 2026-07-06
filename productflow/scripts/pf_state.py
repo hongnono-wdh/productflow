@@ -1173,10 +1173,15 @@ def cmd_backend_flow(args) -> None:
             raise SystemExit(f"no such node: {args.id}")
         if args.status == "clear":
             node.pop("test", None)
+            node.pop("test_note", None)
         else:
             node["test"] = args.status
+            if args.note:
+                node["test_note"] = args.note        # 挂了的原因（key 错 / 代码 bug / E2E 失败…），⑧ 测试进度直接显示
+            elif args.status == "pass":
+                node.pop("test_note", None)          # 通过了清掉原因
         _save_backend_flow(args.dir, bf)
-        print(f"{args.id} test={args.status}")
+        print(f"{args.id} test={args.status}" + (f"（{args.note}）" if args.note else ""))
     elif act == "link-page":
         if not any(l.get("page") == args.page and l.get("module") == args.module for l in bf["pageLinks"]):
             bf["pageLinks"].append({"page": args.page, "module": args.module})
@@ -1428,6 +1433,7 @@ def main(argv: list[str]) -> int:
     btt = bsub.add_parser("set-test", help="设节点 ⑧ 测试态（pass/fail/clear），独立于 set-status（⑦ 开发态）")
     btt.add_argument("--id", required=True)
     btt.add_argument("--status", required=True, choices=["pass", "fail", "clear"])
+    btt.add_argument("--note", help="挂了的原因（fail 时）——如「短信模板 code 不对」「E2E 退出后停在注册 tab」，测试进度直接显示")
     bl = bsub.add_parser("link-page", help="页面 ↔ 模块 关联（N:N）")
     bl.add_argument("--page", required=True, help="页面 id")
     bl.add_argument("--module", required=True, help="模块 id")

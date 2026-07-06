@@ -662,6 +662,7 @@
   .tp-row.proc { animation: pf-pulse 1.4s ease-in-out infinite; }
   .tp-head { display: flex; align-items: center; gap: 9px; padding: 10px 12px; cursor: pointer; }
   .tp-head:hover { background: var(--line-2); }
+  .tp-failreason { padding: 2px 12px 9px 30px; font-size: 12px; color: #b93a32; line-height: 1.55; }
   .tp-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
   .tp-dot.sm { width: 7px; height: 7px; }
   .tp-name { font-weight: 600; font-size: 14px; color: var(--ink); }

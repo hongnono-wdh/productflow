@@ -88,6 +88,7 @@ export function TestProgressView({ running }: { running?: boolean }) {
                 {its.length > 0 && <span className="tp-count">接口 {passN}/{its.length} 通过</span>}
                 {its.length > 0 && <span className="tp-caret">{isOpen ? '▾' : '▸'}</span>}
               </div>
+              {ts === 'fail' && m.test_note && <div className="tp-failreason">⚠ {m.test_note}</div>}
               {isOpen && its.length > 0 && (
                 <ul className="tp-ifaces">
                   {its.map((i) => {
