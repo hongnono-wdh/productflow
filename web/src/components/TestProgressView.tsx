@@ -8,19 +8,25 @@ import type { BackendFlow, BFNode, StateChannel } from '../types'
 
 const EMPTY: BackendFlow = { version: 1, nodes: [], edges: [], pageLinks: [], entry: null, layout: {} }
 
-type TState = 'pass' | 'fail' | 'fixing' | 'pending'
+type TState = 'pass' | 'fail' | 'fixing' | 'testing' | 'pending'
 const TST: Record<TState, { label: string; dot: string }> = {
   pass: { label: '通过', dot: '#3aa657' },
   fail: { label: '挂了', dot: '#e0574f' },
   fixing: { label: '回修中', dot: '#f0a500' },
+  testing: { label: '测试中', dot: '#3b82f6' },
   pending: { label: '待测', dot: '#c4c8cf' },
 }
-// 测试态从独立的 test 字段派生（不复用 status = ⑦ 开发态）：proc → 回修中；test=pass → 通过；test=fail → 挂；未设 → 待测
-const tstate = (n: BFNode): TState => (n.proc ? 'fixing' : n.test === 'pass' ? 'pass' : n.test === 'fail' ? 'fail' : 'pending')
+// 测试态从独立的 test 字段派生（不复用 status = ⑦ 开发态、也不碰 proc = 全局「改代码」信号，避免污染 ⑤⑦ 开发视图）。
+// ⑧ 处理中一律「测试中」(test=testing)——不引入「回修中」：回修=改代码是 ⑦ 的事、在 ⑦ 显示处理中；改完重测回到 test=testing。
+const tstate = (n: BFNode): TState =>
+  n.test === 'testing' ? 'testing'
+    : n.test === 'pass' ? 'pass'
+      : n.test === 'fail' ? 'fail'
+        : 'pending'
 const modId = (m?: string) => (m ? (m.startsWith('module:') ? m : 'module:' + m) : '')
 const strip = (id: string, p: string) => (id.startsWith(p) ? id.slice(p.length) : id)
 // 单模块重测：复用 node-change 通道，发预设指令让 agent 只重跑这一个模块的测试、更新测试态
-const RERUN_TEST_TEXT = (id: string) => `【重新测试本模块】只重测「${id}」这个模块——跑它的集成 / E2E / 回归测试（配了第三方 key 就切真 provider 真测）。先 backend-flow proc --id ${id} --state on 脉冲，按结果 backend-flow set-test --id ${id} --status pass/fail（挂了带 --note 写清原因），测完 proc --state off。别动其它模块、别改代码（除非测出 bug 要修）。`
+const RERUN_TEST_TEXT = (id: string) => `【重新测试本模块】只重测「${id}」这个模块——跑它的集成 / E2E / 回归测试（配了第三方 key 就切真 provider 真测）。先 backend-flow set-test --id ${id} --status testing（显示「测试中」——跑测试用 test=testing、别用 proc！proc 是「改代码」信号、会让 ⑤⑦ 开发视图也误显示处理中），按结果 backend-flow set-test --id ${id} --status pass/fail（挂了带 --note 写清原因）。别动其它模块、别改代码（除非测出 bug 要修，那才 proc + 改代码）。`
 
 export function TestProgressView({ running }: { running?: boolean }) {
   const [bf, setBf] = useState<BackendFlow>(EMPTY)
@@ -60,10 +66,10 @@ export function TestProgressView({ running }: { running?: boolean }) {
 
   if (!bf.nodes.length || !mods.length) return null // 无后端流程图 → 不渲染（无后端项目在此展示前端 E2E 时另说）
 
-  const cnt: Record<TState, number> = { pass: 0, fail: 0, fixing: 0, pending: 0 }
+  const cnt: Record<TState, number> = { pass: 0, fail: 0, fixing: 0, testing: 0, pending: 0 }
   mods.forEach((x) => cnt[x.ts]++)
   const total = mods.length
-  const order: TState[] = ['pass', 'fail', 'fixing', 'pending']
+  const order: TState[] = ['pass', 'fail', 'fixing', 'testing', 'pending']
 
   return (
     <div className="card">
