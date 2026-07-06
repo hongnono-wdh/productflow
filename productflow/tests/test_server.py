@@ -106,7 +106,7 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(proj["name"], "Listing Probe")
         self.assertEqual(proj["done"], 0)
         self.assertEqual(proj["current_phase"], 1)
-        self.assertEqual(len(proj["phases"]), 8)
+        self.assertEqual(len(proj["phases"]), 9)
         self.assertFalse(proj["missing"])
         self.assertFalse(proj["error"])
         self.assertFalse(proj["archived"])

@@ -57,9 +57,10 @@ productflow/
     ├── phase-3-hero.md       # 首图设计（按参考生成首图、定视觉基调）
     ├── phase-4-pages.md      # 页面设计（所有页面 × 平台）→ direction.md 定稿
     ├── phase-5-spec.md       # 模块/ER/DDL/API/选模板
-    ├── phase-6-frontend.md   # 脚手架/前端实现/本地预览（无后端时含单元+集成测试）
-    ├── phase-7-backend.md    # 后端实现/单元+集成测试/接口文档（无后端项目跳过）
-    ├── phase-8-deploy.md     # CF Pages / Workers / 单机(Docker 或 systemd)
+    ├── phase-6-frontend.md   # 脚手架/前端实现/视觉还原（不做功能测试）
+    ├── phase-7-backend.md    # 后端实现/单元测试/接口文档（无后端项目跳过）
+    ├── phase-8-test.md       # 集成+E2E+回归+契约+测试报告门禁（无后端做前端集成/E2E）
+    ├── phase-9-deploy.md     # CF Pages / Workers / 单机(Docker 或 systemd)
     └── templates.md          # 三个固定开发模板 T1/T2/T3
 ```
 

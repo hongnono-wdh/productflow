@@ -6,16 +6,19 @@ import { post } from '../lib'
 import { IcSpark } from '../icons'
 import { DeployCredsCard } from './DeployCredsCard'
 import { PreviewSection } from './PreviewSection'
+import { ModuleProgressView } from './ModuleProgressView'
+import { TestProgressView } from './TestProgressView'
 import { BackendFlowView } from './BackendFlowView'
 import { ProductKeysCard } from './ProductKeysCard'
 import type { AgentLogPayload, WizardPayload } from '../types'
 
-const NAMES: Record<number, string> = { 5: '功能与数据设计', 6: '前端实现', 7: '后端实现 · 测试', 8: '部署上线' }
+const NAMES: Record<number, string> = { 5: '功能与数据设计', 6: '前端实现', 7: '后端实现', 8: '测试', 9: '部署上线' }
 const HINTS: Record<number, string> = {
   5: '功能模块清单 → ER 图 → 表结构 DDL → API 契约 → 选开发模板。',
-  6: '按模板脚手架 → 前端页面 / 交互实现 → 本地预览（严格还原 ④ 设计）。',
-  7: '后端接口 + 数据实现 → 单元测试 + 集成测试（确保功能完整跑通）→ 接口文档。',
-  8: '选部署目标 → 部署 → 线上冒烟 → 交付报告。',
+  6: '按模板脚手架 → 前端页面 / 交互实现 → 本地预览 + 视觉还原（严格还原 ④ 设计）。',
+  7: '后端接口 + 数据实现 → 单元测试 → 接口文档。',
+  8: '集成测试 + E2E 端到端旅程 + 回归 + 契约 + 测试报告门禁（真实拼装后产物的完整验证）。',
+  9: '选部署目标 → 部署 → 线上冒烟 → 交付报告。',
 }
 const isMac = navigator.platform.indexOf('Mac') >= 0 // 独立于 wizard.primary 的 OS 嗅探（critic #4）
 
@@ -71,7 +74,7 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
   }
 
   let mainLabel = done ? '重做本阶段' : '让 Agent 做本阶段'
-  if (phase === 8 && !done) {
+  if (phase === 9 && !done) {
     mainLabel = prim === 'APP' ? '构建并产出上线分发包' : prim === 'PC' ? '构建并部署上线' : prim === 'H5' ? '部署上线' : '让 Agent 做本阶段'
   }
   const previewLabel = prim === 'APP' ? '📱 构建并在模拟器预览' : prim === 'PC' ? '🖥 本地运行预览' : prim === 'H5' ? '🌐 本地预览' : '▶ 构建并预览'
@@ -79,8 +82,10 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
 
   return (
     <>
-      {phase === 8 && <DeployCredsCard primary={prim} />}
-      {(phase === 6 || phase === 7) && <PreviewSection />}
+      {phase === 9 && <DeployCredsCard primary={prim} />}
+      {phase === 6 && <PreviewSection />}
+      {phase === 7 && <ModuleProgressView running={running} />}
+      {phase === 8 && <TestProgressView running={running} />}
       <div className="card">
         <h2>
           {NAMES[phase]} <span className="hint">交给 Agent 自动完成</span>
@@ -135,7 +140,7 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
         )}
       </div>
       {phase === 5 && <BackendFlowView />}
-      {(phase === 5 || phase === 7) && <ProductKeysCard />}
+      {phase === 7 && <ProductKeysCard />}
     </>
   )
 }

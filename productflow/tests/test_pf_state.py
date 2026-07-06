@@ -63,10 +63,10 @@ class TestInit(PfStateBase):
         self.assertEqual(s["v"], 2)
         self.assertEqual(s["current_phase"], 1)
         self.assertEqual(s["project_dir"], os.path.abspath(self.dir))
-        self.assertEqual(len(s["phases"]), 8)
+        self.assertEqual(len(s["phases"]), 9)
         self.assertEqual([ph["name"] for ph in s["phases"]],
                          ["市场调研", "找参考", "首图设计", "页面设计",
-                          "功能与数据设计", "前端实现", "后端实现 · 测试", "部署上线"])
+                          "功能与数据设计", "前端实现", "后端实现", "测试", "部署上线"])
         # phases / steps all start pending
         self.assertTrue(all(ph["status"] == "pending" for ph in s["phases"]))
         self.assertTrue(all(st["status"] == "pending"
@@ -187,7 +187,7 @@ class TestPhaseStep(PfStateBase):
         # status is NOT json — assert it prints product + phase counter
         r = self.run_ok(["status"])
         self.assertIn(self.PRODUCT, r.stdout)
-        self.assertIn("phase 1/8", r.stdout)
+        self.assertIn("phase 1/9", r.stdout)
 
 
 class TestArtifactLog(PfStateBase):
@@ -872,6 +872,11 @@ class TestProductKey(PfStateBase):
         self.assertEqual(keys[0]["key"], "STRIPE_SECRET_KEY")
         self.assertEqual(keys[0]["desc"], "Stripe 支付")
         self.assertEqual(keys[0]["module"], "payment")
+
+    def test_add_multi_module(self):
+        # 一个 key 关联多个模块（如 SMS 同挂 auth 登录 + alerts 告警）→ module 存 list；单个仍为 str
+        self.run_ok(["product-key", "add", "--key", "SMS_KEY", "--module", "auth", "--module", "alerts"])
+        self.assertEqual(self._pk()["keys"][0]["module"], ["auth", "alerts"])
 
     def test_add_dedups_by_key_updates_desc(self):
         self.run_ok(["product-key", "add", "--key", "K", "--desc", "old"])

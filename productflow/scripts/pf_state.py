@@ -76,17 +76,27 @@ PHASES = [
     },
     {
         "id": 7,
-        "name": "后端实现 · 测试",
-        # 无后端项目（DEC-5 判无后端）：本阶段整体隐藏，单元/集成测试并入 ⑥ 前端实现（见手册）
+        "name": "后端实现",
+        # 无后端项目（DEC-5 判无后端）：本阶段整体隐藏；只做后端实现 + 单元测试（集成/E2E 在 ⑧测试，见手册）
         "steps": [
             ("backend", "后端实现"),
             ("unit-test", "单元测试"),
-            ("integration-test", "集成测试"),
             ("api-docs", "接口文档"),
         ],
     },
     {
         "id": 8,
+        "name": "测试",
+        # 真实拼装后产物的完整验证：集成 + E2E + 回归 + 契约 + 门禁（无后端项目做前端集成/E2E）
+        "steps": [
+            ("integration-test", "集成测试"),
+            ("e2e-test", "E2E 端到端旅程"),
+            ("regression", "回归测试"),
+            ("test-report", "测试报告门禁"),
+        ],
+    },
+    {
+        "id": 9,
         "name": "部署上线",
         "steps": [
             ("pick-target", "选择部署目标"),
@@ -180,30 +190,44 @@ def _new_id(product: str, path: str) -> str:
         return pid
 
 
-def _migrate_phases_v2(old: list) -> list:
-    """旧 7 阶段（⑥开发实现 / ⑦部署上线）→ 新 8 阶段（⑥前端实现 / ⑦后端实现·测试 / ⑧部署上线）。
-    1–5 原样保留；旧⑥→新⑥(前端，延用状态+产物) + 新⑦(后端·测试，pending)；旧⑦部署→新⑧。"""
-    by_id = {p.get("id"): p for p in old}
+def _migrate_to_v3(old: list) -> list:
+    """任意旧版（v1 7阶段「⑥开发实现/⑦部署」、v2 8阶段「⑦后端·测试/⑧部署」）→ v3 9阶段
+    （…⑥前端实现 / ⑦后端实现 / ⑧测试 / ⑨部署上线）。按阶段名映射旧状态，无损延用。"""
+    by_name = {p.get("name"): p for p in old}
+    old_be = by_name.get("后端实现 · 测试") or by_name.get("开发实现")   # 旧后端信息源（含 backend/测试）
 
-    def build(ph_def, src):
-        src = src or {}
-        step_status = {s.get("id"): s.get("status") for s in src.get("steps", [])}
-        steps = [{"id": sid, "title": t, "status": step_status.get(sid, "pending")} for sid, t in ph_def["steps"]]
-        node = {"id": ph_def["id"], "name": ph_def["name"], "status": src.get("status", "pending"),
-                "steps": steps, "artifacts": src.get("artifacts", [])}
-        if src.get("gen"):   # 保留产物版本计数（否则迁移后重做代次从 1 重来、产物版本错乱）
+    def sstat(src):
+        return {s.get("id"): s.get("status") for s in (src or {}).get("steps", [])}
+
+    def build(ph_def, src, step_src):
+        ss = sstat(step_src)
+        steps = [{"id": sid, "title": t, "status": ss.get(sid, "pending")} for sid, t in ph_def["steps"]]
+        node = {"id": ph_def["id"], "name": ph_def["name"], "status": (src or {}).get("status", "pending"),
+                "steps": steps, "artifacts": (src or {}).get("artifacts", [])}
+        if (src or {}).get("gen"):   # 保留产物版本计数
             node["gen"] = src["gen"]
         return node
 
     new = []
     for ph_def in PHASES:
-        i = ph_def["id"]
-        if i <= 5 or i == 6:            # 1–5 原样；新⑥前端 ← 旧⑥开发实现
-            new.append(build(ph_def, by_id.get(i)))
-        elif i == 7:                    # 新⑦后端·测试：旧结构没有，新建 pending
-            new.append(build(ph_def, None))
-        else:                           # 新⑧部署 ← 旧⑦部署
-            new.append(build(ph_def, by_id.get(7)))
+        i, nm = ph_def["id"], ph_def["name"]
+        if i <= 6:
+            # 1–5 同名延用；⑥前端实现 ← v2「前端实现」或 v1「开发实现」
+            src = by_name.get(nm) or (by_name.get("开发实现") if i == 6 else None)
+            new.append(build(ph_def, src, src))
+        elif i == 7:      # ⑦后端实现 ← 旧后端（backend/unit-test/api-docs 状态延用）
+            new.append(build(ph_def, old_be, old_be))
+        elif i == 8:      # ⑧测试（新）：旧后端做过集成测试(integration-test done) → 视为已测，否则待做
+            done = sstat(old_be).get("integration-test") == "done"
+            node = build(ph_def, {"status": "done" if done else "pending", "artifacts": [],
+                                  "gen": (old_be or {}).get("gen")}, old_be)
+            if done:
+                for s in node["steps"]:   # 旧集成 done → 新测试各 step 默认 done
+                    s["status"] = "done"
+            new.append(node)
+        else:             # ⑨部署 ← 旧「部署上线」
+            src = by_name.get("部署上线")
+            new.append(build(ph_def, src, src))
     return new
 
 
@@ -229,12 +253,18 @@ def _load(d: str) -> dict:
     if "v" not in state:
         state["v"] = 1
         changed = True
-    # 迁移：旧 7 阶段 → 新 8 阶段（拆⑥开发实现为⑥前端实现+⑦后端实现·测试、部署顺延⑧）
-    if state.get("v", 1) < 2 or any(ph.get("name") == "开发实现" for ph in state.get("phases", [])):
-        state["phases"] = _migrate_phases_v2(state.get("phases", []))
-        if state.get("current_phase") == 7:   # 旧部署⑦ → 新部署⑧
-            state["current_phase"] = 8
-        state["v"] = 2
+    # 迁移到 v3 9阶段（拆旧⑦后端·测试为⑦后端实现+⑧测试、部署顺延⑨）；兼容 v1(7阶段)/v2(8阶段)，无损
+    _old = state.get("phases", [])
+    if state.get("v", 1) < 3 or any(ph.get("name") in ("开发实现", "后端实现 · 测试") for ph in _old):
+        _cur_name = next((ph.get("name") for ph in _old if ph.get("id") == state.get("current_phase")), None)
+        state["phases"] = _migrate_to_v3(_old)
+        # current_phase 按阶段名重映射（开发实现/前端实现→⑥；后端·测试→后端实现⑦；部署→⑨；1-5 原 id 不变）
+        _remap = {"开发实现": 6, "前端实现": 6, "后端实现 · 测试": 7, "部署上线": 9}
+        if _cur_name in _remap:
+            state["current_phase"] = _remap[_cur_name]
+        elif isinstance(state.get("current_phase"), int) and state.get("current_phase") > 9:
+            state["current_phase"] = 9
+        state["v"] = 3
         changed = True
     if changed:
         _save(d, state)
@@ -343,6 +373,11 @@ def cmd_phase(args) -> None:
             sys.stderr.write(
                 f"⚠️ P{args.n} 标 done，但 {len(_pending)} 个步骤未收尾（非 done/skipped）："
                 f"{', '.join(_pending)} —— 每步做完记得 `step {args.n} <id> --status done`。\n")
+        # 重做已完成的阶段（done→active）：把本阶段步骤归位为 pending，让重做时步骤真实逐步重走，
+        # 而非停在上次的「完成」（操作台步骤卡据此实时显示在重做哪一步）。首次进入(pending→active)steps 本就 pending，无影响。
+        if ph.get("status") == "done":
+            for st in ph["steps"]:
+                st["status"] = "pending"
     ph["status"] = args.status
     if args.status == "active":
         s["current_phase"] = args.n
@@ -1032,6 +1067,39 @@ def _save_backend_flow(d: str, data: dict) -> None:
     os.replace(tmp, _backend_flow_path(d))
 
 
+def reset_backend_flow_progress(d: str) -> int:
+    """重做涉后端阶段（⑦）时，把 backend-flow 的模块/接口进度归零（module/interface → todo、清 proc），
+    让重做时成品预览真实重走：模块卡从「完成」变「待做」，再随 agent 逐个 set-status done 变绿，
+    而非一直停在「完成」。数据表(table)不是进度、不动。返回重置的节点数（0 = 无图或已全 todo）。"""
+    bf = _load_backend_flow(d)
+    n = 0
+    for node in bf.get("nodes", []):
+        if node.get("type") in ("module", "interface") and (node.get("status") not in (None, "todo") or node.get("proc") or node.get("stub")):
+            node["status"] = "todo"
+            node.pop("proc", None)
+            node.pop("stub", None)
+            n += 1
+    if n:
+        _save_backend_flow(d, bf)
+    return n
+
+
+def sync_backend_flow_done(d: str) -> int:
+    """阶段（⑦）标 done 收尾时，把 backend-flow 里还没 done 的模块/接口补成 done（清 proc）——兜底：
+    agent 复核式重做常只标 phase done、不逐个 set-status，若不补，成品预览会停在「待做」。
+    agent 主动标 needfix 的保留（真有问题、不该被抹成 done）。返回补的节点数。"""
+    bf = _load_backend_flow(d)
+    n = 0
+    for node in bf.get("nodes", []):
+        if node.get("type") in ("module", "interface") and node.get("status") in (None, "todo", "doing"):
+            node["status"] = "done"
+            node.pop("proc", None)
+            n += 1
+    if n:
+        _save_backend_flow(d, bf)
+    return n
+
+
 def cmd_backend_flow(args) -> None:
     """后端流程图 backend-flow.json 读写（薄关系层）：节点/边/页面链接/状态/入口。"""
     _load(args.dir)  # 校验项目存在 + 自愈注册
@@ -1092,6 +1160,16 @@ def cmd_backend_flow(args) -> None:
             node.pop("proc", None)
         _save_backend_flow(args.dir, bf)
         print(f"{args.id} proc={args.state}")
+    elif act == "set-stub":
+        node = next((n for n in bf["nodes"] if n.get("id") == args.id), None)
+        if node is None:
+            raise SystemExit(f"no such node: {args.id}")
+        if args.clear:
+            node.pop("stub", None)
+        else:
+            node["stub"] = args.note or "真实对接未实现（当前 dev / mock 占位）"
+        _save_backend_flow(args.dir, bf)
+        print(f"{args.id} stub={'cleared' if args.clear else node.get('stub')}")
     elif act == "link-page":
         if not any(l.get("page") == args.page and l.get("module") == args.module for l in bf["pageLinks"]):
             bf["pageLinks"].append({"page": args.page, "module": args.module})
@@ -1137,6 +1215,43 @@ def _save_product_keys(d: str, data: dict) -> None:
     os.replace(tmp, _product_keys_path(d))
 
 
+def cmd_scan_keys(args) -> None:
+    """扫项目代码里引用的第三方 env（process.env.X / os.environ / getenv 等），对比 product-keys 已登记的，
+    列出「代码用了、但没登记」的——根治「该找用户要 key 却漏了」。⑦ 收尾强制跑。"""
+    import re
+    root = os.path.abspath(args.dir)  # 项目根（代码在此）；_root 是 .productflow，别拿来 walk 代码
+    ref = re.compile(r'(?:process\.env\.|os\.environ\.get\(["\']|os\.environ\[["\']|getenv\(["\']|System\.getenv\(["\']|\benv\.)([A-Z_][A-Z0-9_]{2,})')
+    exts = ('.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs', '.py', '.go', '.java', '.kt', '.rs', '.vue', '.svelte')
+    skip = {'node_modules', '.git', '.productflow', 'dist', 'build', 'vendor', '.next', 'target', '__pycache__'}
+    found: set = set()
+    for dp, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in skip]
+        for f in files:
+            if f.endswith(exts):
+                try:
+                    txt = open(os.path.join(dp, f), encoding='utf-8', errors='ignore').read()
+                    for m in ref.finditer(txt):
+                        found.add(m.group(1))
+                except Exception:
+                    pass
+    # 只留「像第三方凭证」的：含这些片段；排除常见基建噪声
+    third = re.compile(r'KEY|SECRET|TOKEN|SMS|PAY|CAPTCHA|APPID|APP_ID|ACCESS|SIGN|TEMPLATE|OAUTH|CLIENT_ID|WEBHOOK|_API|API_|CERT|MCH|PRIVATE')
+    noise = {'NODE_ENV', 'PORT', 'HOST', 'HOSTNAME', 'PATH', 'HOME', 'PWD', 'DATABASE_URL', 'DB_PATH', 'DB_URL',
+             'BASE_URL', 'PUBLIC_URL', 'API_URL', 'API_BASE', 'API_BASE_URL', 'VITE_API_URL', 'LOG_LEVEL'}
+    cand = {k for k in found if third.search(k) and k not in noise and not re.search(r'PROVIDER|_DEV|DEV_|MOCK|FAKE|ECHO|_TEST|DISABLE|ENABLE|COOLDOWN', k)}
+    pk = _load_product_keys(args.dir)
+    registered = {e.get('key') for e in pk.get('keys', []) if e.get('key')}
+    missing = sorted(cand - registered)
+    stale = sorted(registered - found)   # 登记了、但代码里完全没引用 → 疑似过时（功能删了、key 没删；也可能是真适配器还没写的占位）
+    print(json.dumps({'referenced': sorted(cand), 'registered': sorted(registered), 'missing': missing, 'stale': stale}, ensure_ascii=False, indent=2))
+    if missing:
+        print(f"\n⚠ {len(missing)} 个第三方 env 在代码里用了、但没登记进 product-keys（该找用户要却漏了）："
+              + "、".join(missing) + "\n→ 逐个 product-key add 补登记（--provider/--url/--desc 写清），别让用户蒙在鼓里。", file=sys.stderr)
+    if stale:
+        print(f"\n⚠ {len(stale)} 个已登记的 key，代码里已不再引用 → 疑似过时："
+              + "、".join(stale) + "\n→ 核对：确实是功能删了 → `product-key rm --key X` 删登记；若是真适配器还没写的占位 → 留着、把模块 set-stub。别盲删（scan 对解构过深的引用可能漏抓）。", file=sys.stderr)
+
+
 def cmd_product_key(args) -> None:
     """产品级第三方 key 需求 product-keys.json：登记/删除/清空（key 值另存 secrets，不在此）。"""
     _load(args.dir)  # 校验项目
@@ -1149,7 +1264,12 @@ def cmd_product_key(args) -> None:
             pk["keys"].append(entry)
         entry["desc"] = (args.desc or entry.get("desc") or "")
         if args.module:
-            entry["module"] = args.module
+            # 单个 → str（兼容老数据 / 单归属）；多个 → list（一个 key 关联多个模块，如 SMS 同挂 auth + alerts）
+            entry["module"] = args.module[0] if len(args.module) == 1 else args.module
+        if getattr(args, "provider", None):
+            entry["provider"] = args.provider   # 平台/服务商名（Stripe / Twilio / 高德…）——让用户一眼知道这是哪个平台的 key
+        if getattr(args, "url", None):
+            entry["url"] = args.url              # 该 key 的获取地址（平台控制台），操作台显示「去获取」链接
         _save_product_keys(args.dir, pk)
         print(f"登记第三方 key 需求：{args.key}（{entry['desc'] or '-'}）")
     elif act == "rm":
@@ -1493,7 +1613,7 @@ def main(argv: list[str]) -> int:
     bn.add_argument("--module", help="所属模块 id（接口/表的归属）")
     bn.add_argument("--status", choices=list(_BF_STATUS), help="状态（默认 todo）")
     bn.add_argument("--name", help="中文显示名（图上主显中文、英文 id 灰字副显）")
-    bn.add_argument("--field", action="append", help="数据表字段（可多次），如 --field \"email TEXT UK\"；仅数据表用，供点表查看")
+    bn.add_argument("--field", action="append", help="数据表字段（可多次），格式 \"列名 类型 [PK/FK/UK] — 中文备注\"，如 --field \"email TEXT UK — 登录邮箱\"；**带上中文备注**让用户点表看得懂每列含义，仅数据表用")
     brn = bsub.add_parser("rm-node", help="删节点（连带其边/链接）")
     brn.add_argument("--id", required=True)
     ba = bsub.add_parser("add-edge", help="加边（calls / reads_from / writes_to）")
@@ -1511,6 +1631,10 @@ def main(argv: list[str]) -> int:
     bpr = bsub.add_parser("proc", help="标记/清除节点「处理中」（改动进行时操作台脉冲提示）")
     bpr.add_argument("--id", required=True)
     bpr.add_argument("--state", required=True, choices=["on", "off"])
+    bst = bsub.add_parser("set-stub", help="标记/清除节点「占位·真实对接未实现」（用了 dev/mock 占位、真实第三方对接还是 TODO）")
+    bst.add_argument("--id", required=True)
+    bst.add_argument("--note", help="占位说明，如「微信支付真实对接未实现，当前 dev 占位」")
+    bst.add_argument("--clear", action="store_true", help="清除占位标记（真实对接补齐后）")
     bl = bsub.add_parser("link-page", help="页面 ↔ 模块 关联（N:N）")
     bl.add_argument("--page", required=True, help="页面 id")
     bl.add_argument("--module", required=True, help="模块 id")
@@ -1526,12 +1650,16 @@ def main(argv: list[str]) -> int:
     pka = pksub.add_parser("add", help="登记一个需要的第三方 key")
     pka.add_argument("--key", required=True, help="环境变量名，如 STRIPE_SECRET_KEY")
     pka.add_argument("--desc", help="用途说明，如 Stripe 支付")
-    pka.add_argument("--module", help="所属模块（可选）")
+    pka.add_argument("--module", action="append", help="所属模块（可多次 = 一个 key 关联多个模块，如 SMS 同挂 auth 登录 + alerts 告警；任一相关模块缺 key 都会标红）")
+    pka.add_argument("--provider", help="平台/服务商名，如 Stripe / Twilio / 高德地图——让用户一眼知道这是哪个平台的 key")
+    pka.add_argument("--url", help="该 key 的获取地址（平台控制台），操作台显示「去获取」链接")
     pkr = pksub.add_parser("rm", help="删除一个 key 需求")
     pkr.add_argument("--key", required=True)
     pksub.add_parser("list", help="打印 product-keys.json")
     pksub.add_parser("clear", help="清空")
     sp.set_defaults(fn=cmd_product_key)
+    sp = sub.add_parser("scan-keys", help="扫代码引用的第三方 env vs product-keys 登记，列出漏登记的（⑦ 收尾根治「漏找用户要 key」）")
+    sp.set_defaults(fn=cmd_scan_keys)
 
     # explore：视觉探索（agent 写 Dribbble 参考 / 首图 / 风格总结）
     sp = sub.add_parser("explore")

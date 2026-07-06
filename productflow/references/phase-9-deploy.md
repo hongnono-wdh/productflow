@@ -1,13 +1,13 @@
-# Phase 8 — 部署上线
+# Phase 9 — 部署上线
 
-进入第七阶段（Phase 6 已 done、用户确认开始部署）时读本文件。本阶段目标：把产品发布出去（Web 上线到可访问 URL；iOS 构建上传到 TestFlight，停在提审前；Android 构建上传 Google Play 内部测试，停在生产提审前；桌面应用打包成安装包，可选上架商店，停在提交商店前）、验证可用、交付运维交接报告，并完成全流程收尾。发布路径先看平台（`primary` = PC/H5 走 Web，APP 走原生移动——按预设走 iOS 或 Android），详见下方 pick-target。
+进入第九阶段（Phase 8 测试已 done、用户确认开始部署）时读本文件。本阶段目标：把产品发布出去（Web 上线到可访问 URL；iOS 构建上传到 TestFlight，停在提审前；Android 构建上传 Google Play 内部测试，停在生产提审前；桌面应用打包成安装包，可选上架商店，停在提交商店前）、验证可用、交付运维交接报告，并完成全流程收尾。发布路径先看平台（`primary` = PC/H5 走 Web，APP 走原生移动——按预设走 iOS 或 Android），详见下方 pick-target。
 
 ## 阶段启动
 
 ```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" phase 8 --status active
-python3 "$SKILL_DIR/scripts/pf_state.py" log "Phase 8 开始：选择部署目标"
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 pick-target --status active
+python3 "$SKILL_DIR/scripts/pf_state.py" phase 9 --status active
+python3 "$SKILL_DIR/scripts/pf_state.py" log "Phase 9 开始：选择部署目标"
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 pick-target --status active
 ```
 
 ## Step 1: pick-target — 选择部署路径
@@ -16,7 +16,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 pick-target --status active
 
 - **primary = PC（桌面）** → 按预设走 **Web 路径（A/B/C，桌面 Web 站点）** 或 **路径 d（P-Desktop，桌面应用，预设在 Phase 5 `template-choice.md` 已记录）**。
 - **primary = H5（移动 Web）** → 走 Web 路径 A/B/C（按所选预设 T1/T2/T3 对应）。
-- **primary = APP（原生移动）** → 按所选预设走 **路径 i（P-iOS → TestFlight）**；Android（P-Android）有两条可选发布渠道，**按用户已填的凭证择一**：填了 Google Play 凭证（`$PLAY_SERVICE_ACCOUNT_JSON`）→ **路径 a（Google Play 内部测试）**；填了蒲公英凭证（`$PGYER_API_KEY`）→ **路径 g（蒲公英内测分发，国内）**；两套都填 → 用 `choice ask` 让用户选；都没填 → 提示去⑧「部署凭证」表单补（预设在 Phase 5 `template-choice.md` 已记录）。
+- **primary = APP（原生移动）** → 按所选预设走 **路径 i（P-iOS → TestFlight）**；Android（P-Android）有两条可选发布渠道，**按用户已填的凭证择一**：填了 Google Play 凭证（`$PLAY_SERVICE_ACCOUNT_JSON`）→ **路径 a（Google Play 内部测试）**；填了蒲公英凭证（`$PGYER_API_KEY`）→ **路径 g（蒲公英内测分发，国内）**；两套都填 → 用 `choice ask` 让用户选；都没填 → 提示去⑨「部署凭证」表单补（预设在 Phase 5 `template-choice.md` 已记录）。
 
 | 路径 | 适用预设 | 形态 | 手段 |
 |------|----------|------|------|
@@ -30,28 +30,28 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 pick-target --status active
 
 路径与预设一一对应，不再询问用户选哪条（唯一例外：**Android 在路径 a（Google Play）/ 路径 g（蒲公英）两渠道间按用户已填凭证择一，两套都填才用 `choice ask` 让用户选**）；Web 内部选目标形态（本机/CF/服务器、Docker/systemd）有歧义时用 `choice ask` 抛到网页让用户点选（见 SKILL.md）。
 
-**部署凭证（重要）**：服务器地址/SSH 账号/端口/token 等由用户在操作台⑧「部署凭证」表单填，存在项目仓库外的 `~/.productflow/secrets/<项目id>.env`（600，不进 git/留言）。本阶段被触发时这些值**已作为环境变量注入**你的运行环境，直接引用即可：
+**部署凭证（重要）**：服务器地址/SSH 账号/端口/token 等由用户在操作台⑨「部署凭证」表单填，存在项目仓库外的 `~/.productflow/secrets/<项目id>.env`（600，不进 git/留言）。本阶段被触发时这些值**已作为环境变量注入**你的运行环境，直接引用即可：
 
 ```bash
 ssh -p "$PF_SSH_PORT" "$PF_SSH_USER@$PF_SSH_HOST"   # 用户填的 PF_SSH_* 已是环境变量
 # 自定义键（如 CF_API_TOKEN）同样可直接 $CF_API_TOKEN 引用
 ```
 
-iOS 路径同理：App Store Connect API key（`.p8` 文件路径 + key id + issuer id，以及 distribution 证书 / provisioning profile）也走这套凭证机制注入（用户在⑧「部署凭证」表单填，存项目仓库外 `~/.productflow/secrets/<项目id>.env`），本阶段已作为环境变量注入，直接引用即可。
+iOS 路径同理：App Store Connect API key（`.p8` 文件路径 + key id + issuer id，以及 distribution 证书 / provisioning profile）也走这套凭证机制注入（用户在⑨「部署凭证」表单填，存项目仓库外 `~/.productflow/secrets/<项目id>.env`），本阶段已作为环境变量注入，直接引用即可。
 
-Android 路径同理：Google Play **service account JSON**（`$PLAY_SERVICE_ACCOUNT_JSON`）+ **upload keystore 及其密码/别名**（`$ANDROID_KEYSTORE` / `$ANDROID_KEYSTORE_PASSWORD` / `$ANDROID_KEY_ALIAS` / `$ANDROID_KEY_PASSWORD`）也走这套凭证机制注入（用户在⑧「部署凭证」表单填，存项目仓库外 `~/.productflow/secrets/<项目id>.env`），本阶段已作为环境变量注入，直接引用即可。
+Android 路径同理：Google Play **service account JSON**（`$PLAY_SERVICE_ACCOUNT_JSON`）+ **upload keystore 及其密码/别名**（`$ANDROID_KEYSTORE` / `$ANDROID_KEYSTORE_PASSWORD` / `$ANDROID_KEY_ALIAS` / `$ANDROID_KEY_PASSWORD`）也走这套凭证机制注入（用户在⑨「部署凭证」表单填，存项目仓库外 `~/.productflow/secrets/<项目id>.env`），本阶段已作为环境变量注入，直接引用即可。
 
-桌面路径同理：桌面签名凭证——Apple **Developer ID** 证书 + 公证用 **ASC API key**（`$ASC_KEY_PATH` / `$ASC_KEY_ID` / `$ASC_ISSUER_ID`）、Windows **code-signing 证书及密码**（`$WIN_CODESIGN_CERT` / `$WIN_CODESIGN_PASSWORD`）——也走这套凭证机制注入（用户在⑧「部署凭证」表单填，存项目仓库外 `~/.productflow/secrets/<项目id>.env`），本阶段已作为环境变量注入，直接引用即可。
+桌面路径同理：桌面签名凭证——Apple **Developer ID** 证书 + 公证用 **ASC API key**（`$ASC_KEY_PATH` / `$ASC_KEY_ID` / `$ASC_ISSUER_ID`）、Windows **code-signing 证书及密码**（`$WIN_CODESIGN_CERT` / `$WIN_CODESIGN_PASSWORD`）——也走这套凭证机制注入（用户在⑨「部署凭证」表单填，存项目仓库外 `~/.productflow/secrets/<项目id>.env`），本阶段已作为环境变量注入，直接引用即可。
 
-安全：**不要把这些值打印进 agent-log / 产物 / 留言**（ASC key 的 .p8 内容、key id、issuer id；Android keystore 密码/别名、service account JSON 内容；桌面签名的 Developer ID 证书/ASC API key/Windows 证书密码一律不打印、不入库）。命令里只引用凭证文件路径（如 `$PLAY_SERVICE_ACCOUNT_JSON`、`$ANDROID_KEYSTORE`、`$ASC_KEY_PATH`、`$WIN_CODESIGN_CERT`），**绝不贴密钥内容**（仓库是公开的）。若 `$PF_SSH_HOST` / ASC 凭证 / Android 凭证 / 桌面签名凭证等为空（用户还没填），用 `choice ask` 或在 CLI 让用户去⑧表单补，别瞎填占位值。涉及自定义域名时先与用户确认 DNS 归属。
+安全：**不要把这些值打印进 agent-log / 产物 / 留言**（ASC key 的 .p8 内容、key id、issuer id；Android keystore 密码/别名、service account JSON 内容；桌面签名的 Developer ID 证书/ASC API key/Windows 证书密码一律不打印、不入库）。命令里只引用凭证文件路径（如 `$PLAY_SERVICE_ACCOUNT_JSON`、`$ANDROID_KEYSTORE`、`$ASC_KEY_PATH`、`$WIN_CODESIGN_CERT`），**绝不贴密钥内容**（仓库是公开的）。若 `$PF_SSH_HOST` / ASC 凭证 / Android 凭证 / 桌面签名凭证等为空（用户还没填），用 `choice ask` 或在 CLI 让用户去⑨表单补，别瞎填占位值。涉及自定义域名时先与用户确认 DNS 归属。
 
 ### 部署前 checklist（任何路径都先过一遍）
 
 逐项验证，全绿才进入 deploy 步骤（参照 verification-before-completion，不要凭"应该没问题"放行）：
 
 1. **秘密不入库**：`.env`、`*.key`、token 在 `.gitignore` 中；`git grep -iE "api[_-]?key|secret|password" -- ':!*.md'` 无硬编码命中。
-2. **构建通过 + 测试门禁**：`npm run build`（或项目等价命令）退出码 0，T1/T2 零构建则跳过构建项；**Phase 6 测试全绿**——确认 `artifacts/phase-6/test-report.md` 已登记，且单元/集成/E2E/回归四类各为「通过」或「显式 N/A」（没有这份产物或有某类静默跳过 → 退回 Phase 6 补齐，不许带病部署）。
-3. **端口/域名确认（Web 路径）**：用户已给出目标域名（或接受 *.pages.dev / *.workers.dev 默认域）；路径 C 还需确认端口空闲——Linux `ss -ltnp | grep :PORT`，macOS `lsof -iTCP:PORT -sTCP:LISTEN`。iOS 路径 i 改为确认 **Bundle ID / 凭证就位**：ASC API key（.p8 + key id + issuer id）+ distribution 证书 + provisioning profile 已注入（缺则回⑧表单补），App Store Connect 里目标 App 记录与 Bundle ID 已建好（这步是用户手动，见 iOS 小节）。
+2. **构建通过 + 测试门禁**：`npm run build`（或项目等价命令）退出码 0，T1/T2 零构建则跳过构建项；**Phase 8（⑧ 测试）全绿**——确认 `artifacts/phase-8/test-report.md` 已登记，且单元/集成/E2E/回归四类各为「通过」或「显式 N/A」（没有这份产物或有某类静默跳过 → 退回 Phase 8 补齐，不许带病部署）。
+3. **端口/域名确认（Web 路径）**：用户已给出目标域名（或接受 *.pages.dev / *.workers.dev 默认域）；路径 C 还需确认端口空闲——Linux `ss -ltnp | grep :PORT`，macOS `lsof -iTCP:PORT -sTCP:LISTEN`。iOS 路径 i 改为确认 **Bundle ID / 凭证就位**：ASC API key（.p8 + key id + issuer id）+ distribution 证书 + provisioning profile 已注入（缺则回⑨表单补），App Store Connect 里目标 App 记录与 Bundle ID 已建好（这步是用户手动，见 iOS 小节）。
 4. **部署/构建工具就位**：
    - Web：按选定路径 `command -v wrangler`（CF）/ `command -v docker`（Docker）/ `command -v caddy`（自定义域名）检测，缺失就提示用户安装或改 `npx wrangler`，不要硬跑报 command not found。
    - iOS（路径 i）：`xcodebuild -version`、`xcrun simctl list devices`，上传若用 fastlane 则 `command -v fastlane`；缺了提示用户装 **Xcode / 命令行工具 / fastlane**，别硬跑报 command not found。
@@ -60,8 +60,8 @@ Android 路径同理：Google Play **service account JSON**（`$PLAY_SERVICE_ACC
 5. **inbox 检查**：`python3 "$SKILL_DIR/scripts/pf_state.py" inbox`，网页端若有部署相关指示先响应。
 
 ```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 pick-target --status done
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 deploy --status active
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 pick-target --status done
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 deploy --status active
 ```
 
 ## Step 2: deploy — 三条路径
@@ -189,10 +189,10 @@ ssh <user>@SERVER "caddy validate --config /etc/caddy/Caddyfile && systemctl rel
 
 凭证全程走环境变量，**绝不打印、不入库**（ASC key 的 .p8 内容、key id、issuer id、证书一律不进 agent-log / 产物 / 留言）。
 
-**签名凭证分两种情况处理（看用户在⑧「部署凭证」表单填没填，已注入则是环境变量）：**
+**签名凭证分两种情况处理（看用户在⑨「部署凭证」表单填没填，已注入则是环境变量）：**
 
 - **凭证齐全**（ASC API key + distribution 证书 + provisioning profile 都已注入）：走下面 archive → export 签名 `.ipa` → 上传 TestFlight 全程。
-- **凭证缺失**：**仍执行第 1 步 `xcodebuild archive` 产出 `.xcarchive`**，并用 artifact 登记到 `artifacts/phase-7/`（让用户先拿到可继续的归档，不至于空手）；随后 `choice ask` / `reply` 提示用户去⑧「部署凭证」表单补齐 ASC API key / distribution 证书 / provisioning profile，补齐后再触发导出 IPA + 上传——**绝不瞎填占位的 team id / 证书硬跑**（会产出废包或报错）。
+- **凭证缺失**：**仍执行第 1 步 `xcodebuild archive` 产出 `.xcarchive`**，并用 artifact 登记到 `artifacts/phase-9/`（让用户先拿到可继续的归档，不至于空手）；随后 `choice ask` / `reply` 提示用户去⑨「部署凭证」表单补齐 ASC API key / distribution 证书 / provisioning profile，补齐后再触发导出 IPA + 上传——**绝不瞎填占位的 team id / 证书硬跑**（会产出废包或报错）。
 
 ```bash
 # 1. archive：构建可分发归档（scheme/Bundle ID 按工程实际；Release 配置）
@@ -213,7 +213,7 @@ xcodebuild -exportArchive \
 
 上传 TestFlight（任选其一，凭 ASC API key 认证，**不在命令行明文贴 issuer/key id 之外的秘密**，.p8 路径由 `$ASC_KEY_PATH` 这类环境变量提供）：
 
-> **.p8 就位**：用户若是在⑧「部署凭证」表单**整段粘贴** AuthKey.p8，服务端会把它落成 `~/.productflow/secrets/<项目id>.p8` 并把路径注入 `$ASC_KEY_PATH`。altool/fastlane 默认从 `~/.appstoreconnect/private_keys/AuthKey_<key id>.p8` 找私钥，所以上传前先把它 cp 到位（不打印内容）：
+> **.p8 就位**：用户若是在⑨「部署凭证」表单**整段粘贴** AuthKey.p8，服务端会把它落成 `~/.productflow/secrets/<项目id>.p8` 并把路径注入 `$ASC_KEY_PATH`。altool/fastlane 默认从 `~/.appstoreconnect/private_keys/AuthKey_<key id>.p8` 找私钥，所以上传前先把它 cp 到位（不打印内容）：
 > ```bash
 > mkdir -p ~/.appstoreconnect/private_keys
 > cp "$ASC_KEY_PATH" ~/.appstoreconnect/private_keys/AuthKey_"$ASC_KEY_ID".p8
@@ -325,7 +325,7 @@ echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get
 # 大包（>100MB）单步若超时，改用新版两步 API（getCOSToken → PUT 到 COS → buildInfo 轮询），见蒲公英官方文档。
 ```
 
-蒲公英无线上 Web URL，deploy done 的 log 写「蒲公英安装短链已生成：https://www.pgyer.com/<短链> · versionName <x>」即可；可选把二维码/安装页截图登记为 `artifacts/phase-7/live.png`（扫码即装的等价「线上截图」）。
+蒲公英无线上 Web URL，deploy done 的 log 写「蒲公英安装短链已生成：https://www.pgyer.com/<短链> · versionName <x>」即可；可选把二维码/安装页截图登记为 `artifacts/phase-9/live.png`（扫码即装的等价「线上截图」）。
 
 **与 Google Play（路径 a）的区别**：蒲公英直接收成品 APK、无审核、当场可装、不依赖 Google 账号（国内友好），且**真能端到端闭环**（不停在提审前）；但它是**内测分发**不是**应用商店上架**——正式上架国内各大安卓商店（华为/小米/应用宝等）仍需各自渠道，本路径不覆盖。iOS 走蒲公英需 ad-hoc（UDID 白名单）或企业签名，本路径只覆盖 Android。
 
@@ -404,9 +404,9 @@ Linux 一般免签，`.AppImage` / `.deb` 直接分发。
 部署完成后：
 
 ```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 deploy --status done
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 deploy --status done
 python3 "$SKILL_DIR/scripts/pf_state.py" log "部署完成：<线上 URL>"
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 smoke-test --status active
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 smoke-test --status active
 ```
 
 ## Step 3: smoke-test — 线上冒烟 / 构建可装验证
@@ -419,19 +419,19 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://<线上域名>/
 curl -sS https://<线上域名>/api/health
 ```
 
-然后**对部署产物复跑 Phase 6 的 E2E 旅程套件**（这是冒烟的主体——curl 200 只证明进程活着，证明不了"用户能走通"；登录态、视图切换、表单反馈这类问题只有旅程测试能抓）——按项目类型选 Phase 6 用的那套：
+然后**对部署产物复跑 Phase 8（⑧ 测试阶段）的 E2E 旅程套件**（这是冒烟的主体——curl 200 只证明进程活着，证明不了"用户能走通"；登录态、视图切换、表单反馈这类问题只有旅程测试能抓）——按项目类型选 ⑧ 用的那套：
 
 ```bash
 # Node 项目（T2/T3，@playwright/test）：
 BASE_URL=https://<线上域名> npm run test:e2e
-# 非 Node 项目（T1 纯静态，Phase 6 落成的 tests/e2e/test_journeys.py）：
+# 非 Node 项目（T1 纯静态，⑧ 落成的 tests/e2e/test_journeys.py）：
 BASE_URL=https://<线上域名> python3 tests/e2e/test_journeys.py
 ```
 
-E2E 全绿后，打开线上首页截图，确认渲染正常（白屏/资源 404 是 curl 测不出来的），截图存为 `artifacts/phase-7/live.png` 并登记。**浏览器工具**：操作台触发的是 headless 后台 agent，没有浏览器 MCP——直接用本机已装的 **Python Playwright（chromium headless）** 写脚本截图（或 `playwright-cli` skill），别去 ToolSearch 找 MCP：
+E2E 全绿后，打开线上首页截图，确认渲染正常（白屏/资源 404 是 curl 测不出来的），截图存为 `artifacts/phase-9/live.png` 并登记。**浏览器工具**：操作台触发的是 headless 后台 agent，没有浏览器 MCP——直接用本机已装的 **Python Playwright（chromium headless）** 写脚本截图（或 `playwright-cli` skill），别去 ToolSearch 找 MCP：
 
 ```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" artifact 7 artifacts/phase-7/live.png --title "线上首页截图"
+python3 "$SKILL_DIR/scripts/pf_state.py" artifact 9 artifacts/phase-9/live.png --title "线上首页截图"
 ```
 
 冒烟通过后写 `.productflow/deploy.json`（项目目录下，三字段固定）。操作台读到它会自动开始健康监测：约每 5 分钟探测一次 url，结果显示在首页项目卡片与项目看板顶部：
@@ -440,8 +440,8 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 7 artifacts/phase-7/live.png -
 cat > .productflow/deploy.json <<EOF
 {"url": "https://<线上域名>/", "deployed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "method": "<cf-pages|worker|docker|server>"}
 EOF
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 smoke-test --status done
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status active
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 smoke-test --status done
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 handoff-report --status active
 ```
 
 冒烟失败：回到 deploy 步骤排查（路径 C 先看 `journalctl -u <product> -n 50`；CF 看 `wrangler tail`），修复后重测，不要带病出报告。
@@ -449,44 +449,44 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status active
 **iOS 路径 i**：没有线上 URL、没有 curl/E2E 打线上——验证对象是「上传的 build 能被 TestFlight 接收并可安装」：
 
 1. 确认 build 在 App Store Connect 进入 **Ready to Test**（`fastlane pilot builds` 或 ASC 网页看处理状态；卡在 Processing 是正常排队，Invalid 才是失败，按 systematic-debugging 看上传日志找根因）。
-2. 安装态截图作为线上截图的等价物：在 Simulator 跑一遍冒烟旅程（`xcodebuild test` 已在 Phase 6 过；这里至少 `xcrun simctl io booted screenshot artifacts/phase-7/live.png` 截关键屏，确认 Release 配置下界面正常），登记为 `artifacts/phase-7/live.png`。
+2. 安装态截图作为线上截图的等价物：在 Simulator 跑一遍冒烟旅程（`xcodebuild test` 已在 Phase 8 过；这里至少 `xcrun simctl io booted screenshot artifacts/phase-9/live.png` 截关键屏，确认 Release 配置下界面正常），登记为 `artifacts/phase-9/live.png`。
 
 ```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" artifact 7 artifacts/phase-7/live.png --title "TestFlight 构建预览截图"
+python3 "$SKILL_DIR/scripts/pf_state.py" artifact 9 artifacts/phase-9/live.png --title "TestFlight 构建预览截图"
 ```
 
 iOS **不写** `.productflow/deploy.json`（无 url 可健康监测——操作台的 5 分钟探测只对 Web 线上 URL 有意义），直接收尾：
 
 ```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 smoke-test --status done
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status active
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 smoke-test --status done
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 handoff-report --status active
 ```
 
 **Android 路径 a**：没有线上 URL、没有 curl/E2E 打线上——验证对象是「上传的 AAB 能被 Play Console 接收，并可经内部测试链接在 Emulator/真机安装运行」：
 
 1. 确认 AAB 在 Google Play Console 内部测试轨道进入 **已发布** 状态（fastlane supply 输出 / Play Console 网页确认；上传失败按 systematic-debugging 看上传日志找根因）。
-2. 安装态截图作为线上截图的等价物：在 Emulator 或真机经内部测试链接安装 App，跑一遍冒烟旅程，用 `adb` 截关键屏，登记为 `artifacts/phase-7/live.png`：
+2. 安装态截图作为线上截图的等价物：在 Emulator 或真机经内部测试链接安装 App，跑一遍冒烟旅程，用 `adb` 截关键屏，登记为 `artifacts/phase-9/live.png`：
 
 ```bash
 # 启动 Emulator（如有 AVD）或接真机，然后截图
-adb exec-out screencap -p > artifacts/phase-7/live.png
+adb exec-out screencap -p > artifacts/phase-9/live.png
 ```
 
 ```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" artifact 7 artifacts/phase-7/live.png --title "Google Play 内部测试构建预览截图"
+python3 "$SKILL_DIR/scripts/pf_state.py" artifact 9 artifacts/phase-9/live.png --title "Google Play 内部测试构建预览截图"
 ```
 
 Android **不写** `.productflow/deploy.json`（无 url 可健康监测——操作台的 5 分钟探测只对 Web 线上 URL 有意义，与 iOS 一致），直接收尾：
 
 ```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 smoke-test --status done
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status active
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 smoke-test --status done
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 handoff-report --status active
 ```
 
 **路径 d（P-Desktop）**：没有线上 URL、没有 curl/E2E 打线上——验证对象是「构建出的安装包能在本机正常安装并运行」：
 
 1. 在本机安装/运行产出的安装包，验证主要功能（macOS：打开 `.dmg` 拖入 Applications 再运行 `.app`，或直接运行 `src-tauri/target/release/bundle/macos/MyApp.app`；Windows：运行 `.msi`/`.exe` 安装后启动；Linux：`chmod +x MyApp.AppImage && ./MyApp.AppImage`）。
-2. 跑一遍冒烟旅程（关键用户流程），截图存为 `artifacts/phase-7/live.png` 作为线上截图等价物。
+2. 跑一遍冒烟旅程（关键用户流程），截图存为 `artifacts/phase-9/live.png` 作为线上截图等价物。
 
 ```bash
 # 安装包产物位置（Tauri 构建后）：
@@ -494,19 +494,19 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status active
 # Windows: src-tauri/target/release/bundle/msi/*.msi 或 bundle/nsis/*.exe
 # Linux: src-tauri/target/release/bundle/appimage/*.AppImage 或 bundle/deb/*.deb
 
-python3 "$SKILL_DIR/scripts/pf_state.py" artifact 7 artifacts/phase-7/live.png --title "桌面安装包冒烟截图"
+python3 "$SKILL_DIR/scripts/pf_state.py" artifact 9 artifacts/phase-9/live.png --title "桌面安装包冒烟截图"
 ```
 
 桌面路径 d **不写** `.productflow/deploy.json`（无 url 可健康监测——桌面应用无线上服务，与 iOS/Android 一致），直接收尾：
 
 ```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 smoke-test --status done
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status active
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 smoke-test --status done
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 handoff-report --status active
 ```
 
 ## Step 4: handoff-report — 交接报告
 
-写 `artifacts/phase-7/report.md`，这是用户日后运维的唯一入口文档，必含四节：
+写 `artifacts/phase-9/report.md`，这是用户日后运维的唯一入口文档，必含四节：
 
 1. **线上地址**：Web 给所有可访问地址（默认域 + 自定义域 + API base）；iOS 给 TestFlight 构建版本号 + App Store Connect App 链接（无 web URL）；Android 给 Google Play 内部测试链接 + versionCode / versionName（无 web URL）；桌面应用给安装包/Release 下载链接 + 版本号 + 平台列表（macOS/Windows/Linux，说明哪些已构建）（无 web URL）。
 2. **部署/发布方式**：走了哪条路径、关键资源名（CF 项目名 / D1 库名 / 服务器路径与 unit 名；iOS 为 scheme / Bundle ID / 上传方式 fastlane|altool；Android 为 applicationId / 签名 keystore 别名 / 内部测试轨道上传方式 fastlane supply|gradle play publisher|手动；桌面为 Tauri 或 Electron / 签名证书类型（Developer ID / code-signing 证书）/ 分发渠道（GitHub Releases / Mac App Store / Microsoft Store））、重新部署或重新出包上传的完整命令。
@@ -524,8 +524,8 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status active
    - **桌面应用（P-Desktop）**：把 deploy 步骤里那份人工清单原样落进报告——上传已签名安装包到 GitHub Releases（附版本说明）；若可选上架 Mac App Store，改用 App Store Distribution 证书重新构建并通过 Transporter/altool 提交，在 App Store Connect 填元数据/截图/隐私清单后由用户点「提交审核」；若可选上架 Microsoft Store，打包 `.msix` 并在 Partner Center 填商店信息后由用户提交认证。本流水线**到产出已签名安装包为止**，上传 Release 及商店提交由用户决策。
 
 ```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" artifact 7 artifacts/phase-7/report.md --title "上线交接报告"
-python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status done
+python3 "$SKILL_DIR/scripts/pf_state.py" artifact 9 artifacts/phase-9/report.md --title "上线交接报告"
+python3 "$SKILL_DIR/scripts/pf_state.py" step 9 handoff-report --status done
 ```
 
 ## 检查点
@@ -533,6 +533,6 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 7 handoff-report --status done
 阶段收尾按固定顺序执行：
 
 1. `python3 "$SKILL_DIR/scripts/pf_state.py" inbox` 读网页端消息，逐条 `python3 "$SKILL_DIR/scripts/pf_state.py" reply "<回应>"` 后再继续。
-2. 确认 `artifacts/phase-7/live.png` 与 `artifacts/phase-7/report.md` 均已 artifact 登记（操作台靠登记展示）。
-3. `python3 "$SKILL_DIR/scripts/pf_state.py" phase 8 --status done` + `log "Phase 7 完成：已上线 <URL>"`（iOS 写 `log "Phase 7 完成：TestFlight 构建 <版本号> 已上传，待用户提审"`；Android 写 `log "Phase 7 完成：Google Play 内部测试 build 已上传：versionCode <n> / versionName <x>，待用户推生产"`；桌面写 `log "Phase 7 完成：桌面安装包已构建：<版本> / <平台列表(dmg/msi/AppImage)>，待用户上传 Release/商店"`）。
-4. **全流程收尾**：检查 `.productflow/state.json` 确认 7 个阶段全部 done，然后在 CLI 向用户做交付总结——Web 给线上 URL；iOS 给 TestFlight 构建版本号 + 需用户手动完成的 App Store Connect 提审清单；Android 给 Google Play 内部测试链接 + versionCode/versionName + 需用户手动完成的 Play Console 发布清单；桌面给安装包/Release 下载链接（或构建产物路径）+ 版本号 + 平台列表 + 需用户手动完成的 Release 上传/商店提交清单；各阶段关键产物清单（指向 artifacts/phase-N/）、回滚与运维入口（指向 report.md），并告知操作台可回看全部产物。这是流水线终点，无下一阶段确认。
+2. 确认 `artifacts/phase-9/live.png` 与 `artifacts/phase-9/report.md` 均已 artifact 登记（操作台靠登记展示）。
+3. `python3 "$SKILL_DIR/scripts/pf_state.py" phase 9 --status done` + `log "Phase 9 完成：已上线 <URL>"`（iOS 写 `log "Phase 9 完成：TestFlight 构建 <版本号> 已上传，待用户提审"`；Android 写 `log "Phase 9 完成：Google Play 内部测试 build 已上传：versionCode <n> / versionName <x>，待用户推生产"`；桌面写 `log "Phase 9 完成：桌面安装包已构建：<版本> / <平台列表(dmg/msi/AppImage)>，待用户上传 Release/商店"`）。
+4. **全流程收尾**：检查 `.productflow/state.json` 确认 9 个阶段全部 done，然后在 CLI 向用户做交付总结——Web 给线上 URL；iOS 给 TestFlight 构建版本号 + 需用户手动完成的 App Store Connect 提审清单；Android 给 Google Play 内部测试链接 + versionCode/versionName + 需用户手动完成的 Play Console 发布清单；桌面给安装包/Release 下载链接（或构建产物路径）+ 版本号 + 平台列表 + 需用户手动完成的 Release 上传/商店提交清单；各阶段关键产物清单（指向 artifacts/phase-N/）、回滚与运维入口（指向 report.md），并告知操作台可回看全部产物。这是流水线终点，无下一阶段确认。

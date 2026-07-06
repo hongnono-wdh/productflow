@@ -241,6 +241,7 @@ export interface BFNode {
   name?: string // 中文显示名（图上主显中文、英文 id 灰字副显）
   fields?: string[] // 数据表字段（点表查看用；仍以 ⑤ er/schema 为准，此处只存摘要）
   proc?: boolean // agent 正在处理这个节点的改动（操作台显示「处理中」脉冲）
+  stub?: string | null // 占位·真实对接未实现（dev/mock 占位、真实第三方对接还是 TODO）；字符串为占位说明
 }
 export interface BFEdge {
   from: string

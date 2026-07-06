@@ -7,7 +7,7 @@
 当用户要"做一个网站 / Web 产品 / 应用 / 落地页 / 官网 / waitlist"、"做一个带后端和数据库的产品"、"复刻某产品"、"从调研到上线"，或提到 ProductFlow / 操作台 / landing page pipeline 时，按下面的阶段推进，并读对应的 `references/phase-N-*.md` 手册。ProductFlow 做的是**完整互联网产品**（从落地页到带数据库与后端的功能性 Web 应用），落地页只是最简单的一种。
 
 ```
-①市场调研 → ②页面设计 → ③功能与数据设计 → ④前端实现 → ⑤后端实现·测试 → ⑥部署上线
+①市场调研 → ②找参考 → ③首图设计 → ④页面设计 → ⑤功能与数据设计 → ⑥前端实现 → ⑦后端实现 → ⑧测试 → ⑨部署上线
 ```
 
 ## 与 Claude Code 的差异（降级要点）
@@ -19,7 +19,7 @@
   - openai-image-gen → ③④ 强制用 `gpt-image-2` 出图，需 OpenAI 生图 key。**有生图能力但缺 key**（`~/.config/openai/env` 无 `OPENAI_API_KEY`）→ 不静默降级，按 `SKILL.md`「启动·4. 生图 key 预检」在 CLI 向用户**强制索取 key 并写入**后再进 ③④；**只有连图像生成能力都没有**才跳过 Phase 3 首图生成、在 Phase 4 直接写页面而非参考图
   - database-schema-designer → 按 `references/phase-5-spec.md` 内置的 SQLite 约定直接设计
   - test-driven-development / verification-before-completion / systematic-debugging → 先写测试 / 跑验证命令再说完成 / 先复现定位根因再改
-  - deploy-cf-pages → 按 `references/phase-8-deploy.md` 的 wrangler 命令手动部署
+  - deploy-cf-pages → 按 `references/phase-9-deploy.md` 的 wrangler 命令手动部署
 - **Agent Teams / 并行子代理** → 没有就**串行**逐个做（如多竞品分析），结果一样，别去调不存在的 `TeamCreate`。
 - **`~/.claude/skills/...` 路径** → 那是 Claude Code 的布局，你的环境以实际安装位置为准，或直接走上面的降级。
 
