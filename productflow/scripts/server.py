@@ -541,27 +541,28 @@ def _auto_research(pf: str, instruction: str = "") -> None:
 
 # 面板阶段（④页面设计交给画布，这里给 ⑤⑥⑦）的「让 Agent 做本阶段」配置
 _STAGE_DOC = {4: "phase-4-pages.md", 5: "phase-5-spec.md",
-              6: "phase-6-frontend.md", 7: "phase-7-backend.md", 8: "phase-8-deploy.md"}
-_STAGE_NAME = {4: "页面设计", 5: "功能与数据设计", 6: "前端实现", 7: "后端实现 · 测试", 8: "部署上线"}
+              6: "phase-6-frontend.md", 7: "phase-7-backend.md", 8: "phase-8-test.md", 9: "phase-9-deploy.md"}
+_STAGE_NAME = {4: "页面设计", 5: "功能与数据设计", 6: "前端实现", 7: "后端实现", 8: "测试", 9: "部署上线"}
 _STAGE_STEPS = {
     4: "page-map / design-pages / platform-versions / finalize-direction",
     5: "module-list / er-diagram / schema-ddl / api-contract / pick-template",
     6: "scaffold / frontend",
-    7: "backend / unit-test / integration-test / api-docs",
-    8: "pick-target / deploy / smoke-test / handoff-report",
+    7: "backend / unit-test / api-docs",
+    8: "integration-test / e2e-test / regression / test-report",
+    9: "pick-target / deploy / smoke-test / handoff-report",
 }
 # 各阶段典型的「该让用户拍板」决策点——提示 Agent 用 choice ask 抛到网页
 _STAGE_DECISION = {
     5: "选开发模板（pick-template）时，用 choice ask 抛 T1/T2/T3 让用户点选后再继续。",
-    8: "选部署目标（pick-target）时用 choice ask 抛 本机/Cloudflare/服务器 + Docker/systemd 让用户点选。"
-       "部署凭证（SSH 地址/用户/端口/token 等）由用户在⑧的「凭证」表单填好、已作为环境变量注入你的运行环境，"
+    9: "选部署目标（pick-target）时用 choice ask 抛 本机/Cloudflare/服务器 + Docker/systemd 让用户点选。"
+       "部署凭证（SSH 地址/用户/端口/token 等）由用户在⑨的「凭证」表单填好、已作为环境变量注入你的运行环境，"
        "直接用即可（缺什么再用 choice ask 或 CLI 让用户补，别瞎猜）。",
 }
 
 
 def _stage_timeout(phase: int) -> int:
-    """单轮墙钟上限：⑥前端/⑦后端·测试/⑧部署是长循环，给足 45 分钟；不够会自动续跑下一轮。其余 30 分钟。"""
-    return {6: 2700, 7: 2700, 8: 2700}.get(phase, 1800)
+    """单轮墙钟上限：⑥前端/⑦后端/⑧测试/⑨部署是长循环，给足 45 分钟；不够会自动续跑下一轮。其余 30 分钟。"""
+    return {6: 2700, 7: 2700, 8: 2700, 9: 2700}.get(phase, 1800)
 
 
 def _phase_node(pf: str, phase: int) -> dict | None:
@@ -583,10 +584,40 @@ def _stage_progress_key(pf: str, phase: int):
     return (done, ph.get("status"))
 
 
+def _flag_missing_key_modules(pf: str, pid: str | None):
+    """⑧测试开跑前扫「登记了第三方 key 但用户没填」的模块：标 backend-flow needfix（测试进度立即标红）+
+    返回缺 key 信息，不靠 agent 自觉——系统层先把缺 key 摆出来。返回 [(module, [(key, provider, desc), ...]), ...]。"""
+    root = os.path.dirname(pf)
+    pk = pf_state._load_product_keys(root)
+    creds = _load_deploy_creds(pid) if pid else {}
+    missing: dict = {}
+    for e in pk.get("keys", []):
+        k, mod = e.get("key"), e.get("module")
+        if not k or creds.get(k):   # 没登记 key 名、或已填 → 跳过
+            continue
+        mod_list = mod if isinstance(mod, list) else ([mod] if mod else [])
+        for m in mod_list:   # 一个 key 可关联多个模块 → 每个相关模块都标红
+            missing.setdefault(m, []).append((k, e.get("provider") or "", e.get("desc") or ""))
+    if not missing:
+        return []
+    bf = pf_state._load_backend_flow(root)
+    out, changed = [], False
+    for mod, keys in missing.items():
+        mid = mod if str(mod).startswith("module:") else "module:" + str(mod)
+        node = next((n for n in bf.get("nodes", []) if n.get("id") == mid), None)
+        if node and node.get("status") != "needfix":
+            node["status"] = "needfix"
+            changed = True
+        out.append((mod, keys))
+    if changed:
+        pf_state._save_backend_flow(root, bf)
+    return out
+
+
 def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = None) -> None:
     """后台 spawn claude 当完整 agent，按 phase-N-*.md 跑某个面板阶段（⑤⑥⑦，及④兜底）全流程。
     遇歧义点提示用 choice ask 抛给用户点选；instruction = 用户对本次（重）做的额外要求。
-    phase 8（部署）会把用户填的部署凭证作为环境变量注入 agent 的运行环境。"""
+    phase 9（部署）会把用户填的部署凭证作为环境变量注入 agent 的运行环境。"""
     project_root = os.path.dirname(pf)
     ps = os.path.join(SKILL_DIR, "scripts", "pf_state.py")
     name = _STAGE_NAME.get(phase, f"阶段{phase}")
@@ -609,7 +640,7 @@ def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = No
         + f"全部做完：python3 {ps} --dir {project_root} phase {phase} --status done\n"
         "只做本阶段，完成即停。"
     )
-    if phase in (6, 7, 8):
+    if phase in (6, 7, 8, 9):
         # ⑥前端截图/E2E、⑦测试 E2E、⑧线上冒烟截图都要浏览器；headless 无任何浏览器 MCP，别让 agent 乱找
         prompt += ("\n\n⚠️ 浏览器：你 headless 后台运行，**没有任何浏览器 MCP**（playwright MCP / claude-in-chrome 都不可用）——"
                    "不要 ToolSearch 找浏览器 MCP、不要试 claude-in-chrome。需要截图/E2E 就直接用本机已装的 "
@@ -617,12 +648,12 @@ def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = No
                    "或 webapp-testing / playwright-cli skill；E2E 落成项目内可复跑的 @playwright/test 文件。")
     env = dict(os.environ)
     _inject_openai_env(env)   # ④ 批量出图等会调 gen.py，需要 OPENAI_API_KEY/BASE_URL（和 ③ 一致）
-    if phase == 8:
+    if phase == 9:
         # 部署阶段：把用户在网页凭证表单填的值注入 env，agent 直接 $PF_SSH_HOST 等使用
         creds = _load_deploy_creds(pid) if pid else {}
         if creds:
             _inject_deploy_creds(env, pid)
-            prompt += ("\n\n部署凭证已作为环境变量注入（用户在⑦凭证表单填的），命令里直接引用即可："
+            prompt += ("\n\n部署凭证已作为环境变量注入（用户在⑨凭证表单填的），命令里直接引用即可："
                        + "、".join("$" + k for k in creds)
                        + "。例如 ssh -p \"$PF_SSH_PORT\" \"$PF_SSH_USER@$PF_SSH_HOST\"。"
                        "安全：不要把这些值打印进 agent-log / 产物 / 留言里。")
@@ -650,6 +681,11 @@ def _auto_stage(pf: str, phase: int, instruction: str = "", pid: str | None = No
                                   timeout=_stage_timeout(phase), status=status)
             node = _phase_node(pf, phase)
             if node and node.get("status") == "done":
+                if phase == 7:                           # ⑦ 收尾兜底：agent 复核式重做常只标 phase done、不逐个
+                    try:                                 # set-status，把 backend-flow 模块/接口补成 done，
+                        pf_state.sync_backend_flow_done(project_root)  # 免成品预览卡在 reset 后的「待做」
+                    except Exception:
+                        pass
                 break                                    # 阶段真做完了
             if not status.get("timed_out"):
                 break                                    # 非超时退出（没登录/崩溃/结束却没标 done）→ 留给前端 failed
@@ -685,7 +721,7 @@ def _auto_action(pf: str, phase: int, action: str, pid: str | None = None) -> No
         "- iOS（P-iOS）：`xcrun simctl boot` 目标机型 → `open -a Simulator` 把模拟器开到用户屏幕 → `xcodebuild` 构建并装进模拟器启动 App → `xcrun simctl io booted screenshot` 截一张确认；\n"
         "- Android（P-Android）：起 `emulator` → `./gradlew installDebug` 装上并启动 → `adb exec-out screencap` 截图确认；\n"
         "- 桌面（P-Desktop）：`cargo tauri dev`（或 `npm run tauri dev`）把原生窗口起到用户屏幕；\n"
-        "- Web（PC/H5）：起 dev server（`npm run dev` / `wrangler dev` 等），拿到本地端口后 `open http://localhost:<PORT>`。\n"
+        "- Web（PC/H5）：**持久起** dev server——用 nohup 后台常驻（如 `nohup npm run dev > /tmp/pf-preview.log 2>&1 & disown`），**别前台跑 `npm run dev`**（你是后台 agent，前台会把你阻塞住、你一结束 server 也随之被 SIGHUP 杀 → 用户 open 的页面连不上）；**也别花大量时间查端口/配置**——dev 命令与端口在 package.json / template-choice.md 里，直接起，再轮询确认端口 listen；listen 后 `open http://localhost:<PORT>`。\n"
         "起好后用 `reply` 一句话告诉用户「已起到你屏幕/模拟器上，可直接看」并附本地地址/复现方式。"
     )
     prompt = (
@@ -749,6 +785,52 @@ def _auto_node_change(pf: str, node_id: str, text: str, pid: str | None = None) 
         except Exception:
             pass
     print(f"[node-change] {node_id} 结束", file=sys.stderr)
+
+
+def _auto_parse_keys(pf: str, text: str, pid: str | None = None) -> None:
+    """用户在操作台贴一段第三方凭证富文本 → spawn agent 解析出各 key 值、只写临时文件；
+    本函数读该文件、merge 进 secrets（agent 不直接碰 secrets 存储）、删文件。key 值绝不进 log。"""
+    project_root = os.path.dirname(pf)
+    out_path = os.path.join(pf, ".parse-keys-out.json")
+    try:
+        os.remove(out_path)
+    except OSError:
+        pass
+    pk = pf_state._load_product_keys(project_root)
+    keylist = "\n".join(f"- {e.get('key')}（{e.get('provider') or '?'}｜{e.get('desc') or ''}）" for e in pk.get("keys", [])) or "（product-keys 为空：按文本里出现的 KEY=VALUE 直接取）"
+    prompt = (
+        "你是 ProductFlow 的 key 解析 Agent，headless。用户在操作台贴了一段第三方凭证文本，请解析出各 key 的值。\n"
+        f"当前产品需要的 key（product-keys）：\n{keylist}\n\n"
+        f"用户贴的文本：\n<<<TEXT\n{text}\n>>>TEXT\n\n"
+        "智能匹配（「AccessKey ID」→SMS_ACCESS_KEY_ID、「商户号 / mchid」→PAYMENT_MCHID、「私钥」→*_PRIVATE_KEY、「AppID」→*_APP_ID 等），"
+        f"把识别出的 {{\"KEY\":\"值\"}} JSON **只写到文件** `{out_path}`（认不出 / 没出现的别写、别编造值）。\n"
+        "**绝不把任何 key 值写进 log / reply / 终端回显**——只在最后 reply 里说「解析出 N 个：KEY1、KEY2…（值已写入待存）；没认出：KEYx」。\n"
+        "只写这一个文件，别改产品代码、别推进阶段。"
+    )
+    env = dict(os.environ)
+    _inject_openai_env(env)
+    _log_reset(pf, "parse-keys", "解析粘贴的第三方凭证")
+    try:
+        _run_claude_streaming(pf, "parse-keys", prompt, project_root, env=env, timeout=300)
+    except Exception:
+        pass
+    saved: list = []
+    try:
+        with open(out_path, encoding="utf-8") as f:
+            parsed = json.load(f)
+        if isinstance(parsed, dict) and pid:
+            cur = _load_deploy_creds(pid)
+            cur.update({str(k): str(v) for k, v in parsed.items() if v})
+            _save_deploy_creds(pid, cur)   # 内部只收合法 KEY、做 shell 安全转义
+            saved = [str(k) for k, v in parsed.items() if v]
+    except Exception:
+        pass
+    finally:
+        try:
+            os.remove(out_path)   # 用完即删，明文值不留盘
+        except OSError:
+            pass
+    print(f"[parse-keys] saved {len(saved)} keys", file=sys.stderr)
 
 
 
@@ -1874,6 +1956,7 @@ class Handler(BaseHTTPRequestHandler):
                 creds = _load_deploy_creds(pid)
                 self._json({"keys": [
                     {"key": e.get("key"), "desc": e.get("desc", ""), "module": e.get("module"),
+                     "provider": e.get("provider"), "url": e.get("url"),
                      "filled": bool(creds.get(e.get("key"))),
                      "masked": _mask_secret(creds[e["key"]]) if creds.get(e.get("key")) else ""}
                     for e in pk.get("keys", []) if e.get("key")]})
@@ -2078,7 +2161,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         pid, sub = m.group(1), m.group(2) or ""
         root = _resolve(pid)
-        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/run-action", "/api/deploy-creds", "/api/reveal", "/api/redraw", "/api/stage", "/api/node-proc", "/api/node-change"):
+        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/run-action", "/api/deploy-creds", "/api/reveal", "/api/redraw", "/api/stage", "/api/node-proc", "/api/node-change", "/api/parse-keys"):
             self._send(404, b"not found", "text/plain")
             return
         pf = os.path.join(root, ".productflow")
@@ -2121,6 +2204,15 @@ class Handler(BaseHTTPRequestHandler):
                 f.write(json.dumps({"ts": _now(), "from": "web", "type": "design-feedback",
                                     "text": f"系统流程图·节点「{node_id}」要改：\n{text}"}, ensure_ascii=False) + "\n")
             threading.Thread(target=_auto_node_change, args=(pf, node_id, text, pid), daemon=True).start()
+            self._json({"ok": True})
+            return
+        if sub == "/api/parse-keys":
+            # 用户贴的第三方凭证富文本 → 后台 spawn agent 解析、写临时文件、本函数 merge 进 secrets
+            text = str(data.get("text") or "").strip()
+            if not text:
+                self._json({"error": "bad_req"}, 400)
+                return
+            threading.Thread(target=_auto_parse_keys, args=(pf, text, pid), daemon=True).start()
             self._json({"ok": True})
             return
         if sub == "/api/reveal":
@@ -2444,7 +2536,27 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"error": "already_running"}, 409)
                     return
                 _STAGE_RUNNING.add((pid, phase))
+            # 重做已完成的 ⑦（done→重跑）：把 backend-flow 模块/接口进度归零，让重做时成品预览真实重走
+            # （模块卡从「完成」→「待做」，随 agent 逐个 set-status done 变绿），而非一直停在「完成」。
+            if phase == 7:
+                _node = _phase_node(pf, phase)
+                if _node and _node.get("status") == "done":
+                    try:
+                        pf_state.reset_backend_flow_progress(os.path.dirname(pf))
+                    except Exception:
+                        pass
             instruction = (data.get("instruction") or "").strip()
+            # ⑧测试开跑前：系统自动扫「需 key 的模块 key 齐没齐」，缺的标 needfix（测试进度立即标红）+ 提示 agent 测试时判失败说明
+            if phase == 8:
+                try:
+                    _miss = _flag_missing_key_modules(pf, pid)
+                    if _miss:
+                        _h = "；".join(f"{m} 缺 {'/'.join(k for k, _p, _d in ks)}" for m, ks in _miss)
+                        instruction = ((instruction + " ") if instruction else "") + (
+                            f"【系统已检测：以下模块缺第三方 key（用户未填）、已在流程图/测试进度标红：{_h}。"
+                            "测到这些模块的相关测试点时按手册『缺 key 判失败』处理——判该项失败并 log 说清缺哪个 key（非代码问题）、别 mock 假装通过，其它模块照常测。】")
+                except Exception:
+                    pass
             note = f"让 Agent 做阶段{phase}「{_STAGE_NAME[phase]}」" + (f"（要求：{instruction}）" if instruction else "")
             with open(os.path.join(pf, "inbox.jsonl"), "a", encoding="utf-8") as f:
                 f.write(json.dumps({"ts": _now(), "from": "web", "type": "stage-request",
@@ -2481,7 +2593,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
             return
         if sub == "/api/deploy-creds":
-            # 用户在⑧填部署凭证（SSH 地址/账号/token / 整段 .p8…）：存到项目仓库外的 secrets/<id>.env(600)。
+            # 用户在⑨填部署凭证（SSH 地址/账号/token / 整段 .p8…）：存到项目仓库外的 secrets/<id>.env(600)。
             # 默认与已存的合并；replace=true 整体覆盖；clear=true 清空全部；remove=KEY 删单条；
             # p8="<PEM>" 把 App Store Connect 私钥落成 <id>.p8 文件并自动设 ASC_KEY_PATH（多行 PEM 不能进 .env）。
             if data.get("clear"):

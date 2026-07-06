@@ -103,12 +103,7 @@ python3 "$SKILL_DIR/scripts/pf_state.py" artifact 5 artifacts/phase-5/state-diag
 > **顺序要点（用户参与的关键点）**：Step 3 schema-ddl（数据层方言 / 是否 skip）、Step 4 api-contract（有无接口）、⑥ 系统流程图 **都依赖「涉不涉后端 + 什么 DB + 什么栈」**——所以选型决策要在**写 schema-ddl 之前**做掉，并**让用户（技术负责人）参与确认**，不能拖到本阶段最后。`pick-template` 的 step id 虽登记在最后（脚本注册名不变），但它的**调研 / 决策 / DB 选型流程（见 Step 5）要在这里就执行**；最后在 pick-template 步把最终选择写进 `template-choice.md`。
 
 1. **判涉后端（DEC-5）**：据 Step 1 的 module-list——有需要存数据 / 服务端的功能模块 = 涉后端（Web 走 T2/T3）；纯静态展示、无数据模块 = 无后端（Web = T1，schema-ddl / api-contract 后续标 skipped）。原生本地（iOS / Android / 纯本地桌面）= 无 HTTP 后端、但有本地数据层。
-   - **判为无后端时**（含原生本地）：后续 ⑦ 后端实现·测试阶段会在操作台**整体隐藏、跳过**，单元 / 集成测试并入 ⑥ 前端实现——所以此时**给 ⑥ 补两个测试步骤**，让步骤条显式可见（幂等，已存在则跳过）：
-     ```bash
-     python3 "$SKILL_DIR/scripts/pf_state.py" --dir "$PF_DIR" step-add 6 unit-test 单元测试
-     python3 "$SKILL_DIR/scripts/pf_state.py" --dir "$PF_DIR" step-add 6 integration-test 集成测试
-     ```
-     涉后端项目**不要**加（⑥ 只做前端，测试在 ⑦ 阶段有可见步骤）。
+   - **判为无后端时**（含原生本地）：后续 ⑦ 后端实现阶段会在操作台**整体隐藏、跳过**；测试**不并入 ⑥**（⑥ 只做前端 + 视觉还原），而是在 **⑧ 测试阶段做前端集成 / E2E / 回归**——⑧ 对无后端项目照常有 integration-test / e2e-test / regression / test-report 步骤，无需给 ⑥ 额外补测试步。
 2. **涉后端才选 DB + 定后端栈**：按 Step 5 的「实时联网调研选型 + 数据库选型」流程执行——agent 按场景实时调研 + 推荐，再用 `choice ask` 让用户确认（全自动模式直接用默认）。**先把 DB 方言定下来，再写 Step 3 的 DDL。**
 3. 定完再进 Step 3：schema-ddl 按选定平台 / DB 出数据层；无后端（T1）则 er-diagram / schema-ddl / api-contract 相应标 skipped。
 
@@ -306,17 +301,28 @@ python3 "$SKILL_DIR/scripts/pf_state.py" backend-flow add-edge --from "api:<...>
 python3 "$SKILL_DIR/scripts/pf_state.py" backend-flow link-page --page <页面id> --module <模块>
 ```
 
-节点只存 id / 类型 / 归属 / 中文名（`--name`）/ 数据表字段摘要（`--field`），定义仍以 ④ arch.json / modules.md / api.md / er 为准、**不重存**。写完操作台 ⑤ 面板即出可交互的系统流程图：**页面视图**（④ 真实设计图缩略排成画廊 → 点某页面就地展开它的 模块 → 接口 → 数据表链路、其它隐藏）/ **接口·数据全览**；节点**主显中文名、英文 id 灰字副显**，可拖 / 缩放 / hover 高亮；**点任一节点弹该节点对话框**（数据表含字段结构 +「这个节点要改什么」写一句发给 agent 改，走 design-feedback）；⑥ 开发时在这张图上更新状态、不重新生成。
+节点只存 id / 类型 / 归属 / 中文名（`--name`）/ 数据表字段摘要（`--field`，**每列写成 `列名 类型 [PK/FK] — 中文备注`**、别只写列名类型，让用户点表能看懂每列含义），定义仍以 ④ arch.json / modules.md / api.md / er 为准、**不重存**。写完操作台 ⑤ 面板即出可交互的系统流程图：**页面视图**（④ 真实设计图缩略排成画廊 → 点某页面就地展开它的 模块 → 接口 → 数据表链路、其它隐藏）/ **接口·数据全览**；节点**主显中文名、英文 id 灰字副显**，可拖 / 缩放 / hover 高亮；**点任一节点弹该节点对话框**（数据表含字段结构 +「这个节点要改什么」写一句发给 agent 改，走 design-feedback）；⑥ 开发时在这张图上更新状态、不重新生成。
 
 ## 第三方 key 识别（涉后端项目 · 用户在操作台填）
 
-若某模块 / 接口用到**产品级第三方服务**（支付 Stripe、短信、地图、OAuth、对象存储…）需要 key，本阶段就**登记这些 key 需求**——操作台据此在页面上列出、让用户填（DEC-3：只做开发侧 key）：
+若某模块 / 接口用到**产品级第三方服务**（支付、短信、地图、OAuth、对象存储…）需要 key，本阶段就**登记这些 key 需求**——操作台据此在页面上列出、让用户填（DEC-3：只做开发侧 key）。
+
+**先定平台、再登记 key——「用哪家」优先问用户、别自己猜**：同类服务常有多家（支付＝微信/支付宝/Stripe；短信＝阿里云/腾讯云；地图＝高德/百度/Google；登录＝微信/Google OAuth…），选哪家**取决于用户的账号 / 地区 / 偏好**，agent 无从替他假设：
+
+- **平台取决于用户的** → 先用 `choice` 问用户选，别自己拍板一家：
+  ```bash
+  python3 "$SKILL_DIR/scripts/pf_state.py" choice ask --stage 5 --question "支付用哪个平台？（决定接哪家 SDK 与 key）" --option "微信支付" --option "支付宝" --option "Stripe（海外）"
+  # 输出 ch-xxxx → choice wait <id> --timeout 600 等用户选 → 按结果定 provider（全自动/超时：按推荐默认走一家并 log 说明）
+  ```
+- **产品已明确某家 / 该类只有事实标准的** → agent 直接定推荐平台，不必打扰用户。
+
+平台定了再登记，`--provider` 写选定的那家：
 
 ```bash
-python3 "$SKILL_DIR/scripts/pf_state.py" product-key add --key STRIPE_SECRET_KEY --desc "Stripe 支付" --module payment
+python3 "$SKILL_DIR/scripts/pf_state.py" product-key add --key SMS_ACCESS_KEY_ID --provider "阿里云短信" --url "https://dysms.console.aliyun.com" --desc "登录验证码 + 异常告警短信" --module auth --module alerts
 ```
 
-只登记**需要哪些 key + 用途 + 归属模块**（从 api.md / 数据来源识别）；**绝不把 key 值写进任何产物 / 日志 / 留言**——值由用户在操作台填入、存 `~/.productflow/secrets/`（不进 git），⑥ 开发用到时从环境变量取。无第三方依赖则跳过本步。
+只登记 **key + 平台（`--provider` 必写，操作台靠它告诉用户是哪个平台、去哪申请）+ 获取地址（`--url`）+ 用途 + 归属模块（`--module` 可给多次 = 一个 key 关联多个模块，如短信 key 同挂登录 auth + 告警 alerts；任一相关模块缺 key 都会标红）**（从 api.md / 数据来源识别——**对着代码把 key 的所有使用方挂全、别漏**：短信的 sendCode 给登录、sendAlert 给告警，`auth` 和 `alerts` 就都要挂上；漏挂的模块在成品预览 / 测试里不会被提示缺 key、等于埋雷）。**绝不把 key 值写进任何产物 / 日志 / 留言**——值由用户在操作台填入、存 `~/.productflow/secrets/`（不进 git），⑥ 开发用到时从环境变量取。无第三方依赖则跳过本步。
 
 ## 检查点
 

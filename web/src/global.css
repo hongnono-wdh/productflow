@@ -615,6 +615,67 @@
   /* 系统流程图：节点「处理中」脉冲（agent 正在改这个节点） */
   @keyframes pf-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(240, 165, 0, .55); } 50% { box-shadow: 0 0 0 7px rgba(240, 165, 0, 0); } }
 
+  /* ⑦ 后端实现「成品预览」= 按模块显示后端开发进度（接口实现 X/N 进度条）——区别于 ⑧ 测试红绿灯 */
+  .mp-rerun { display: flex; align-items: center; gap: 6px; margin: 2px 0 10px; padding: 7px 11px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: #8a5a00; background: #fff4dc; border: 1px solid #f0d089; animation: pf-pulse 1.4s ease-in-out infinite; }
+  /* 顶部总览：整体接口完成度（大百分比 + 渐变进度条） */
+  .mp-top { margin: 2px 0 14px; }
+  .mp-top-row { display: flex; align-items: center; gap: 13px; }
+  .mp-top-pct { font-size: 30px; font-weight: 800; color: var(--ink); line-height: 1; letter-spacing: -0.5px; }
+  .mp-top-pct i { font-size: 15px; font-weight: 700; color: var(--dim); font-style: normal; margin-left: 1px; }
+  .mp-top-meta { display: flex; flex-direction: column; gap: 3px; }
+  .mp-top-lbl { font-size: 12px; color: var(--dim); font-weight: 600; }
+  .mp-sum { font-size: 13px; color: var(--ink-2); }
+  .mp-sum b { font-weight: 700; color: var(--ink); }
+  .mp-sum b.done { color: #3aa657; } .mp-sum b.doing { color: #3b82f6; } .mp-sum b.needfix { color: #e0574f; }
+  .mp-top-bar { height: 7px; border-radius: 5px; overflow: hidden; background: var(--line-2); margin-top: 10px; }
+  .mp-top-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #3b82f6, #3aa657); transition: width .4s ease; }
+  /* 模块卡 */
+  .mp-keypend { color: #9a6a08; font-weight: 600; }
+  .mp-stubwarn { color: #b93a32; font-weight: 700; }
+
+  /* 第三方 key 卡：富文本粘贴 + Agent 解析（唯一填写）；下方所有 key 平铺展示（不分平台） */
+  .pk-paste { display: flex; gap: 8px; align-items: stretch; margin: 0 0 12px; }
+  .pk-paste-ta { flex: 1; min-height: 58px; max-width: none; resize: vertical; font-size: 12.5px; line-height: 1.5; }
+  .pk-paste .btn { flex: none; align-self: stretch; white-space: nowrap; }
+  .pk-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 3px 22px; padding: 4px 0 2px; }
+  .pk-line { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12.5px; }
+  .pk-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: #c4c8cf; }
+  .pk-dot.done { background: #3aa657; }
+  .pk-line-name { flex: 1; font-family: monospace; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pk-line.done .pk-line-name { color: var(--ink); }
+  .pk-line-prov { flex: none; font-size: 11px; color: var(--dim); white-space: nowrap; }
+  a.pk-line-prov { color: #3b82f6; text-decoration: none; }
+  .pk-line-status { flex: none; font-size: 11px; color: var(--faint); width: 34px; text-align: right; }
+  .pk-line-status.done { color: #3aa657; font-weight: 600; }
+
+  /* ⑧ 测试进度（TestProgressView）：测试状态「红绿灯」，刻意区别于 ⑦ 成品预览的实现完成度进度条 */
+  .tp-banner { display: flex; align-items: center; gap: 6px; margin: 2px 0 10px; padding: 7px 11px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: #8a5a00; background: #fff4dc; border: 1px solid #f0d089; animation: pf-pulse 1.4s ease-in-out infinite; }
+  .tp-overbar { display: flex; height: 8px; border-radius: 5px; overflow: hidden; background: var(--line-2); margin: 2px 0 8px; }
+  .tp-seg { height: 100%; transition: width .3s ease; }
+  .tp-seg.pass { background: #3aa657; } .tp-seg.fail { background: #e0574f; } .tp-seg.fixing { background: #f0a500; } .tp-seg.pending { background: #d8dce1; }
+  .tp-sum { font-size: 13px; color: var(--ink-2); margin-bottom: 12px; }
+  .tp-sum b { font-weight: 700; } .tp-sum b.pass { color: #3aa657; } .tp-sum b.fail { color: #e0574f; } .tp-sum b.fixing { color: #c8820a; } .tp-sum b.pending { color: var(--dim); }
+  .tp-list { display: flex; flex-direction: column; gap: 7px; }
+  .tp-row { border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; }
+  .tp-row.pass { border-left: 3px solid #3aa657; }
+  .tp-row.fail { border-color: #f0b8b4; background: #fdf6f5; }
+  .tp-row.proc { animation: pf-pulse 1.4s ease-in-out infinite; }
+  .tp-head { display: flex; align-items: center; gap: 9px; padding: 10px 12px; cursor: pointer; }
+  .tp-head:hover { background: var(--line-2); }
+  .tp-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .tp-dot.sm { width: 7px; height: 7px; }
+  .tp-name { font-weight: 600; font-size: 14px; color: var(--ink); }
+  .tp-id { font-size: 11.5px; color: var(--faint); font-family: monospace; }
+  .tp-badge { margin-left: auto; font-size: 11px; padding: 1.5px 9px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+  .tp-badge.pass { background: #d7f5dd; color: #1f7a3d; } .tp-badge.fail { background: #fde2e2; color: #b93a32; } .tp-badge.fixing { background: #fdeecb; color: #9a6a08; } .tp-badge.pending { background: #eef0f2; color: #8a8a8a; }
+  .tp-count { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  .tp-caret { font-size: 11px; color: var(--faint); width: 12px; text-align: center; }
+  .tp-ifaces { list-style: none; margin: 0; padding: 6px 12px 10px; border-top: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 4px; }
+  .tp-ifaces li { display: flex; align-items: center; gap: 7px; font-size: 12.5px; }
+  .tp-if-name { font-family: monospace; color: var(--ink-2); }
+  .tp-if-st { margin-left: auto; font-size: 11px; }
+  .tp-if-st.pass { color: #3aa657; } .tp-if-st.fail { color: #b93a32; } .tp-if-st.fixing { color: #c8820a; } .tp-if-st.pending { color: var(--faint); }
+
   /* 产物弹窗：.md 正文按 markdown 渲染 */
   .md-body { font-size: 14px; line-height: 1.7; color: var(--ink); padding: 4px 10px 12px; text-align: left; align-self: stretch; }
   .md-body > :first-child { margin-top: 0; }

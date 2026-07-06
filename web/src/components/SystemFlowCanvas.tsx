@@ -44,19 +44,25 @@ function PageNode({ data }: NodeProps) {
 
 // 节点：主显中文名（data.name），下方灰字英文 id（data.label）；无中文名则只显英文
 function Box({ data }: NodeProps) {
-  const d = data as { label: string; name?: string; kind: string; status?: string; dim?: boolean; proc?: boolean; onOpen?: () => void }
+  const d = data as { label: string; name?: string; kind: string; status?: string; dim?: boolean; proc?: boolean; stub?: string; missKey?: boolean; onOpen?: () => void }
   const c = STATUS[d.status || 'todo'] || STATUS.todo
   return (
     <div
       style={{
         position: 'relative', padding: '8px 12px', minWidth: 104, textAlign: 'center', lineHeight: 1.25,
-        borderRadius: d.kind === 'table' ? 16 : 8, border: `2px solid ${d.proc ? '#f0a500' : c.bd}`, background: c.bg,
+        borderRadius: d.kind === 'table' ? 16 : 8, border: `2px solid ${d.proc ? '#f0a500' : d.stub ? '#e0574f' : d.missKey ? '#e0a800' : c.bd}`, background: d.stub ? '#fdf6f5' : d.missKey ? '#fdf8e8' : c.bg,
         opacity: d.dim ? 0.22 : 1, transition: 'opacity .12s', cursor: 'pointer',
         boxShadow: '0 1px 3px rgba(0,0,0,.08)', ...(d.proc ? { animation: 'pf-pulse 1.1s ease-in-out infinite' } : {}),
       }}>
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       <div style={{ fontSize: 13 }}>{ICON[d.kind] || ''} {d.name || d.label}{d.kind === 'table' ? ' ▸' : ''}</div>
       {d.name ? <div style={{ fontSize: 11, color: 'var(--dim)', fontFamily: 'monospace' }}>{d.label}</div> : null}
+      {(d.stub || d.missKey) ? (
+        <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 3, flexWrap: 'wrap' }}>
+          {d.stub ? <span title={typeof d.stub === 'string' ? d.stub : ''} style={{ fontSize: 9.5, background: '#fde2e2', color: '#b93a32', borderRadius: 5, padding: '0 5px', fontWeight: 700 }}>⚠占位</span> : null}
+          {d.missKey ? <span style={{ fontSize: 9.5, background: '#fdeecb', color: '#9a6a08', borderRadius: 5, padding: '0 5px', fontWeight: 700 }}>🔑待key</span> : null}
+        </div>
+      ) : null}
       {d.proc ? <div style={{ position: 'absolute', top: -9, right: -9, fontSize: 10, background: '#f0a500', color: '#fff', borderRadius: 8, padding: '1px 6px', whiteSpace: 'nowrap' }}>⏳ 处理中</div> : null}
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
     </div>
@@ -68,12 +74,12 @@ const RH = 100
 const COL = { page: 20, module: 320, interface: 610, table: 910 }
 const OCOL = { module: 40, interface: 380, table: 820 }
 
-function build(bf: BackendFlow, pages: PageCard[], focusPage: string | null, mode: 'pages' | 'overview', onToggle: (k: string) => void, onNode: (id: string) => void) {
+function build(bf: BackendFlow, pages: PageCard[], focusPage: string | null, mode: 'pages' | 'overview' | 'progress', onToggle: (k: string) => void, onNode: (id: string) => void, missKeyMods?: Set<string>) {
   const nodes: Node[] = []
   const edges: Edge[] = []
   const byId = new Map(bf.nodes.map((n) => [n.id, n]))
   const mkE = (s: string, t: string, label?: string) => edges.push({ id: `${s}->${t}->${label || ''}`, source: s, target: t, label })
-  const boxData = (id: string) => { const n = byId.get(id); return { kind: n?.type || 'module', label: shortLabel(id), name: n?.name, status: n?.status, proc: n?.proc, onOpen: () => onNode(id) } }
+  const boxData = (id: string) => { const n = byId.get(id); return { kind: n?.type || 'module', label: shortLabel(id), name: n?.name, status: n?.status, proc: n?.proc, stub: n?.stub, missKey: missKeyMods?.has(id), onOpen: () => onNode(id) } }
   const mkBox = (id: string, x: number, y: number) => nodes.push({ id, type: 'box', position: { x, y }, data: boxData(id), draggable: true })
 
   // 模块 id 归一化：接口的 module 字段可能是裸名(auth)或带前缀(module:auth)，统一到节点 id
@@ -105,6 +111,30 @@ function build(bf: BackendFlow, pages: PageCard[], focusPage: string | null, mod
     const spanH = Math.max(y - 28, tbls.length * RH) // 内容总高（模块带累计）
     tbls.forEach((n, i) => mkBox(n.id, OCOL.table, tbls.length > 1 ? (i + 0.5) * (spanH / tbls.length) : spanH / 2))
     for (const e of bf.edges || []) mkE(e.from, e.to, e.type === 'writes_to' ? '写' : e.type === 'reads_from' ? '读' : undefined)
+    const adj = new Map<string, Set<string>>()
+    nodes.forEach((n) => adj.set(n.id, new Set()))
+    edges.forEach((e) => { adj.get(e.source)?.add(e.target); adj.get(e.target)?.add(e.source) })
+    return { nodes, edges, adj }
+  }
+
+  if (mode === 'progress') {
+    // ⑦ 成品预览：两层「模块 → 接口」（复用 overview 的模块带布局，去掉数据表层）
+    const mods = bf.nodes.filter((n) => n.type === 'module')
+    const allIfc = bf.nodes.filter((n) => n.type === 'interface')
+    const ownIds = new Map<string, string[]>(mods.map((m) => [m.id, []]))
+    for (const e of bf.edges || []) if (e.type === 'calls' && ownIds.has(e.from) && byId.get(e.to)?.type === 'interface' && !ownIds.get(e.from)!.includes(e.to)) ownIds.get(e.from)!.push(e.to)
+    for (const n of allIfc) { const mid = n.module ? modId(n.module) : ''; if (ownIds.has(mid) && !ownIds.get(mid)!.includes(n.id)) ownIds.get(mid)!.push(n.id) }
+    const claimed = new Set<string>([...ownIds.values()].flat())
+    let y = 20
+    for (const m of mods) {
+      const own = ownIds.get(m.id)!.map((id) => byId.get(id)).filter(Boolean) as { id: string }[]
+      const rows = Math.max(1, own.length)
+      const top = y
+      mkBox(m.id, OCOL.module, top + ((rows - 1) * RH) / 2)
+      own.forEach((n, i) => { mkBox(n.id, OCOL.interface, top + i * RH); mkE(m.id, n.id) })
+      y += rows * RH + 28
+    }
+    allIfc.filter((n) => !claimed.has(n.id)).forEach((n) => { mkBox(n.id, OCOL.interface, y); y += RH })
     const adj = new Map<string, Set<string>>()
     nodes.forEach((n) => adj.set(n.id, new Set()))
     edges.forEach((e) => { adj.get(e.source)?.add(e.target); adj.get(e.target)?.add(e.source) })
@@ -155,13 +185,13 @@ function build(bf: BackendFlow, pages: PageCard[], focusPage: string | null, mod
   return { nodes, edges, adj }
 }
 
-export function SystemFlowCanvas({ bf, pages, mode, onChanged }: { bf: BackendFlow; pages: PageCard[]; mode: 'pages' | 'overview'; onChanged?: () => void }) {
+export function SystemFlowCanvas({ bf, pages, mode, onChanged, missKeyMods, onRerun }: { bf: BackendFlow; pages: PageCard[]; mode: 'pages' | 'overview' | 'progress'; onChanged?: () => void; missKeyMods?: Set<string>; onRerun?: (id: string) => void }) {
   const [focusPage, setFocusPage] = useState<string | null>(mode === 'pages' && pages.length === 1 ? pages[0].key : null)
   const [selId, setSelId] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
   const toggle = (k: string) => setFocusPage((f) => (f === k ? null : k))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const built = useMemo(() => build(bf, pages, focusPage, mode, toggle, setSelId), [bf, pages, focusPage, mode])
+  const built = useMemo(() => build(bf, pages, focusPage, mode, toggle, setSelId, missKeyMods), [bf, pages, focusPage, mode, missKeyMods])
   const procIds = useMemo(() => new Set(bf.nodes.filter((n) => n.proc).map((n) => n.id)), [bf]) // 处理中的节点（改动传播动效用）
   const [nodes, setNodes, onNodesChange] = useNodesState(built.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(built.edges)
@@ -235,7 +265,17 @@ export function SystemFlowCanvas({ bf, pages, mode, onChanged }: { bf: BackendFl
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
             <div style={{ fontSize: 12, color: 'var(--dim)', marginBottom: 4 }}>字段结构</div>
             {sel.fields && sel.fields.length
-              ? sel.fields.map((f, i) => <div key={i} style={{ padding: '2px 0', fontFamily: 'monospace', fontSize: 13 }}>{f}</div>)
+              ? sel.fields.map((f, i) => {
+                  const idx = f.search(/\s[—–-]\s|\s{2,}/)   // 「列名+类型」与「中文备注」分隔：空格+—/–/-+空格，或连续空格
+                  const col = idx >= 0 ? f.slice(0, idx).trim() : f.trim()
+                  const note = idx >= 0 ? f.slice(idx).replace(/^[\s—–-]+/, '').trim() : ''
+                  return (
+                    <div key={i} style={{ padding: '2px 0', display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: 13, whiteSpace: 'nowrap' }}>{col}</span>
+                      {note ? <span style={{ color: 'var(--dim)', fontSize: 12 }}>{note}</span> : null}
+                    </div>
+                  )
+                })
               : <span style={{ color: 'var(--dim)', fontSize: 13 }}>该表未附字段摘要——见 ⑤ ER 图 / schema.sql 产物。</span>}
           </div>
         )}
@@ -258,6 +298,7 @@ export function SystemFlowCanvas({ bf, pages, mode, onChanged }: { bf: BackendFl
             <textarea className="wz-input" style={{ width: '100%', minHeight: 72, resize: 'vertical' }} value={msg} onChange={(e) => setMsg(e.target.value)}
               placeholder={sel.type === 'table' ? '如：加一个 phone 字段、email 改成必填唯一…' : sel.type === 'interface' ? '如：加分页参数、返回值加 avatar 字段、限流…' : '如：拆成两个子模块、并入权限校验…'} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+              {onRerun && sel.type === 'module' ? <button className="btn ghost" style={{ marginRight: 'auto', color: '#b93a32', borderColor: '#f0b8b4' }} onClick={() => { onRerun(sel.id); closeDialog() }}>↻ 重做本模块</button> : null}
               <button className="btn ghost" onClick={closeDialog}>取消</button>
               <button className="btn" onClick={sendNodeChange}>发给 Agent 改</button>
             </div>

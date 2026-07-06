@@ -47,7 +47,7 @@ export function Project() {
     if (chatOpen) setSeen(inbox?.messages.length || 0)
   }, [chatOpen, inbox])
 
-  // 无后端判定：⑤ 已 done 且 backend-flow 无后端模块 → 隐藏 ⑦ 后端实现·测试
+  // 无后端判定：⑤ 已 done 且 backend-flow 无后端模块 → 隐藏 ⑦ 后端实现（⑧测试仍做前端集成/E2E，不隐藏）
   useEffect(() => {
     fetch(PF_BASE + '/api/backend-flow').then((r) => r.json())
       .then((d) => setBfMods((d?.nodes || []).filter((n: { type?: string }) => n.type === 'module').length))
@@ -98,7 +98,7 @@ export function Project() {
       <BriefPanel phase={phase} />
     ) : sel === 2 ? (
       <RefsPanel />
-    ) : sel === 5 || sel === 6 || sel === 7 || sel === 8 ? (
+    ) : sel === 5 || sel === 6 || sel === 7 || sel === 8 || sel === 9 ? (
       <StageRunPanel phase={sel} phaseStatus={phase.status} />
     ) : (
       <div style={{ color: 'var(--dim)', fontSize: 13, padding: '4px 0 14px' }} />
@@ -147,15 +147,6 @@ export function Project() {
           )}
         </div>
       </div>
-
-      {phases.length !== 8 && (
-        <div id="compat-banner">
-          <div className="compat-warn">
-            ⚠️ 此项目是<b>旧版数据（{phases.length} 阶段）</b>，与当前 8 阶段流程不兼容，下面的步骤/按钮会显示异常。请回 <a href="/">全部项目</a> 点「＋ 新建项目」重新开始（旧项目可在总览页删除）。当前 8
-            阶段：市场调研 → 找参考 → 首图设计 → 页面设计 → 功能与数据设计 → 前端实现 → 后端实现·测试 → 部署上线。
-          </div>
-        </div>
-      )}
 
       <ChoicesBar />
 

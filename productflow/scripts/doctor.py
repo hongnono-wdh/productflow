@@ -43,7 +43,7 @@ def run_setup_baseline() -> int:
 
 
 def check_completeness():
-    """② 代码完整性：关键文件 + 编译产物 + 7 阶段手册 + git 完整性。"""
+    """② 代码完整性：关键文件 + 编译产物 + 9 阶段手册 + git 完整性。"""
     print("\n=== ② 代码完整性 ===")
     manifest = [
         "productflow/scripts/server.py", "productflow/scripts/pf_state.py",
@@ -62,8 +62,8 @@ def check_completeness():
           "缺 dist/assets/*.js —— cd web && npm run build" if not js else f"{len(js)} 个 bundle")
 
     refs = glob.glob(os.path.join(SKILL_DIR, "references", "phase-*.md"))
-    check("7 阶段手册 references/phase-*.md", len(refs) >= 7,
-          f"只有 {len(refs)} 个" if len(refs) < 7 else f"{len(refs)} 个齐全")
+    check("9 阶段手册 references/phase-*.md", len(refs) >= 9,
+          f"只有 {len(refs)} 个" if len(refs) < 9 else f"{len(refs)} 个齐全")
 
     if os.path.isdir(os.path.join(REPO, ".git")):
         r = subprocess.run(["git", "-C", REPO, "fsck", "--connectivity-only"],
