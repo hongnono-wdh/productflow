@@ -91,6 +91,8 @@ export function DeployCredsCard({ primary }: { primary?: string | null }) {
   const [paste, setPaste] = useState('')
   const [showManual, setShowManual] = useState(false)
   const [d, setD] = useState({ ...empty })
+  const [devKeys, setDevKeys] = useState<{ key: string; provider?: string | null; filled: boolean }[]>([])
+  const [showReuse, setShowReuse] = useState(false)
   const refetch = () => {
     fetch(PF_BASE + '/api/deploy-creds')
       .then((r) => r.json())
@@ -98,6 +100,13 @@ export function DeployCredsCard({ primary }: { primary?: string | null }) {
       .catch(() => {})
   }
   useEffect(refetch, [])
+  // 开发阶段（⑤⑦）在 product-keys 卡配好的第三方 key——和部署凭证同一份 secrets，部署可直接复用
+  useEffect(() => {
+    fetch(PF_BASE + '/api/product-keys')
+      .then((r) => r.json())
+      .then((j) => setDevKeys((j.keys || []).filter((k: { filled?: boolean }) => k.filled)))
+      .catch(() => {})
+  }, [keys])
 
   const have = useMemo(() => new Set(keys.map((k) => k.key)), [keys])
   const recipes = useMemo(() => detectRecipes(have, primary), [have, primary])
@@ -168,6 +177,24 @@ export function DeployCredsCard({ primary }: { primary?: string | null }) {
         把手头任意凭证/配置整段粘进下面的框——支持 <code>KEY=VALUE</code>、<code>export …</code>、TOML <code>key = "值"</code>、JSON、以及整段 <code>.p8</code> 私钥。
         存在本机 <code>~/.productflow/secrets/</code>（600 权限），<b>不进 git、不进留言</b>；Agent 部署时作为环境变量取用。
       </div>
+
+      {devKeys.length > 0 && (
+        <div className="dc-reuse">
+          <div className="dc-reuse-head">
+            <span>🔗 开发环境已配 <b>{devKeys.length}</b> 个第三方密钥（邮件 / 短信 / 支付等）——部署<b>直接复用</b>、不用在这重填</span>
+            <button className="btn ghost sm" onClick={() => setShowReuse((s) => !s)}>{showReuse ? '收起' : '↺ 复用开发环境密钥'}</button>
+          </div>
+          {showReuse && (
+            <div className="dc-reuse-list">
+              {devKeys.map((k) => (
+                <span key={k.key} className="dc-reuse-item"><code>{k.key}</code>{k.provider ? ' · ' + k.provider : ''} ✓</span>
+              ))}
+              <div className="wz-hint2" style={{ marginTop: 6, width: '100%' }}>这些密钥和部署凭证存在<b>同一份 secrets</b>，Agent 部署时会自动注入生产环境，不必在上方重复粘贴。若生产要用<b>不同</b>的密钥（如正式邮箱账号 / 生产短信签名），在上方粘贴同名 <code>KEY=新值</code> 覆盖即可。</div>
+            </div>
+          )}
+        </div>
+      )}
+
       <textarea
         className="wz-textarea"
         value={paste}
