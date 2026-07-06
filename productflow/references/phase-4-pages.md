@@ -212,8 +212,21 @@ python3 "$SKILL_DIR/scripts/pf_state.py" step 4 finalize-direction --status acti
    ```bash
    python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.primary --value "#3498db" --type color
    python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.action.primary --value color.primary --type color --ref
-   # …色板/字体/圆角/间距逐个定稿…
+   # 字号建完整 type scale——尤其含超大标题 display 档（缺档→主标题被迫 snap 到偏小档→还原度崩，实测教训）：
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.size.body --value "16px" --type dimension
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.size.hero --value "60px" --type dimension
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.size.display --value "76px" --type dimension
+   # 行高独立维度（--type number，别用 dimension——会被当尺寸编译成 dp/CGFloat）：
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token lineHeight.tight --value "1.1" --type number
+   python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token lineHeight.normal --value "1.5" --type number
+   # …色板/圆角/间距逐个定稿…
    ```
+
+   > **token 梯度密度原则（还原度关键，实测教训）**：梯度覆盖设计里真实出现的语义层级、且到此为止——
+   > - **字号必须建完整 type scale、含超大标题档**（`display`/`hero`）：设计稿主标题往往很大，缺档→被迫 snap 到偏小档→还原度崩。判据：每档对应一个反复出现的文字角色、能命名（`display`/`h2`/`body`/`caption`）。
+   > - **别给间距/颜色盲目加密**：4px 基数的 `space`、50→900 的色阶已够；过密反把生图噪声固化、丢掉节奏一致性。
+   > - **行高独立成档**（`lineHeight.tight/normal/relaxed`），标题/正文各一档，别让 ⑥ 临场估。
+   > - 进阶：把实测字号/间距**聚类**，聚成几堆设几档（档位＝真实语义聚类数）；`scripts/redline.py` 辅助取色 snap 与度量。
 
 2. **每页组件映射（= ⑥ 主读的 sidecar，PNG 只作预览）**：对**产品 UI 页**，按 `artifacts/phase-2/component-catalog.md` 出「设计元素→组件」映射写进 design-spec（`spec set-page --type product --component slot:lib:variant`；匹配不上组件目录就报缺口、别硬凑）：
    ```bash

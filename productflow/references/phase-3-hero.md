@@ -62,9 +62,14 @@ python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.primary --value "#
 python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.bg --value "#0e1420" --type color
 python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token radius.md --value "8px" --type dimension
 python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.title --value "Montserrat" --type fontFamily
+# 字号梯度——尤其超大标题 display 档（缺档会让主标题被迫 snap 到偏小档、还原度崩）：
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.size.hero --value "60px" --type dimension
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token font.size.display --value "76px" --type dimension
+# 行高独立维度（用 --type number，别用 dimension——那会被当尺寸编译成 dp/CGFloat）：
+python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token lineHeight.tight --value "1.1" --type number
 # 语义 token 用 alias 指向 primitive（DTCG {..} 语法传给 --value；`--ref` 是布尔 flag、不接值，别拿它当值传）：
 python3 "$SKILL_DIR/scripts/pf_state.py" spec set-token color.action.primary --value "{color.blue.500}" --type color
-# …按首图实际值逐个写：主色/辅色/背景/文字色、圆角、字体气质…
+# …按首图实际值逐个写：主色/辅色/背景/文字色、圆角、字体气质、字号梯度（含 display）、行高…
 ```
 
 ```bash

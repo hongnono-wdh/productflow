@@ -14,6 +14,7 @@ class TokenCompileTest(unittest.TestCase):
             "action": {"primary": {"$value": "{color.blue.500}", "$type": "color"}},
         },
         "space": {"4": {"$value": "16px", "$type": "dimension"}},
+        "lineHeight": {"normal": {"$value": "1.5", "$type": "number"}},
     }
 
     def _r(self):
@@ -37,6 +38,15 @@ class TokenCompileTest(unittest.TestCase):
         kt = tc.compile_compose(self._r())
         self.assertIn("val ColorActionPrimary = Color(0xFF3498DB)", kt)
         self.assertIn("val Space4 = 16.dp", kt)
+
+    def test_lineheight_stays_unitless(self):
+        """补 line-height 维度：number 类型 → CSS 原值 1.5，不被当 dimension 编成 CGFloat/dp。"""
+        r = self._r()
+        self.assertIn("--lineHeight-normal: 1.5;", tc.compile_css(r))
+        sw = tc.compile_swift(r)
+        self.assertIn('static let lineHeightNormal = "1.5"', sw)
+        self.assertNotIn("CGFloat(1.5)", sw)          # 关键：没被误当尺寸
+        self.assertNotIn("1.5.dp", tc.compile_compose(r))
 
     def test_cycle_raises(self):
         cyc = {"a": {"$value": "{b}", "$type": "color"}, "b": {"$value": "{a}", "$type": "color"}}
