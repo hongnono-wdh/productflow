@@ -782,7 +782,7 @@ def _auto_node_change(pf: str, node_id: str, text: str, pid: str | None = None) 
     _inject_openai_env(env)
     _log_reset(pf, "node-change", f"改节点 {node_id}")
     try:
-        _run_claude_streaming(pf, "node-change", prompt, project_root, env=env, timeout=900)
+        _run_claude_streaming(pf, "node-change", prompt, project_root, env=env, timeout=1800)   # 30 分钟：node-change 可能是牵连多模块/表的大重构（如「短信登录改邮箱登录」牵连 users/verification_codes/members/settings 4+ 模块），900s 不够、会被墙钟看门狗误砍
     finally:
         try:  # 兜底：结束时确保该节点不再挂「处理中」，避免 agent 异常时卡死
             bf = pf_state._load_backend_flow(project_root)
