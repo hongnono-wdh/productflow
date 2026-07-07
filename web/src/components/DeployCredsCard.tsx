@@ -9,7 +9,7 @@ import type { DeployCredKey } from '../types'
 
 const empty = { host: '', user: '', port: '', target: '', extra: '' }
 
-type Recipe = { key: string; label: string; need: string[]; tips: Record<string, string> }
+type Recipe = { key: string; label: string; need: string[]; tips: Record<string, string>; oneOf?: string[] }
 const R: Record<string, Recipe> = {
   ios: {
     key: 'ios',
@@ -28,6 +28,9 @@ const R: Record<string, Recipe> = {
     tips: {
       PLAY_SERVICE_ACCOUNT_JSON: 'Google Play Console 服务账号 JSON 文件的本机路径',
       ANDROID_KEYSTORE: '上传密钥库 .jks/.keystore 文件的本机路径',
+      ANDROID_KEYSTORE_PASSWORD: '密钥库口令——生成 .jks 时设置的 store password',
+      ANDROID_KEY_ALIAS: '密钥别名——生成 .jks 时给签名密钥起的 alias 名',
+      ANDROID_KEY_PASSWORD: '密钥口令——该 alias 的密码（生成时设置，常与库口令相同）',
     },
   },
   pgyer: {
@@ -46,7 +49,14 @@ const R: Record<string, Recipe> = {
     key: 'ssh',
     label: 'Web · 单机服务器',
     need: ['PF_SSH_HOST', 'PF_SSH_USER'],
-    tips: { PF_SSH_HOST: '服务器 IP 或域名', PF_SSH_USER: '登录用户名（如 root）' },
+    oneOf: ['PF_SSH_PASSWORD', 'PF_SSH_KEY_PATH'],
+    tips: {
+      PF_SSH_HOST: '服务器 IP 或域名',
+      PF_SSH_USER: '登录用户名（如 root）',
+      PF_SSH_PASSWORD: '登录密码，和密钥二选一',
+      PF_SSH_KEY_PATH: 'SSH 私钥文件路径，和密码二选一、更安全',
+      PF_SSH_PORT: '端口，默认 22、可选',
+    },
   },
 }
 
@@ -187,17 +197,31 @@ export function DeployCredsCard({ primary }: { primary?: string | null }) {
       <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
         {recipes.map((rc) => {
           const missing = rc.need.filter((k) => !have.has(k))
+          const oneOfUnmet = !!rc.oneOf && !rc.oneOf.some((k) => have.has(k))
+          const missCount = missing.length + (oneOfUnmet ? 1 : 0)
           return (
             <div key={rc.key} style={{ marginBottom: 8 }}>
               <div className="wz-hint2">
                 <b>{rc.label}</b>{' '}
-                {missing.length ? <span style={{ color: '#b3793a' }}>· 还缺 {missing.length} 项</span> : <span style={{ color: '#3a8a4a' }}>· ✓ 必填已齐</span>}
+                {missCount ? <span style={{ color: '#b3793a' }}>· 还缺 {missCount} 项</span> : <span style={{ color: '#3a8a4a' }}>· ✓ 必填已齐</span>}
               </div>
               {missing.map((k) => (
                 <div key={k} className="wz-hint2" style={{ marginLeft: 10, marginTop: 2 }}>
                   ✗ <code>{k}</code> — {rc.tips[k] || `在上面框里补一行 ${k}=…`}
                 </div>
               ))}
+              {oneOfUnmet && rc.oneOf && (
+                <div className="wz-hint2" style={{ marginLeft: 10, marginTop: 2 }}>
+                  ✗ 认证（二选一） —{' '}
+                  {rc.oneOf.map((k, i) => (
+                    <span key={k}>
+                      {i > 0 && ' 或 '}
+                      <code>{k}</code>
+                      {rc.tips[k] ? `（${rc.tips[k]}）` : ''}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}

@@ -47,6 +47,19 @@ export function ProductKeysCard() {
   if (!keys.length) return null // ⑤ 未识别到第三方 key 需求 → 整卡不显示
   const doneCount = keys.filter((k) => k.filled).length
 
+  // 按 provider 成套分组：保留首次出现顺序；provider 为空/null 归到「其他」放最后，让用户一眼看到某服务要几个 key、缺哪几个
+  const named: { name: string; items: PKey[] }[] = []
+  const other: PKey[] = []
+  const idx = new Map<string, number>()
+  for (const k of keys) {
+    const name = (k.provider || '').trim()
+    if (!name) { other.push(k); continue }
+    let i = idx.get(name)
+    if (i === undefined) { i = named.length; idx.set(name, i); named.push({ name, items: [] }) }
+    named[i].items.push(k)
+  }
+  const groups = other.length ? [...named, { name: '其他', items: other }] : named
+
   return (
     <div className="card">
       <h2>第三方 key <span className="hint">产品用到的第三方服务凭证（{doneCount}/{keys.length} 已配置 · 存本机 secrets、不进 git）</span></h2>
@@ -55,20 +68,34 @@ export function ProductKeysCard() {
       <button className="btn" style={{ marginTop: 10 }} onClick={parseKeys}>🪄 智能识别并保存</button>
 
       <div className="wz-hint2" style={{ marginTop: 12 }}>需要的 key（{doneCount}/{keys.length} 已配置 · 点 ✕ 清除单条变回待填）：</div>
-      <div className="pk-chips">
-        {keys.map((k) => (
-          <span key={k.key} className={'pk-chip' + (k.filled ? ' done' : '')} title={k.desc || k.key}>
-            <span className={'pk-dot' + (k.filled ? ' done' : '')} />
-            <code>{k.key}{k.filled ? '=' + k.masked : ''}</code>
-            {k.provider ? (k.url
-              ? <a className="pk-chip-prov" href={k.url} target="_blank" rel="noreferrer">{k.provider} ↗</a>
-              : <span className="pk-chip-prov">{k.provider}</span>) : null}
-            {k.filled
-              ? <span className="pk-chip-x" onClick={() => removeKey(k.key)} title="清除这条（变回待填）">✕</span>
-              : <span className="pk-chip-todo">待填</span>}
-          </span>
-        ))}
-      </div>
+      {groups.map((g) => {
+        const total = g.items.length
+        const done = g.items.filter((k) => k.filled).length
+        const miss = total - done
+        return (
+          <div key={g.name} className="pk-group">
+            <div className="pk-group-head">
+              <b>{g.name}</b> ({total})：已配 {done} · {miss > 0
+                ? <span className="miss">还缺 {miss}</span>
+                : <span className="ok">✓ 已齐</span>}
+            </div>
+            <div className="pk-chips">
+              {g.items.map((k) => (
+                <span key={k.key} className={'pk-chip' + (k.filled ? ' done' : '')} title={k.desc || k.key}>
+                  <span className={'pk-dot' + (k.filled ? ' done' : '')} />
+                  <code>{k.key}{k.filled ? '=' + k.masked : ''}</code>
+                  {k.provider ? (k.url
+                    ? <a className="pk-chip-prov" href={k.url} target="_blank" rel="noreferrer">{k.provider} ↗</a>
+                    : <span className="pk-chip-prov">{k.provider}</span>) : null}
+                  {k.filled
+                    ? <span className="pk-chip-x" onClick={() => removeKey(k.key)} title="清除这条（变回待填）">✕</span>
+                    : <span className="pk-chip-todo">待填</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
