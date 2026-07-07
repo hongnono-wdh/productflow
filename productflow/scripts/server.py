@@ -1534,7 +1534,7 @@ _WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 _WS_PROJECT_CHANNELS = [
     "state", "inbox", "health", "pages", "choices", "brief", "explore", "wizard", "spec",
     "agent-log:research", "agent-log:search-refs",
-    "agent-log:stage-4", "agent-log:stage-5", "agent-log:stage-6", "agent-log:stage-7", "agent-log:stage-8",
+    "agent-log:stage-4", "agent-log:stage-5", "agent-log:stage-6", "agent-log:stage-7", "agent-log:stage-8", "agent-log:stage-9",
 ]
 
 
