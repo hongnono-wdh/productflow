@@ -3,7 +3,7 @@
 // 主入口是「一个粘贴框」：把手头任意凭证/配置（KEY=VALUE / export / TOML / 整段 .p8 私钥）
 // 整段粘进来，前端确定性解析后保存；按平台必填清单算出还缺哪条、就地提示。结构化字段保留作手动兜底。
 import { useEffect, useMemo, useState } from 'react'
-import { PF_BASE, post } from '../lib'
+import { PF_BASE, parsePaste, post } from '../lib'
 import { toast } from '../store'
 import type { DeployCredKey } from '../types'
 
@@ -61,29 +61,6 @@ function detectRecipes(have: Set<string>, primary?: string | null): Recipe[] {
   if (ks.some((k) => k.startsWith('PF_SSH_'))) out.push(R.ssh)
   if (out.length) return out
   return (primary || '').toUpperCase() === 'APP' ? [R.ios, R.android, R.pgyer] : [R.cf, R.ssh]
-}
-
-// 确定性解析：抽出 .p8 PEM 块 + 逐行 KEY=VALUE / export / TOML key="v" / "KEY": "v" / KEY: v
-function parsePaste(raw: string): { creds: Record<string, string>; p8: string } {
-  const creds: Record<string, string> = {}
-  let text = raw
-  let p8 = ''
-  const pem = text.match(/-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*?-----END[^-]*PRIVATE KEY-----/)
-  if (pem) {
-    p8 = pem[0]
-    text = text.replace(pem[0], '\n')
-  }
-  for (const line of text.split('\n')) {
-    let l = line.trim()
-    if (!l || l.startsWith('#') || l.startsWith('//')) continue
-    l = l.replace(/^export\s+/, '')
-    const m = l.match(/^["']?([A-Za-z_][A-Za-z0-9_]*)["']?\s*[=:]\s*(.+)$/)
-    if (!m) continue
-    let v = m[2].trim().replace(/[,;]\s*$/, '').trim()
-    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1)
-    if (v) creds[m[1]] = v
-  }
-  return { creds, p8 }
 }
 
 export function DeployCredsCard({ primary }: { primary?: string | null }) {

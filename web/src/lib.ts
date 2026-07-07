@@ -46,3 +46,27 @@ export async function post(path: string, body: unknown): Promise<Response> {
     body: JSON.stringify(body ?? {}),
   })
 }
+
+// 确定性解析粘贴的凭证：抽 .p8 PEM 块 + 逐行 KEY=VALUE / export KEY=v / TOML key="v" / "KEY":"v" / KEY: v。
+// ⑤⑦ 第三方 key 卡和 ⑨ 部署凭证卡共用——前端直接解析、不调 agent（快）。
+export function parsePaste(raw: string): { creds: Record<string, string>; p8: string } {
+  const creds: Record<string, string> = {}
+  let text = raw
+  let p8 = ''
+  const pem = text.match(/-----BEGIN[^-]*PRIVATE KEY-----[\s\S]*?-----END[^-]*PRIVATE KEY-----/)
+  if (pem) {
+    p8 = pem[0]
+    text = text.replace(pem[0], '\n')
+  }
+  for (const line of text.split('\n')) {
+    let l = line.trim()
+    if (!l || l.startsWith('#') || l.startsWith('//')) continue
+    l = l.replace(/^export\s+/, '')
+    const m = l.match(/^["']?([A-Za-z_][A-Za-z0-9_]*)["']?\s*[=:]\s*(.+)$/)
+    if (!m) continue
+    let v = m[2].trim().replace(/[,;]\s*$/, '').trim()
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1)
+    if (v) creds[m[1]] = v
+  }
+  return { creds, p8 }
+}
