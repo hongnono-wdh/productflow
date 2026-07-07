@@ -800,50 +800,7 @@ def _auto_node_change(pf: str, node_id: str, text: str, pid: str | None = None) 
     print(f"[node-change] {node_id} 结束", file=sys.stderr)
 
 
-def _auto_parse_keys(pf: str, text: str, pid: str | None = None) -> None:
-    """用户在操作台贴一段第三方凭证富文本 → spawn agent 解析出各 key 值、只写临时文件；
-    本函数读该文件、merge 进 secrets（agent 不直接碰 secrets 存储）、删文件。key 值绝不进 log。"""
-    project_root = os.path.dirname(pf)
-    out_path = os.path.join(pf, ".parse-keys-out.json")
-    try:
-        os.remove(out_path)
-    except OSError:
-        pass
-    pk = pf_state._load_product_keys(project_root)
-    keylist = "\n".join(f"- {e.get('key')}（{e.get('provider') or '?'}｜{e.get('desc') or ''}）" for e in pk.get("keys", [])) or "（product-keys 为空：按文本里出现的 KEY=VALUE 直接取）"
-    prompt = (
-        "你是 ProductFlow 的 key 解析 Agent，headless。用户在操作台贴了一段第三方凭证文本，请解析出各 key 的值。\n"
-        f"当前产品需要的 key（product-keys）：\n{keylist}\n\n"
-        f"用户贴的文本：\n<<<TEXT\n{text}\n>>>TEXT\n\n"
-        "智能匹配（「AccessKey ID」→SMS_ACCESS_KEY_ID、「商户号 / mchid」→PAYMENT_MCHID、「私钥」→*_PRIVATE_KEY、「AppID」→*_APP_ID 等），"
-        f"把识别出的 {{\"KEY\":\"值\"}} JSON **只写到文件** `{out_path}`（认不出 / 没出现的别写、别编造值）。\n"
-        "**绝不把任何 key 值写进 log / reply / 终端回显**——只在最后 reply 里说「解析出 N 个：KEY1、KEY2…（值已写入待存）；没认出：KEYx」。\n"
-        "只写这一个文件，别改产品代码、别推进阶段。"
-    )
-    env = dict(os.environ)
-    _inject_openai_env(env)
-    _log_reset(pf, "parse-keys", "解析粘贴的第三方凭证")
-    try:
-        _run_claude_streaming(pf, "parse-keys", prompt, project_root, env=env, timeout=300)
-    except Exception:
-        pass
-    saved: list = []
-    try:
-        with open(out_path, encoding="utf-8") as f:
-            parsed = json.load(f)
-        if isinstance(parsed, dict) and pid:
-            cur = _load_deploy_creds(pid)
-            cur.update({str(k): str(v) for k, v in parsed.items() if v})
-            _save_deploy_creds(pid, cur)   # 内部只收合法 KEY、做 shell 安全转义
-            saved = [str(k) for k, v in parsed.items() if v]
-    except Exception:
-        pass
-    finally:
-        try:
-            os.remove(out_path)   # 用完即删，明文值不留盘
-        except OSError:
-            pass
-    print(f"[parse-keys] saved {len(saved)} keys", file=sys.stderr)
+# （_auto_parse_keys 已移除：⑤⑦ key 卡改为前端确定性解析 parsePaste → 直接存 secrets，不再 spawn agent）
 
 
 
@@ -1534,8 +1491,7 @@ _WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 _WS_PROJECT_CHANNELS = [
     "state", "inbox", "health", "pages", "choices", "brief", "explore", "wizard", "spec",
     "agent-log:research", "agent-log:search-refs",
-    "agent-log:stage-4", "agent-log:stage-5", "agent-log:stage-6", "agent-log:stage-7", "agent-log:stage-8", "agent-log:stage-9",
-]
+] + [f"agent-log:stage-{n}" for n in range(1, 10)]   # ①-⑨ 动态生成、别手写枚举（stage-9 曾漏过）；多订阅空频道无害
 
 
 def _read_json_or(pf: str, name: str, default):
@@ -2182,7 +2138,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         pid, sub = m.group(1), m.group(2) or ""
         root = _resolve(pid)
-        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/run-action", "/api/deploy-creds", "/api/reveal", "/api/redraw", "/api/stage", "/api/node-proc", "/api/node-change", "/api/parse-keys"):
+        if root is None or sub not in ("/api/inbox", "/api/canvas", "/api/pages", "/api/explore", "/api/brief", "/api/research", "/api/choice", "/api/run-stage", "/api/run-action", "/api/deploy-creds", "/api/reveal", "/api/redraw", "/api/stage", "/api/node-proc", "/api/node-change"):
             self._send(404, b"not found", "text/plain")
             return
         pf = os.path.join(root, ".productflow")
@@ -2225,15 +2181,6 @@ class Handler(BaseHTTPRequestHandler):
                 f.write(json.dumps({"ts": _now(), "from": "web", "type": "design-feedback",
                                     "text": f"系统流程图·节点「{node_id}」要改：\n{text}"}, ensure_ascii=False) + "\n")
             threading.Thread(target=_auto_node_change, args=(pf, node_id, text, pid), daemon=True).start()
-            self._json({"ok": True})
-            return
-        if sub == "/api/parse-keys":
-            # 用户贴的第三方凭证富文本 → 后台 spawn agent 解析、写临时文件、本函数 merge 进 secrets
-            text = str(data.get("text") or "").strip()
-            if not text:
-                self._json({"error": "bad_req"}, 400)
-                return
-            threading.Thread(target=_auto_parse_keys, args=(pf, text, pid), daemon=True).start()
             self._json({"ok": True})
             return
         if sub == "/api/reveal":

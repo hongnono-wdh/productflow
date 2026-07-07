@@ -24,11 +24,15 @@ export function ProductKeysCard() {
     const { creds, p8 } = parsePaste(paste)
     const n = Object.keys(creds).length + (p8 ? 1 : 0)
     if (!n) { toast('没识别到 KEY=VALUE——每行写成 KEY=值 或 export KEY=值（值可带引号）'); return }
+    const needed = new Set(keys.map((k) => k.key))
+    const unknown = Object.keys(creds).filter((k) => !needed.has(k)) // 不在 ⑤ 登记需求里的（拼错/多贴）——存了但下方列表不显示
     post('/api/deploy-creds', { creds, p8 })
       .then((r) => r.json())
       .then((j) => {
         if (j.error) { toast('保存失败：' + j.error); return }
-        toast(`已识别并保存 ${j.count || n} 项密钥（下方状态已刷新）`)
+        toast(unknown.length
+          ? `已保存 ${j.count || n} 项，其中 ${unknown.length} 个不在需求清单、下方不显示：${unknown.join('、')}（如拼错请核对）`
+          : `已识别并保存 ${j.count || n} 项密钥（下方状态已刷新）`)
         setPaste('')
         setNonce((x) => x + 1)
       })

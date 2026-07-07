@@ -54,6 +54,18 @@ class ServerTest(unittest.TestCase):
         h.stop_server(cls.proc)
         h.rm_home(cls.home)
 
+    def test_ws_channels_cover_all_stages(self):
+        """_WS_PROJECT_CHANNELS 必须覆盖 agent-log:stage-1..9——防再漏一个阶段（stage-9 曾漏）导致整阶段 running/日志/waiting 不推给前端。"""
+        scripts = os.path.join(os.path.dirname(HERE), "scripts")
+        code = (
+            f"import sys; sys.path.insert(0, {scripts!r}); import server; "
+            "m=[n for n in range(1, 10) if f'agent-log:stage-{n}' not in server._WS_PROJECT_CHANNELS]; "
+            "print('MISSING:' + str(m) if m else 'OK')"
+        )
+        env = dict(os.environ, HOME=self.home, PYTHONPATH=scripts)
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=20)
+        self.assertIn("OK", out.stdout, f"stdout={out.stdout!r} stderr={out.stderr!r}")
+
     # ---- meta / listing -------------------------------------------------
 
     def test_version(self):
