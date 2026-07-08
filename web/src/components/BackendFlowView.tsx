@@ -8,7 +8,7 @@ import type { BackendFlow, PagesPayload, StateChannel } from '../types'
 
 const EMPTY: BackendFlow = { version: 1, nodes: [], edges: [], pageLinks: [], entry: null, layout: {} }
 
-export function BackendFlowView() {
+export function BackendFlowView({ running }: { running?: boolean }) {
   const [bf, setBf] = useState<BackendFlow>(EMPTY)
   const [nonce, setNonce] = useState(0)
   const [mode, setMode] = useState<'pages' | 'overview'>('pages')
@@ -24,12 +24,12 @@ export function BackendFlowView() {
     return () => { cancelled = true }
   }, [nonce, stateCh?.log?.length])
 
-  // 有节点在「处理中」时轮询刷新，直到 agent 改完清除 proc
+  // ⑤ 本阶段 agent 在跑（生成 / 重做流程图）或有节点「处理中」时轮询刷新——生成完立即显示、不用手动刷新页面
   useEffect(() => {
-    if (!bf.nodes.some((n) => n.proc)) return
+    if (!running && !bf.nodes.some((n) => n.proc)) return
     const t = setInterval(() => setNonce((n) => n + 1), 2500)
     return () => clearInterval(t)
-  }, [bf])
+  }, [running, bf])
 
   const pages = pagesCh?.pages || []
   const linkedKeys = [...new Set((bf.pageLinks || []).map((l) => l.page))]

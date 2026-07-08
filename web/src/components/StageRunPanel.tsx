@@ -139,7 +139,7 @@ export function StageRunPanel({ phase, phaseStatus }: { phase: number; phaseStat
           </div>
         )}
       </div>
-      {phase === 5 && <BackendFlowView />}
+      {phase === 5 && <BackendFlowView running={running} />}
       {phase === 7 && <ProductKeysCard />}
     </>
   )
