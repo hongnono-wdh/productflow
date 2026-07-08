@@ -188,7 +188,8 @@ def _run_claude_streaming(pf: str, phase: str, prompt: str, cwd: str,
     result_text = ""
     try:
         proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, text=True, bufsize=1)
+                                stderr=subprocess.PIPE, text=True, bufsize=1,
+                                start_new_session=True)  # 独立进程组：超时能连 claude fork 的实际子 agent 一起杀干净（否则外层死、内层活 → 假结束释放锁 → 用户再点就双开）
     except (FileNotFoundError, OSError) as e:
         if status is not None:
             status["error"] = "spawn"
@@ -200,9 +201,12 @@ def _run_claude_streaming(pf: str, phase: str, prompt: str, cwd: str,
     def _watchdog() -> None:
         timed_out["v"] = True
         try:
-            proc.kill()
+            os.killpg(os.getpgid(proc.pid), 9)  # SIGKILL 整个进程组——含 claude fork 的实际 agent，避免「外层被杀内层还活着 → server 以为结束、释放锁 → 用户再点就双开」
         except Exception:  # noqa: BLE001
-            pass
+            try:
+                proc.kill()
+            except Exception:  # noqa: BLE001
+                pass
 
     wd = threading.Timer(timeout, _watchdog)
     wd.daemon = True
